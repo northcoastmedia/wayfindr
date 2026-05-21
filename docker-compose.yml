@@ -1,0 +1,35 @@
+name: wayfindr
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wayfindr
+      POSTGRES_USER: wayfindr
+      POSTGRES_PASSWORD: wayfindr
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wayfindr -d wayfindr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "54329:5432"
+    volumes:
+      - wayfindr-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "6380:6379"
+    volumes:
+      - wayfindr-redis-data:/data
+
+volumes:
+  wayfindr-postgres-data:
+  wayfindr-redis-data:

@@ -1,6 +1,6 @@
 # Self-Hosting Install
 
-Self-hosting instructions will be added once the first working Community Edition build exists.
+Self-hosting instructions will be added once the first working Community Edition build exists. The current Docker Compose file is for local development only.
 
 The intended self-hosting baseline is Docker Compose with:
 

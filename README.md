@@ -10,7 +10,7 @@ The project is intentionally early. The first goal is to prove a focused support
 - request consent-based cobrowsing,
 - create a durable ticket from the support session.
 
-Wayfindr is planned as a Laravel-first monorepo. Laravel owns the core product, while SDKs and integrations make it portable across WordPress, Laravel, Next.js, React, and plain JavaScript sites.
+Wayfindr is a Laravel-first monorepo. Laravel owns the core product, while SDKs and integrations make it portable across WordPress, Laravel, Next.js, React, and plain JavaScript sites.
 
 ## Repository Layout
 
@@ -58,4 +58,4 @@ See [public-information-policy.md](docs/governance/public-information-policy.md)
 
 ## Status
 
-Pre-alpha. No installable product exists yet.
+Pre-alpha. The Laravel server scaffold exists, but no usable support workflow exists yet.
