@@ -7,10 +7,13 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['account_id', 'name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -28,5 +31,35 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    public function assignedConversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class, 'assigned_agent_id');
+    }
+
+    public function assignedTickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class, 'assignee_id');
+    }
+
+    public function requestedCobrowseSessions(): HasMany
+    {
+        return $this->hasMany(CobrowseSession::class, 'requested_by_id');
+    }
+
+    public function sentConversationMessages(): MorphMany
+    {
+        return $this->morphMany(ConversationMessage::class, 'sender');
+    }
+
+    public function auditEvents(): MorphMany
+    {
+        return $this->morphMany(AuditEvent::class, 'actor');
     }
 }

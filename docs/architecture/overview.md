@@ -13,6 +13,8 @@ Wayfindr is planned as a Laravel-first support platform with portable client int
 - Redis for cache, queues, and realtime support.
 - Integration packages for WordPress, Laravel, React, and plain JavaScript.
 
+See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
+
 ## Runtime Flow
 
 1. A host site loads the Wayfindr widget.
