@@ -129,6 +129,12 @@ reports `Composer could not find a composer.json file`, the site can still be
 used. Replace the generated deploy script with Wayfindr's script, set the
 environment variables, and run a fresh deploy.
 
+If deployment reaches `view:cache` and fails with `View path not found`, verify
+the shared storage path is `apps/server/storage -> apps/server/storage` and that
+the deploy script includes Wayfindr's runtime-directory preparation step. The
+failure usually means Forge linked an empty shared storage directory before the
+Laravel storage subdirectories existed.
+
 If zero-downtime deployments were disabled when the site was created, use
 [standard-deploy.sh](../../deploy/forge/standard-deploy.sh) instead.
 

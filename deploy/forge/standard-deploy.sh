@@ -15,6 +15,17 @@ forge_php() {
     "${FORGE_PHP:-php}" "$@"
 }
 
+prepare_laravel_runtime_directories() {
+    mkdir -p \
+        bootstrap/cache \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs
+}
+
 cd "$FORGE_SITE_PATH"
 git pull origin "$FORGE_SITE_BRANCH"
 
@@ -41,6 +52,7 @@ if forge_php artisan down --retry=60; then
     maintenance_enabled=1
 fi
 
+prepare_laravel_runtime_directories
 forge_php artisan storage:link || true
 forge_php artisan migrate --force
 forge_php artisan config:cache
