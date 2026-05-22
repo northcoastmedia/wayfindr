@@ -53,9 +53,41 @@
             <section class="section" aria-labelledby="conversations-heading">
                 <div class="section-header">
                     <h2 id="conversations-heading">Conversations</h2>
-                    <span class="lede">0 open</span>
+                    <span class="lede">{{ $conversations->count() }} open</span>
                 </div>
-                <p class="empty">No active conversations yet.</p>
+
+                @if ($conversations->isEmpty())
+                    <p class="empty">No active conversations yet.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Subject</th>
+                                    <th scope="col">Site</th>
+                                    <th scope="col">Visitor</th>
+                                    <th scope="col">Support Code</th>
+                                    <th scope="col">Last Activity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($conversations as $conversation)
+                                    <tr>
+                                        <td>
+                                            <a class="text-link" href="{{ route('dashboard.conversations.show', $conversation->support_code) }}">
+                                                {{ $conversation->subject ?? 'Untitled conversation' }}
+                                            </a>
+                                        </td>
+                                        <td>{{ $conversation->site->name }}</td>
+                                        <td>{{ $conversation->visitor->anonymous_id ?? 'Unknown visitor' }}</td>
+                                        <td>{{ $conversation->support_code }}</td>
+                                        <td>{{ $conversation->last_message_at?->diffForHumans() ?? $conversation->created_at->diffForHumans() }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </section>
         </main>
     </div>

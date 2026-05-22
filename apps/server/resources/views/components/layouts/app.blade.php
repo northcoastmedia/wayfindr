@@ -175,6 +175,16 @@
             margin-top: 22px;
         }
 
+        .text-link {
+            color: var(--accent-strong);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .text-link:hover {
+            text-decoration: underline;
+        }
+
         .section {
             margin-top: 28px;
             background: var(--surface);
@@ -228,6 +238,62 @@
             color: var(--muted);
         }
 
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1px;
+            background: var(--border);
+            border-top: 1px solid var(--border);
+        }
+
+        .meta-item {
+            background: var(--surface);
+            padding: 16px 20px;
+        }
+
+        .meta-label {
+            color: var(--muted);
+            display: block;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .meta-value {
+            display: block;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        .message-list {
+            display: grid;
+            gap: 14px;
+            padding: 20px;
+        }
+
+        .message {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .message.agent {
+            background: var(--surface-muted);
+        }
+
+        .message-meta {
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+            gap: 8px;
+            justify-content: space-between;
+        }
+
+        .message-body {
+            margin: 10px 0 0;
+            white-space: pre-wrap;
+        }
+
         @media (max-width: 640px) {
             .topbar-inner {
                 align-items: flex-start;
@@ -238,6 +304,10 @@
             .section-header {
                 align-items: flex-start;
                 flex-direction: column;
+            }
+
+            .meta-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
