@@ -55,7 +55,7 @@ repo-scoped install flow to document for self-hosters.
 - Cache/queue: Redis.
 - Root directory: `/`.
 - Web directory: `/apps/server/public`.
-- Health check URL: `/health`.
+- Health check URL: `/up`.
 
 For a new Forge site, leave zero-downtime deployments enabled. Forge enables
 this by default for new sites, and it cannot be added to an existing site
@@ -113,8 +113,16 @@ MAIL_FROM_NAME="${APP_NAME}"
 Generate the `APP_KEY` on the server with:
 
 ```bash
-cd apps/server
+cd ~/wayfindr.on-forge.com/current/apps/server
 php artisan key:generate --show
+```
+
+Forge's zero-downtime `current` directory points to the monorepo root, not the
+Laravel application root. Run Artisan commands from `apps/server`:
+
+```bash
+cd ~/wayfindr.on-forge.com/current/apps/server
+php artisan about
 ```
 
 ## Deploy Script
@@ -177,7 +185,7 @@ the staging runtime close to the expected production shape.
 11. Replace the generated deploy script with Wayfindr's deploy script.
 12. Run the first deploy.
 13. Enable TLS before testing the widget from another origin.
-14. Enable the deployment health check against `/health`.
+14. Enable the deployment health check against `/up`.
 15. Add the queue worker and scheduler.
 16. Log in with the seeded demo agent only if the seeder has been run:
    `agent@example.com` / `password`.

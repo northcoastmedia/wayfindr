@@ -66,7 +66,7 @@
         <main>
             <h1>Wayfindr Server</h1>
             <p>
-                Laravel core application scaffold is running. Use <code>/health</code> for a lightweight
+                Laravel core application scaffold is running. Use <code>/up</code> for a lightweight
                 service check while the product surface is still pre-alpha.
             </p>
         </main>

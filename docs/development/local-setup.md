@@ -25,7 +25,7 @@ composer test
 php artisan serve
 ```
 
-The server runs at [http://localhost:8000](http://localhost:8000). A lightweight health check is available at [http://localhost:8000/health](http://localhost:8000/health).
+The server runs at [http://localhost:8000](http://localhost:8000). A lightweight health check is available at [http://localhost:8000/up](http://localhost:8000/up).
 
 ## Root Shortcuts
 
