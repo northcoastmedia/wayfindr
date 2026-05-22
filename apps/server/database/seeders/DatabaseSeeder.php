@@ -2,9 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Models\Account;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -15,11 +18,30 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $account = Account::query()->updateOrCreate(
+            ['slug' => 'demo-support-co'],
+            ['name' => 'Demo Support Co'],
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'agent@example.com'],
+            [
+                'account_id' => $account->id,
+                'name' => 'Demo Agent',
+                'password' => Hash::make('password'),
+            ],
+        );
+
+        Site::query()->updateOrCreate(
+            ['public_key' => 'site_demo_public_key'],
+            [
+                'account_id' => $account->id,
+                'name' => 'Demo Site',
+                'domain' => 'demo.test',
+                'settings' => [
+                    'mask_selectors' => ['input[type="password"]', '[data-wayfindr-mask]'],
+                ],
+            ],
+        );
     }
 }

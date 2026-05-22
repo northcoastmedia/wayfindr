@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AgentDashboardController;
+use App\Http\Controllers\Auth\SessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -11,4 +13,14 @@ Route::get('/health', function () {
         'status' => 'ok',
         'service' => config('app.name', 'Wayfindr'),
     ]);
+});
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [SessionController::class, 'create'])->name('login');
+    Route::post('/login', [SessionController::class, 'store'])->name('login.store');
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
+    Route::post('/logout', [SessionController::class, 'destroy'])->name('logout');
 });
