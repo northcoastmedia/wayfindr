@@ -53,14 +53,23 @@ repo-scoped install flow to document for self-hosters.
 - PHP: 8.3 or newer.
 - Database: Postgres.
 - Cache/queue: Redis.
-- Web directory: `apps/server/public`.
+- Root directory: `/`.
+- Web directory: `/apps/server/public`.
 - Health check URL: `/health`.
 
 For a new Forge site, leave zero-downtime deployments enabled. Forge enables
 this by default for new sites, and it cannot be added to an existing site
 later. Add `apps/server/storage` as a shared path so logs and uploaded files
-survive release swaps. Forge automatically shares `.env` for zero-downtime
-sites.
+survive release swaps. If Forge pre-populates a `storage -> storage` shared
+path, change it to `apps/server/storage -> apps/server/storage` for Wayfindr's
+monorepo layout. Forge automatically shares `.env` for zero-downtime sites.
+
+Turn off Forge's creation-time `Install Composer dependencies` option. Wayfindr
+is a monorepo, and Forge runs that automatic Composer install from the repository
+root. Our `composer.json` lives in `apps/server`, so the install belongs in the
+deploy script instead. Also leave the creation-time frontend build disabled; the
+deploy script will run it only after the Laravel app has a lockfile to build
+from.
 
 ## Environment
 
@@ -115,6 +124,11 @@ as the Forge deploy script for new sites. It assumes Forge's zero-downtime
 macros are available and that commands run from the monorepo root. The macro
 lines are Forge-specific and are not meant to run in a local shell.
 
+If the site was created with `Install Composer dependencies` enabled and Forge
+reports `Composer could not find a composer.json file`, the site can still be
+used. Replace the generated deploy script with Wayfindr's script, set the
+environment variables, and run a fresh deploy.
+
 If zero-downtime deployments were disabled when the site was created, use
 [standard-deploy.sh](../../deploy/forge/standard-deploy.sh) instead.
 
@@ -148,13 +162,16 @@ the staging runtime close to the expected production shape.
 4. Enable `Generate a site deploy key for your source control provider`.
 5. Add the generated key to the fork as a read-only GitHub deploy key.
 6. Use the fork's SSH repository URL and the target deploy branch.
-7. Point the web directory to `apps/server/public`.
-8. Add the environment values above in Forge.
-9. Enable TLS before testing the widget from another origin.
-10. Enable the deployment health check against `/health`.
-11. Add the queue worker and scheduler.
+7. Set root directory to `/` and web directory to `/apps/server/public`.
+8. Turn off Forge's creation-time Composer install and frontend build options.
+9. Keep zero-downtime deployments enabled.
+10. Add the environment values above in Forge.
+11. Replace the generated deploy script with Wayfindr's deploy script.
 12. Run the first deploy.
-13. Log in with the seeded demo agent only if the seeder has been run:
+13. Enable TLS before testing the widget from another origin.
+14. Enable the deployment health check against `/health`.
+15. Add the queue worker and scheduler.
+16. Log in with the seeded demo agent only if the seeder has been run:
    `agent@example.com` / `password`.
 
 ## Smoke Test
