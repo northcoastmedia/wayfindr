@@ -58,4 +58,7 @@ See [public-information-policy.md](docs/governance/public-information-policy.md)
 
 ## Status
 
-Pre-alpha. The Laravel server scaffold exists, but no usable support workflow exists yet.
+Pre-alpha. The current prototype supports a local first support loop: a plain
+JavaScript widget can create a visitor conversation, and an authenticated agent
+can read the conversation in the dashboard. Replies, realtime updates,
+cobrowsing, ticket workflows, and production hardening are still ahead.

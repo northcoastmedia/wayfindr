@@ -1,0 +1,30 @@
+# Paste this into Forge's deploy script editor for a zero-downtime site.
+# The CREATE_RELEASE, ACTIVATE_RELEASE, and RESTART_QUEUES lines are Forge
+# macros and are not valid outside Forge.
+set -euo pipefail
+
+if [[ "${FORGE_DEPLOY_MESSAGE:-}" =~ \[skip[[:space:]]deploy\] ]]; then
+    echo "Skipping deploy because commit message contains [skip deploy]."
+    exit 0
+fi
+
+$CREATE_RELEASE()
+cd "$FORGE_RELEASE_DIRECTORY/apps/server"
+
+"$FORGE_COMPOSER" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+if [[ -f package-lock.json ]]; then
+    npm ci
+    npm run build
+else
+    echo "No package-lock.json found; skipping frontend asset build."
+fi
+
+"$FORGE_PHP" artisan storage:link || true
+"$FORGE_PHP" artisan migrate --force
+"$FORGE_PHP" artisan config:cache
+"$FORGE_PHP" artisan route:cache
+"$FORGE_PHP" artisan view:cache
+
+$ACTIVATE_RELEASE()
+$RESTART_QUEUES()

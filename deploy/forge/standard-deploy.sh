@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${FORGE_DEPLOY_MESSAGE:-}" =~ \[skip[[:space:]]deploy\] ]]; then
+    echo "Skipping deploy because commit message contains [skip deploy]."
+    exit 0
+fi
+
+cd "$FORGE_SITE_PATH"
+git pull origin "$FORGE_SITE_BRANCH"
+
+cd apps/server
+
+"$FORGE_COMPOSER" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+if [[ -f package-lock.json ]]; then
+    npm ci
+    npm run build
+else
+    echo "No package-lock.json found; skipping frontend asset build."
+fi
+
+maintenance_enabled=0
+restore_application() {
+    if [[ "$maintenance_enabled" -eq 1 ]]; then
+        "$FORGE_PHP" artisan up || true
+    fi
+}
+trap restore_application EXIT
+
+if "$FORGE_PHP" artisan down --retry=60; then
+    maintenance_enabled=1
+fi
+
+"$FORGE_PHP" artisan storage:link || true
+"$FORGE_PHP" artisan migrate --force
+"$FORGE_PHP" artisan config:cache
+"$FORGE_PHP" artisan route:cache
+"$FORGE_PHP" artisan view:cache
+"$FORGE_PHP" artisan queue:restart
+"$FORGE_PHP" artisan up
+maintenance_enabled=0
+trap - EXIT

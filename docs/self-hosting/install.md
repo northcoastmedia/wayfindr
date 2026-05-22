@@ -1,8 +1,14 @@
 # Self-Hosting Install
 
-Self-hosting instructions will be added once the first working Community Edition build exists. The current Docker Compose file is for local development only.
+Wayfindr is pre-alpha. The current Docker Compose file is for local
+development only, but the first staging/demo deployment target is Laravel
+Forge.
 
-The intended self-hosting baseline is Docker Compose with:
+Use [laravel-forge.md](laravel-forge.md) for the current Forge deployment
+checklist, deploy script templates, environment values, queue worker, scheduler,
+and smoke test.
+
+The intended self-hosting baseline is still Docker Compose with:
 
 - Laravel web process,
 - queue worker,
