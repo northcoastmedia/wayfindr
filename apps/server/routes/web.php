@@ -9,13 +9,6 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'service' => config('app.name', 'Wayfindr'),
-    ]);
-});
-
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SessionController::class, 'create'])->name('login');
     Route::post('/login', [SessionController::class, 'store'])->name('login.store');

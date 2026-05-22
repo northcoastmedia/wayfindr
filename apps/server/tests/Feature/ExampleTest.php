@@ -16,12 +16,14 @@ class ExampleTest extends TestCase
 
     public function test_health_endpoint_reports_ok_status(): void
     {
-        $response = $this->get('/health');
+        $this->get('/health')
+            ->assertOk()
+            ->assertSee('Application up');
+    }
 
-        $response->assertOk();
-        $response->assertJson([
-            'status' => 'ok',
-            'service' => 'Wayfindr',
-        ]);
+    public function test_default_laravel_health_endpoint_is_not_exposed(): void
+    {
+        $this->get('/up')
+            ->assertNotFound();
     }
 }
