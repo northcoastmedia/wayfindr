@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wayfindr Plain HTML Demo</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f3;
+      --surface: #ffffff;
+      --text: #1d2523;
+      --muted: #62706b;
+      --border: #d8dfdc;
+      --accent: #0d6f68;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .bar,
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .bar {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      font-weight: 800;
+    }
+
+    nav {
+      display: flex;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    main {
+      padding: 48px 0 120px;
+    }
+
+    .article {
+      max-width: 720px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.75rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    p {
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .steps {
+      margin: 28px 0;
+      padding: 0;
+      list-style: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .steps li {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      gap: 14px;
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .steps li:last-child {
+      border-bottom: 0;
+    }
+
+    .number {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--accent) 12%, white);
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #e9eeeb;
+      color: var(--text);
+    }
+
+    .sample-form {
+      display: grid;
+      gap: 10px;
+      max-width: 420px;
+      margin-top: 28px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    label {
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    @media (max-width: 640px) {
+      .bar {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 16px 0;
+      }
+
+      nav {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand">Demo Store Docs</div>
+      <nav aria-label="Demo navigation">
+        <span>Install</span>
+        <span>Checkout</span>
+        <span>Account</span>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <article class="article">
+      <h1>Updating checkout settings</h1>
+      <p>
+        Use this demo store article to confirm the checkout helper is connected
+        before sharing the page with customers.
+      </p>
+
+      <ol class="steps">
+        <li>
+          <span class="number">1</span>
+          <span>Open the checkout settings page in your store dashboard.</span>
+        </li>
+        <li>
+          <span class="number">2</span>
+          <span>Confirm the payment method and shipping region are active.</span>
+        </li>
+        <li>
+          <span class="number">3</span>
+          <span>Save the changes and run a test checkout with a demo account.</span>
+        </li>
+      </ol>
+
+      <form class="sample-form">
+        <label for="demo-password">Masked field sample</label>
+        <input id="demo-password" type="text" value="not-a-real-secret" autocomplete="off" data-wayfindr-mask>
+      </form>
+    </article>
+  </main>
+
+  <script src="../../packages/widget-js/src/wayfindr-widget.js"></script>
+  <script>
+    Wayfindr.init({
+      apiBaseUrl: 'http://127.0.0.1:8000',
+      sitePublicKey: 'site_demo_public_key',
+      launcherLabel: 'Support',
+      title: 'Demo Support',
+    });
+  </script>
+</body>
+</html>

@@ -1,7 +1,34 @@
 # Wayfindr Widget JS
 
-Browser widget SDK placeholder.
+Classic script-compatible browser widget SDK for Wayfindr.
 
-This package is intended to provide the script loaded by customer websites.
+The initial package exposes a small global API and is intentionally friendly to
+plain HTML sites:
+
+```html
+<script src="../../packages/widget-js/src/wayfindr-widget.js"></script>
+<script>
+  Wayfindr.init({
+    apiBaseUrl: 'http://127.0.0.1:8000',
+    sitePublicKey: 'site_demo_public_key',
+  });
+</script>
+```
+
+The widget currently supports the first visitor loop:
+
+- bootstrap the site config and anonymous visitor,
+- start a conversation,
+- send the first visitor message.
+
+## Development
+
+```bash
+npm test
+```
+
+The script attaches `window.Wayfindr` for classic script tags and also exports
+the same API through CommonJS so the package can be tested without a browser
+build step.
 
 License: MIT.
