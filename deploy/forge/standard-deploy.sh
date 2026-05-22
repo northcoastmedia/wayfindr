@@ -6,12 +6,21 @@ if [[ "${FORGE_DEPLOY_MESSAGE:-}" =~ \[skip[[:space:]]deploy\] ]]; then
     exit 0
 fi
 
+forge_composer() {
+    # Forge may set this to "php8.4 /usr/local/bin/composer".
+    ${FORGE_COMPOSER:-composer} "$@"
+}
+
+forge_php() {
+    "${FORGE_PHP:-php}" "$@"
+}
+
 cd "$FORGE_SITE_PATH"
 git pull origin "$FORGE_SITE_BRANCH"
 
 cd apps/server
 
-"$FORGE_COMPOSER" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+forge_composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 if [[ -f package-lock.json ]]; then
     npm ci
@@ -23,21 +32,21 @@ fi
 maintenance_enabled=0
 restore_application() {
     if [[ "$maintenance_enabled" -eq 1 ]]; then
-        "$FORGE_PHP" artisan up || true
+        forge_php artisan up || true
     fi
 }
 trap restore_application EXIT
 
-if "$FORGE_PHP" artisan down --retry=60; then
+if forge_php artisan down --retry=60; then
     maintenance_enabled=1
 fi
 
-"$FORGE_PHP" artisan storage:link || true
-"$FORGE_PHP" artisan migrate --force
-"$FORGE_PHP" artisan config:cache
-"$FORGE_PHP" artisan route:cache
-"$FORGE_PHP" artisan view:cache
-"$FORGE_PHP" artisan queue:restart
-"$FORGE_PHP" artisan up
+forge_php artisan storage:link || true
+forge_php artisan migrate --force
+forge_php artisan config:cache
+forge_php artisan route:cache
+forge_php artisan view:cache
+forge_php artisan queue:restart
+forge_php artisan up
 maintenance_enabled=0
 trap - EXIT

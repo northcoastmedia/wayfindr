@@ -8,10 +8,19 @@ if [[ "${FORGE_DEPLOY_MESSAGE:-}" =~ \[skip[[:space:]]deploy\] ]]; then
     exit 0
 fi
 
+forge_composer() {
+    # Forge may set this to "php8.4 /usr/local/bin/composer".
+    ${FORGE_COMPOSER:-composer} "$@"
+}
+
+forge_php() {
+    "${FORGE_PHP:-php}" "$@"
+}
+
 $CREATE_RELEASE()
 cd "$FORGE_RELEASE_DIRECTORY/apps/server"
 
-"$FORGE_COMPOSER" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+forge_composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 if [[ -f package-lock.json ]]; then
     npm ci
@@ -20,11 +29,11 @@ else
     echo "No package-lock.json found; skipping frontend asset build."
 fi
 
-"$FORGE_PHP" artisan storage:link || true
-"$FORGE_PHP" artisan migrate --force
-"$FORGE_PHP" artisan config:cache
-"$FORGE_PHP" artisan route:cache
-"$FORGE_PHP" artisan view:cache
+forge_php artisan storage:link || true
+forge_php artisan migrate --force
+forge_php artisan config:cache
+forge_php artisan route:cache
+forge_php artisan view:cache
 
 $ACTIVATE_RELEASE()
 $RESTART_QUEUES()
