@@ -19,6 +19,10 @@
             <h1>{{ $conversation->subject ?? 'Untitled conversation' }}</h1>
             <p class="lede">Support code {{ $conversation->support_code }}</p>
 
+            @if (session('status'))
+                <p class="status-message">{{ session('status') }}</p>
+            @endif
+
             <section class="section" aria-labelledby="conversation-context-heading">
                 <div class="section-header">
                     <h2 id="conversation-context-heading">Context</h2>
@@ -72,6 +76,26 @@
                         @endforeach
                     </div>
                 @endif
+            </section>
+
+            <section class="section" aria-labelledby="reply-heading">
+                <div class="section-header">
+                    <h2 id="reply-heading">Reply</h2>
+                </div>
+
+                <form class="section-form" method="POST" action="{{ route('dashboard.conversations.messages.store', $conversation->support_code) }}">
+                    @csrf
+
+                    <div class="field">
+                        <label for="body">Message</label>
+                        <textarea id="body" name="body" rows="4" required>{{ old('body') }}</textarea>
+                        @error('body')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <button class="button" type="submit">Send reply</button>
+                </form>
             </section>
         </main>
     </div>

@@ -72,5 +72,5 @@ See [public-information-policy.md](docs/governance/public-information-policy.md)
 
 Pre-alpha. The current prototype supports a local first support loop: a plain
 JavaScript widget can create a visitor conversation, and an authenticated agent
-can read the conversation in the dashboard. Replies, realtime updates,
+can read and reply to the conversation in the dashboard. Realtime updates,
 cobrowsing, ticket workflows, and production hardening are still ahead.

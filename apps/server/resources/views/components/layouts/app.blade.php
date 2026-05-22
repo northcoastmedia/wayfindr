@@ -35,7 +35,8 @@
         }
 
         button,
-        input {
+        input,
+        textarea {
             font: inherit;
         }
 
@@ -108,7 +109,8 @@
             font-weight: 650;
         }
 
-        .field input {
+        .field input,
+        .field textarea {
             width: 100%;
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -117,7 +119,13 @@
             color: var(--text);
         }
 
-        .field input:focus {
+        .field textarea {
+            min-height: 132px;
+            resize: vertical;
+        }
+
+        .field input:focus,
+        .field textarea:focus {
             outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
             border-color: var(--accent);
         }
@@ -236,6 +244,24 @@
         .empty {
             padding: 20px;
             color: var(--muted);
+        }
+
+        .status-message {
+            margin: 20px 0 0;
+            color: var(--accent-strong);
+            font-weight: 700;
+        }
+
+        .section-form {
+            padding: 20px;
+        }
+
+        .section-form .field:first-child {
+            margin-top: 0;
+        }
+
+        .section-form .button {
+            margin-top: 16px;
         }
 
         .meta-grid {

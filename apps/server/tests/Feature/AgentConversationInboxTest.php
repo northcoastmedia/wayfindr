@@ -108,7 +108,96 @@ class AgentConversationInboxTest extends TestCase
             ->assertSee('Acme Docs')
             ->assertSee('anon-acme')
             ->assertSee('WF-DETAIL1')
+            ->assertSee('Send reply')
+            ->assertSee('name="body"', false)
             ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
+    }
+
+    public function test_agent_can_reply_to_their_account_conversation(): void
+    {
+        $account = Account::factory()->create(['name' => 'Acme Support']);
+        $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+        $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+            'support_code' => 'WF-REPLY1',
+            'subject' => 'Checkout trouble',
+            'status' => 'open',
+            'last_message_at' => now()->subMinutes(5),
+        ]);
+
+        ConversationMessage::factory()->for($conversation)->create([
+            'sender_type' => Visitor::class,
+            'sender_id' => $visitor->id,
+            'body' => 'The checkout button is stuck.',
+            'created_at' => now()->subMinutes(5),
+        ]);
+
+        $this->actingAs($agent)
+            ->post('/dashboard/conversations/WF-REPLY1/messages', [
+                'body' => 'Thanks, I can help.',
+            ])
+            ->assertRedirect('/dashboard/conversations/WF-REPLY1');
+
+        $this->assertDatabaseHas('conversation_messages', [
+            'conversation_id' => $conversation->id,
+            'sender_type' => User::class,
+            'sender_id' => $agent->id,
+            'type' => 'text',
+            'body' => 'Thanks, I can help.',
+        ]);
+
+        $this->assertTrue($conversation->fresh()->last_message_at->greaterThan(now()->subMinutes(2)));
+
+        $this->actingAs($agent)
+            ->get('/dashboard/conversations/WF-REPLY1')
+            ->assertOk()
+            ->assertSee('Ada Agent')
+            ->assertSeeInOrder(['The checkout button is stuck.', 'Thanks, I can help.']);
+    }
+
+    public function test_agent_reply_requires_a_message_body(): void
+    {
+        $account = Account::factory()->create();
+        $agent = User::factory()->for($account)->create();
+        $site = Site::factory()->for($account)->create();
+        $visitor = Visitor::factory()->for($site)->create();
+        Conversation::factory()->for($site)->for($visitor)->create([
+            'support_code' => 'WF-REPLY2',
+        ]);
+
+        $this->actingAs($agent)
+            ->from('/dashboard/conversations/WF-REPLY2')
+            ->post('/dashboard/conversations/WF-REPLY2/messages', [
+                'body' => '',
+            ])
+            ->assertRedirect('/dashboard/conversations/WF-REPLY2')
+            ->assertSessionHasErrors('body');
+
+        $this->assertDatabaseCount('conversation_messages', 0);
+    }
+
+    public function test_agent_cannot_reply_to_another_account_conversation(): void
+    {
+        $account = Account::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $agent = User::factory()->for($account)->create();
+        $otherSite = Site::factory()->for($otherAccount)->create();
+        $otherVisitor = Visitor::factory()->for($otherSite)->create();
+
+        Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+            'support_code' => 'WF-OTHER1',
+        ]);
+
+        $this->actingAs($agent)
+            ->post('/dashboard/conversations/WF-OTHER1/messages', [
+                'body' => 'Can you see this?',
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('conversation_messages', [
+            'body' => 'Can you see this?',
+        ]);
     }
 
     public function test_agent_cannot_view_another_account_conversation(): void

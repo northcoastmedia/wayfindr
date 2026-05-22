@@ -246,8 +246,8 @@ WAYFINDR_SITE_PUBLIC_KEY=replace-with-bootstrap-site-public-key \
 ./scripts/smoke/widget-intake.sh
 ```
 
-Then sign in to the Forge site as the demo agent and confirm the smoke
-conversation appears in the agent inbox.
+Then sign in to the Forge site as the demo agent, confirm the smoke conversation
+appears in the agent inbox, and send a short agent reply.
 
 ## Rollback
 
