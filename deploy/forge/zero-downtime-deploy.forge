@@ -1,6 +1,6 @@
 # Paste this into Forge's deploy script editor for a zero-downtime site.
-# The CREATE_RELEASE, ACTIVATE_RELEASE, and RESTART_QUEUES lines are Forge
-# macros and are not valid outside Forge.
+# The CREATE_RELEASE and ACTIVATE_RELEASE lines are Forge macros and are not
+# valid outside Forge.
 set -euo pipefail
 
 if [[ "${FORGE_DEPLOY_MESSAGE:-}" =~ \[skip[[:space:]]deploy\] ]]; then
@@ -47,5 +47,12 @@ forge_php artisan config:cache
 forge_php artisan route:cache
 forge_php artisan view:cache
 
+echo "Activating release."
 $ACTIVATE_RELEASE()
-$RESTART_QUEUES()
+
+cd "$FORGE_SITE_PATH/apps/server"
+
+echo "Restarting Laravel queues."
+forge_php artisan queue:restart
+
+echo "Deployment script complete."

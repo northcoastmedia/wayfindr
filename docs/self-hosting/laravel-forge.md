@@ -121,8 +121,10 @@ php artisan key:generate --show
 
 Use [zero-downtime-deploy.forge](../../deploy/forge/zero-downtime-deploy.forge)
 as the Forge deploy script for new sites. It assumes Forge's zero-downtime
-macros are available and that commands run from the monorepo root. The macro
-lines are Forge-specific and are not meant to run in a local shell.
+release macros are available and that commands run from the monorepo root. The
+macro lines are Forge-specific and are not meant to run in a local shell. After
+the release is activated, the script restarts Laravel queues from the active
+`current` release with `php artisan queue:restart`.
 
 If the site was created with `Install Composer dependencies` enabled and Forge
 reports `Composer could not find a composer.json file`, the site can still be
