@@ -1,8 +1,15 @@
 # Laravel Forge Deployment
 
-This is the first recommended staging/demo path for Wayfindr. Forge gives us a
-plain Laravel runtime, managed deploy hooks, queue workers, scheduled jobs,
-TLS, and health checks without introducing our own platform layer yet.
+This is the first-class staging/demo deployment path for Wayfindr. Forge gives
+us a plain Laravel runtime, managed deploy hooks, queue workers, scheduled
+jobs, TLS, and health checks without introducing our own platform layer yet.
+
+Forge is recommended, not required. Wayfindr can run on any infrastructure that
+can provide the same Laravel, Postgres, Redis, queue, scheduler, and realtime
+services. The Forge path gets the most complete docs first because this project
+is Laravel-first and Forge is a strong fit for Laravel applications.
+
+No partnership, sponsorship, or hosting requirement is implied.
 
 Wayfindr is still pre-alpha. Use this environment for product validation and
 integration smoke tests, not for real customer data.

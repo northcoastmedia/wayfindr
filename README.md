@@ -12,6 +12,16 @@ The project is intentionally early. The first goal is to prove a focused support
 
 Wayfindr is a Laravel-first monorepo. Laravel owns the core product, while SDKs and integrations make it portable across WordPress, Laravel, Next.js, React, and plain JavaScript sites.
 
+## Deployment Posture
+
+Wayfindr treats Laravel Forge as a first-class deployment path because the
+platform is built on Laravel and Forge maps cleanly to Laravel apps, queues,
+schedulers, TLS, and deploy hooks.
+
+Forge is recommended, not required. Wayfindr should remain launchable anywhere
+that can run the required Laravel, Postgres, Redis, queue, scheduler, and
+realtime services.
+
 ## Repository Layout
 
 ```text
@@ -47,6 +57,8 @@ Wayfindr uses a deliberately mixed license structure:
 - Wayfindr names, logos, and marks are not covered by the code license.
 
 See [0001-license-and-repo-structure.md](docs/decisions/0001-license-and-repo-structure.md) for the current licensing rationale.
+
+See [0003-laravel-forge-as-first-class-deployment-path.md](docs/decisions/0003-laravel-forge-as-first-class-deployment-path.md) for the current Forge deployment posture.
 
 ## Public Documentation Boundary
 
