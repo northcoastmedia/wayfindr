@@ -21,11 +21,22 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate
+php artisan wayfindr:bootstrap \
+  --account="Demo Support Co" \
+  --name="Demo Agent" \
+  --email="agent@example.com" \
+  --password="password" \
+  --site="Demo Site" \
+  --domain="demo.test" \
+  --site-public-key="site_demo_public_key"
 composer test
 php artisan serve
 ```
 
 The server runs at [http://localhost:8000](http://localhost:8000). A lightweight health check is available at [http://localhost:8000/up](http://localhost:8000/up).
+
+The local bootstrap credentials above are `agent@example.com` / `password`, and
+the widget public key is `site_demo_public_key`.
 
 ## Root Shortcuts
 
@@ -41,4 +52,7 @@ make server-serve
 
 ## Current Limits
 
-There is no agent workspace, visitor widget, chat flow, cobrowsing flow, or ticketing flow yet.
+The current prototype supports agent login, public widget intake, visitor
+conversation creation, and a read-only agent conversation inbox. Agent replies,
+realtime updates, cobrowsing, ticket workflows, and production hardening are
+still ahead.

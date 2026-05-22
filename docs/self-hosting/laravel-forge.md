@@ -170,6 +170,38 @@ Both scripts:
 - cache config, routes, and views,
 - restart queues after deploy.
 
+## First Account Bootstrap
+
+After the first deploy, create the first account, agent, and site from the
+Laravel app directory:
+
+```bash
+cd ~/wayfindr.on-forge.com/current/apps/server
+php artisan wayfindr:bootstrap \
+  --account="Acme Support" \
+  --name="Ada Agent" \
+  --email="ada@example.com" \
+  --site="Acme Website" \
+  --domain="example.com"
+```
+
+When `--password` is omitted, the command generates and prints the first
+agent password. When `--site-public-key` is omitted, it generates and prints the
+public widget key for the site.
+
+The command refuses to run when bootstrap records already exist. Use `--force`
+only when you intentionally want to create or update the supplied account,
+agent, and site records:
+
+```bash
+php artisan wayfindr:bootstrap \
+  --force \
+  --account="Acme Support" \
+  --name="Ada Agent" \
+  --email="ada@example.com" \
+  --site="Acme Website"
+```
+
 ## Queues And Scheduler
 
 Create one Forge queue worker for the site:
@@ -200,9 +232,9 @@ the staging runtime close to the expected production shape.
 12. Run the first deploy.
 13. Enable TLS before testing the widget from another origin.
 14. Enable the deployment health check against `/up`.
-15. Add the queue worker and scheduler.
-16. Log in with the seeded demo agent only if the seeder has been run:
-   `agent@example.com` / `password`.
+15. Run `php artisan wayfindr:bootstrap` from `apps/server`.
+16. Add the queue worker and scheduler.
+17. Sign in with the generated first agent credentials.
 
 ## Smoke Test
 
@@ -210,7 +242,7 @@ From a local machine with `curl` and PHP available:
 
 ```bash
 WAYFINDR_BASE_URL=https://replace-with-forge-site-host \
-WAYFINDR_SITE_PUBLIC_KEY=site_demo_public_key \
+WAYFINDR_SITE_PUBLIC_KEY=replace-with-bootstrap-site-public-key \
 ./scripts/smoke/widget-intake.sh
 ```
 

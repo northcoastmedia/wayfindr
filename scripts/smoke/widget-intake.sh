@@ -18,7 +18,7 @@ json_post() {
 }
 
 echo "Checking health endpoint..."
-curl -fsS "${base_url%/}/health" >/dev/null
+curl -fsS "${base_url%/}/up" >/dev/null
 
 echo "Bootstrapping widget visitor..."
 json_post '/api/widget/bootstrap' "{
