@@ -26,11 +26,25 @@ prepare_laravel_runtime_directories() {
         storage/logs
 }
 
+link_laravel_environment_file() {
+    if [[ -e .env ]]; then
+        return
+    fi
+
+    if [[ ! -f ../../.env ]]; then
+        echo "Expected Forge environment file at ../../.env, but it was not found." >&2
+        exit 1
+    fi
+
+    ln -s ../../.env .env
+}
+
 cd "$FORGE_SITE_PATH"
 git pull origin "$FORGE_SITE_BRANCH"
 
 cd apps/server
 
+link_laravel_environment_file
 forge_composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 if [[ -f package-lock.json ]]; then

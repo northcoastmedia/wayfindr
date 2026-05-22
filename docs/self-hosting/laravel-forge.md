@@ -125,6 +125,19 @@ cd ~/wayfindr.on-forge.com/current/apps/server
 php artisan about
 ```
 
+Forge stores the site environment file at the monorepo root. The Wayfindr deploy
+script links that file into `apps/server/.env` before Composer and Artisan run.
+If web routes fail with `No application encryption key has been specified` even
+after `APP_KEY` was set in Forge, verify the link exists:
+
+```bash
+cd ~/wayfindr.on-forge.com/current/apps/server
+readlink .env
+php artisan tinker --execute="app('encrypter'); echo 'encrypter ok'.PHP_EOL;"
+```
+
+The link should resolve to `../../.env`.
+
 ## Deploy Script
 
 Use [zero-downtime-deploy.forge](../../deploy/forge/zero-downtime-deploy.forge)
@@ -150,6 +163,7 @@ If zero-downtime deployments were disabled when the site was created, use
 
 Both scripts:
 
+- link Forge's root `.env` into `apps/server/.env`,
 - install production Composer dependencies from `apps/server`,
 - skip the frontend build until a `package-lock.json` exists,
 - run migrations with `--force`,
