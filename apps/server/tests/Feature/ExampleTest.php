@@ -1,29 +1,19 @@
 <?php
 
-namespace Tests\Feature;
+test('homepage identifies the Wayfindr server', function (): void {
+    $response = $this->get('/');
 
-use Tests\TestCase;
+    $response->assertStatus(200);
+    $response->assertSee('Wayfindr Server');
+});
 
-class ExampleTest extends TestCase
-{
-    public function test_homepage_identifies_wayfindr_server(): void
-    {
-        $response = $this->get('/');
+test('health endpoint reports ok status', function (): void {
+    $this->get('/up')
+        ->assertOk()
+        ->assertSee('Application up');
+});
 
-        $response->assertStatus(200);
-        $response->assertSee('Wayfindr Server');
-    }
-
-    public function test_health_endpoint_reports_ok_status(): void
-    {
-        $this->get('/up')
-            ->assertOk()
-            ->assertSee('Application up');
-    }
-
-    public function test_documented_legacy_health_endpoint_is_not_exposed(): void
-    {
-        $this->get('/health')
-            ->assertNotFound();
-    }
-}
+test('documented legacy health endpoint is not exposed', function (): void {
+    $this->get('/health')
+        ->assertNotFound();
+});

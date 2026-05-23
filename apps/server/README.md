@@ -16,6 +16,8 @@ php artisan migrate
 composer test
 ```
 
+`composer test` runs the Laravel Pest 4 suite.
+
 Use the repository root `docker-compose.yml` for local Postgres and Redis services.
 
 License: `AGPL-3.0-or-later`.
