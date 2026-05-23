@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
@@ -183,6 +184,96 @@ test('visitor can add a message to their conversation', function (): void {
         ->and($message->sender_type)->toBe(Visitor::class)
         ->and($message->sender_id)->toBe($visitor->id)
         ->and($conversation->refresh()->last_message_at)->not->toBeNull();
+});
+
+test('visitor can grant cobrowse consent for their conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-COBROWSE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'requested',
+        'consented_at' => null,
+        'ended_at' => null,
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-consent", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'granted' => true,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-COBROWSE')
+        ->assertJsonPath('data.cobrowse.status', 'granted')
+        ->assertJsonPath('data.cobrowse.consent', 'granted');
+
+    $session->refresh();
+
+    expect($session->conversation_id)->toBe($conversation->id)
+        ->and($session->site_id)->toBe($site->id)
+        ->and($session->visitor_id)->toBe($visitor->id)
+        ->and($session->status)->toBe('granted')
+        ->and($session->consented_at)->not->toBeNull()
+        ->and($session->ended_at)->toBeNull();
+
+    $this->assertDatabaseCount('cobrowse_sessions', 1);
+});
+
+test('visitor can revoke cobrowse consent for their conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REVOKE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-consent", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'granted' => false,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-REVOKE')
+        ->assertJsonPath('data.cobrowse.status', 'revoked')
+        ->assertJsonPath('data.cobrowse.consent', 'revoked');
+
+    expect($session->fresh())
+        ->status->toBe('revoked')
+        ->consented_at->not->toBeNull()
+        ->ended_at->not->toBeNull();
+});
+
+test('visitor cannot change cobrowse consent for another visitors conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-other']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-PRIVATE',
+    ]);
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-consent", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-other',
+        'visitor_token' => widgetVisitorToken($this, 'site_public_docs', 'anon-other'),
+        'granted' => true,
+    ])
+        ->assertNotFound()
+        ->assertJsonPath('message', 'Conversation not found.');
+
+    $this->assertDatabaseCount('cobrowse_sessions', 0);
 });
 
 test('visitor message creation rejects an invalid token', function (): void {

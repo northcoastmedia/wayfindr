@@ -49,6 +49,15 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="cobrowse-heading">
+                <div class="section-header">
+                    <h2 id="cobrowse-heading">Cobrowse</h2>
+                    <span class="lede">{{ $cobrowseConsent['label'] }}</span>
+                </div>
+
+                <p class="empty">{{ $cobrowseConsent['message'] }}</p>
+            </section>
+
             <section class="section" aria-labelledby="messages-heading">
                 <div class="section-header">
                     <h2 id="messages-heading">Messages</h2>

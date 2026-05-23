@@ -193,6 +193,44 @@ test('fetches visitor-visible conversation messages', async () => {
   assert.equal(result.messages[0].body, 'Hello from support.');
 });
 
+test('sets cobrowse consent through the public visitor API', async () => {
+  const calls = [];
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+          },
+          cobrowse: {
+            status: 'granted',
+            consent: 'granted',
+          },
+        },
+      });
+    },
+  });
+
+  const result = await client.setCobrowseConsent('WF-TEST123', true);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/cobrowse-consent');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    granted: true,
+  });
+  assert.equal(result.conversation.support_code, 'WF-TEST123');
+  assert.equal(result.cobrowse.consent, 'granted');
+});
+
 test('prepares private conversation subscriptions for realtime adapters', () => {
   let subscriptionPayload = null;
   const received = [];
@@ -563,6 +601,128 @@ test('appends live agent messages from the realtime subscription', async () => {
   widget.destroy();
 
   assert.equal(unsubscribed, true);
+});
+
+test('renders widget cobrowse consent controls after a conversation starts', async () => {
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+    url: 'https://docs.example.test/install',
+  });
+  const calls = [];
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    storage: memoryStorage(),
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent')) {
+        const payload = JSON.parse(options.body);
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: {
+              status: payload.granted ? 'granted' : 'revoked',
+              consent: payload.granted ? 'granted' : 'revoked',
+            },
+          },
+        });
+      }
+
+      return jsonResponse(200, {
+        data: {
+          conversation: { support_code: 'WF-TEST123', status: 'open' },
+          messages: [
+            {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          ],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+
+  const cobrowse = widget.root.querySelector('.wayfindr-widget__cobrowse');
+  const cobrowseButton = widget.root.querySelector('.wayfindr-widget__cobrowse-toggle');
+
+  assert.equal(cobrowse.hidden, false);
+  assert.equal(cobrowseButton.textContent, 'Allow cobrowse');
+
+  cobrowseButton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  const grantCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent'));
+
+  assert.deepEqual(JSON.parse(grantCall.options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    granted: true,
+  });
+  assert.equal(cobrowseButton.textContent, 'Stop cobrowse');
+  assert.match(widget.root.querySelector('.wayfindr-widget__status').textContent, /Cobrowse consent granted/);
+
+  cobrowseButton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  const revokeCall = calls.filter((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent'))[1];
+
+  assert.equal(JSON.parse(revokeCall.options.body).granted, false);
+  assert.equal(cobrowseButton.textContent, 'Allow cobrowse');
+  assert.match(widget.root.querySelector('.wayfindr-widget__status').textContent, /Cobrowse consent revoked/);
 });
 
 function jsonResponse(status, payload) {

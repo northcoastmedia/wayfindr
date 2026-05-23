@@ -98,6 +98,14 @@
           visitor_token: requireVisitorToken(visitorToken),
         }));
       },
+      setCobrowseConsent: function (supportCode, granted) {
+        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/cobrowse-consent', {
+          site_public_key: sitePublicKey,
+          anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
+          granted: Boolean(granted),
+        });
+      },
       subscribeToConversation: function (supportCode, onMessage) {
         if (!realtime) {
           return null;
@@ -177,6 +185,10 @@
       '      <button class="wayfindr-widget__refresh" type="button" hidden>Refresh</button>',
       '    </div>',
       '  </form>',
+      '  <div class="wayfindr-widget__cobrowse" hidden>',
+      '    <p class="wayfindr-widget__cobrowse-copy">Allow support to view this page with sensitive fields masked.</p>',
+      '    <button class="wayfindr-widget__cobrowse-toggle" type="button">Allow cobrowse</button>',
+      '  </div>',
       '  <p class="wayfindr-widget__status" role="status"></p>',
       '</section>',
     ].join('');
@@ -192,10 +204,13 @@
     var status = rootEl.querySelector('.wayfindr-widget__status');
     var send = rootEl.querySelector('.wayfindr-widget__send');
     var refresh = rootEl.querySelector('.wayfindr-widget__refresh');
+    var cobrowse = rootEl.querySelector('.wayfindr-widget__cobrowse');
+    var cobrowseToggle = rootEl.querySelector('.wayfindr-widget__cobrowse-toggle');
     var bootstrapped = false;
     var supportCode = null;
     var messages = [];
     var realtimeSubscription = null;
+    var cobrowseGranted = false;
 
     function renderMessages(nextMessages) {
       messages = Array.isArray(nextMessages) ? nextMessages : messages;
@@ -253,6 +268,35 @@
       });
     }
 
+    function renderCobrowseConsent() {
+      cobrowse.hidden = !supportCode;
+      cobrowseToggle.textContent = cobrowseGranted ? 'Stop cobrowse' : 'Allow cobrowse';
+    }
+
+    async function toggleCobrowseConsent() {
+      if (!supportCode) {
+        return;
+      }
+
+      var nextGranted = !cobrowseGranted;
+
+      cobrowseToggle.disabled = true;
+      status.textContent = nextGranted ? 'Granting cobrowse consent...' : 'Revoking cobrowse consent...';
+
+      try {
+        var result = await client.setCobrowseConsent(supportCode, nextGranted);
+        var consent = result && result.cobrowse ? result.cobrowse.consent : null;
+
+        cobrowseGranted = consent === 'granted';
+        renderCobrowseConsent();
+        status.textContent = cobrowseGranted ? 'Cobrowse consent granted.' : 'Cobrowse consent revoked.';
+      } catch (error) {
+        status.textContent = error.message || 'Wayfindr could not update cobrowse consent.';
+      } finally {
+        cobrowseToggle.disabled = false;
+      }
+    }
+
     async function refreshMessages(options) {
       options = options || {};
 
@@ -297,6 +341,9 @@
     refresh.addEventListener('click', function () {
       refreshMessages();
     });
+    cobrowseToggle.addEventListener('click', function () {
+      toggleCobrowseConsent();
+    });
     form.addEventListener('submit', async function (event) {
       event.preventDefault();
 
@@ -324,6 +371,7 @@
 
           supportCode = result.conversation.support_code;
           connectRealtime();
+          renderCobrowseConsent();
         }
 
         textarea.value = '';
@@ -607,6 +655,11 @@
       '.wayfindr-widget__refresh{min-height:40px;border:1px solid #d8dfdc;border-radius:6px;background:#fff;color:#1d2523;cursor:pointer;padding:0 12px;font:700 14px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
       '.wayfindr-widget__refresh:hover{border-color:#0d6f68;color:#0d6f68}',
       '.wayfindr-widget__refresh:disabled{cursor:wait;opacity:.7}',
+      '.wayfindr-widget__cobrowse{display:grid;gap:8px;padding:0 16px 16px}',
+      '.wayfindr-widget__cobrowse-copy{margin:0;color:#62706b;font-size:13px;line-height:1.35}',
+      '.wayfindr-widget__cobrowse-toggle{justify-self:start;min-height:36px;border:1px solid #d8dfdc;border-radius:6px;background:#fff;color:#1d2523;cursor:pointer;padding:0 12px;font:700 13px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
+      '.wayfindr-widget__cobrowse-toggle:hover{border-color:#0d6f68;color:#0d6f68}',
+      '.wayfindr-widget__cobrowse-toggle:disabled{cursor:wait;opacity:.7}',
       '.wayfindr-widget__status{min-height:20px;margin:0;padding:0 16px 16px;color:#62706b;font-size:13px}',
       '@media (max-width:480px){.wayfindr-widget{right:12px;bottom:12px}.wayfindr-widget__panel{width:calc(100vw - 24px)}}',
     ].join('');
