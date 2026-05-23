@@ -119,6 +119,23 @@
           reconnects: telemetry.reconnects,
         });
       },
+      reportCobrowsePageState: function (supportCode, pageState) {
+        pageState = pageState || {};
+
+        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/cobrowse-page-state', {
+          site_public_key: sitePublicKey,
+          anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
+          page_url: pageState.pageUrl,
+          title: pageState.title,
+          viewport_width: pageState.viewportWidth,
+          viewport_height: pageState.viewportHeight,
+          scroll_x: pageState.scrollX,
+          scroll_y: pageState.scrollY,
+          visibility_state: pageState.visibilityState,
+          focused: pageState.focused,
+        });
+      },
       subscribeToConversation: function (supportCode, onMessage) {
         if (!realtime) {
           return null;
@@ -300,6 +317,23 @@
       }
     }
 
+    function collectPageState() {
+      var view = doc.defaultView || root;
+      var docElement = doc.documentElement || {};
+      var body = doc.body || {};
+
+      return {
+        pageUrl: location ? String(location.href || '') : '',
+        title: doc.title || '',
+        viewportWidth: Number(view && view.innerWidth ? view.innerWidth : docElement.clientWidth || body.clientWidth || 0),
+        viewportHeight: Number(view && view.innerHeight ? view.innerHeight : docElement.clientHeight || body.clientHeight || 0),
+        scrollX: Number(view && typeof view.scrollX === 'number' ? view.scrollX : view && typeof view.pageXOffset === 'number' ? view.pageXOffset : 0),
+        scrollY: Number(view && typeof view.scrollY === 'number' ? view.scrollY : view && typeof view.pageYOffset === 'number' ? view.pageYOffset : 0),
+        visibilityState: doc.visibilityState || 'visible',
+        focused: typeof doc.hasFocus === 'function' ? doc.hasFocus() : true,
+      };
+    }
+
     async function toggleCobrowseConsent() {
       if (!supportCode) {
         return;
@@ -328,6 +362,12 @@
             });
           } catch (error) {
             // Telemetry should never undo a successful consent change.
+          }
+
+          try {
+            await client.reportCobrowsePageState(supportCode, collectPageState());
+          } catch (error) {
+            // Page-state reporting should never undo a successful consent change.
           }
         }
 

@@ -270,6 +270,48 @@ test('agent can see cobrowse telemetry on a conversation', function (): void {
         ->assertSee('5');
 });
 
+test('agent can see cobrowse page state on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-PAGESTATE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'page_state' => [
+                'page_url' => 'https://docs.example.test/install?step=2',
+                'title' => 'Install Guide',
+                'viewport_width' => 1366,
+                'viewport_height' => 768,
+                'scroll_x' => 0,
+                'scroll_y' => 420,
+                'visibility_state' => 'visible',
+                'focused' => true,
+                'reported_at' => now()->toJSON(),
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-PAGESTATE')
+        ->assertOk()
+        ->assertSee('Visitor page')
+        ->assertSee('Install Guide')
+        ->assertSee('https://docs.example.test/install?step=2')
+        ->assertSee('1,366 x 768')
+        ->assertSee('0, 420')
+        ->assertSee('visible')
+        ->assertSee('Focused');
+});
+
 test('agent can reply to their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

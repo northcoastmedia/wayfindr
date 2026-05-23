@@ -79,5 +79,6 @@ can also retrieve the visitor-visible message timeline, and the embedded widget
 renders that timeline with live Reverb updates when configured and a manual
 refresh fallback when realtime is unavailable. The Laravel app serves the
 classic widget script from `/widget.js`. Cobrowsing is beginning with explicit
-visitor consent and lightweight connection telemetry; page-state streaming,
-ticket workflows, and production hardening are still ahead.
+visitor consent, lightweight connection telemetry, and passive page-state
+reporting; sanitized DOM streaming, ticket workflows, and production hardening
+are still ahead.

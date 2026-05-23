@@ -7,7 +7,7 @@ use App\Models\Conversation;
 class CobrowseConsentState
 {
     /**
-     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null}
+     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null}
      */
     public function forConversation(Conversation $conversation): array
     {
@@ -21,6 +21,7 @@ class CobrowseConsentState
                 'message' => 'Visitor has not granted cobrowse consent.',
                 'status' => 'unavailable',
                 'telemetry' => null,
+                'page_state' => null,
             ];
         }
 
@@ -48,6 +49,7 @@ class CobrowseConsentState
         };
 
         $state['telemetry'] = $this->formatTelemetry($session->metadata['telemetry'] ?? null);
+        $state['page_state'] = $this->formatPageState($session->metadata['page_state'] ?? null);
 
         return $state;
     }
@@ -70,6 +72,43 @@ class CobrowseConsentState
             'reconnects' => number_format((int) ($telemetry['reconnects'] ?? 0)),
             'samples' => number_format((int) ($telemetry['samples'] ?? 0)),
         ];
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function formatPageState(mixed $pageState): ?array
+    {
+        if (! is_array($pageState)) {
+            return null;
+        }
+
+        return [
+            'title' => filled($pageState['title'] ?? null) ? (string) $pageState['title'] : 'Untitled page',
+            'page_url' => filled($pageState['page_url'] ?? null) ? (string) $pageState['page_url'] : 'Not reported',
+            'viewport' => $this->formatDimensions($pageState['viewport_width'] ?? null, $pageState['viewport_height'] ?? null),
+            'scroll' => $this->formatCoordinates($pageState['scroll_x'] ?? null, $pageState['scroll_y'] ?? null),
+            'visibility_state' => filled($pageState['visibility_state'] ?? null) ? (string) $pageState['visibility_state'] : 'Not reported',
+            'focus' => ($pageState['focused'] ?? false) ? 'Focused' : 'Not focused',
+        ];
+    }
+
+    private function formatDimensions(mixed $width, mixed $height): string
+    {
+        if (! is_numeric($width) || ! is_numeric($height)) {
+            return 'Not reported';
+        }
+
+        return number_format((int) $width).' x '.number_format((int) $height);
+    }
+
+    private function formatCoordinates(mixed $x, mixed $y): string
+    {
+        if (! is_numeric($x) || ! is_numeric($y)) {
+            return 'Not reported';
+        }
+
+        return number_format((int) $x).', '.number_format((int) $y);
     }
 
     private function formatMilliseconds(mixed $value): string
