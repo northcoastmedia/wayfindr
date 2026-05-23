@@ -6,20 +6,33 @@ The initial package exposes a small global API and is intentionally friendly to
 plain HTML sites:
 
 ```html
-<script src="../../packages/widget-js/src/wayfindr-widget.js"></script>
+<script src="https://your-wayfindr-host.example/widget.js"></script>
 <script>
   Wayfindr.init({
-    apiBaseUrl: 'http://127.0.0.1:8000',
+    apiBaseUrl: 'https://your-wayfindr-host.example',
     sitePublicKey: 'site_demo_public_key',
   });
 </script>
 ```
 
+For local development inside this monorepo, use
+`../../packages/widget-js/src/wayfindr-widget.js` from the plain HTML example.
+
 The widget currently supports the first visitor loop:
 
 - bootstrap the site config and anonymous visitor,
 - start a conversation,
-- send the first visitor message.
+- send visitor messages,
+- fetch the visitor-visible conversation message timeline.
+
+```js
+const client = Wayfindr.createClient({
+  apiBaseUrl: 'https://your-wayfindr-host.example',
+  sitePublicKey: 'site_demo_public_key',
+});
+
+const timeline = await client.fetchMessages('WF-EXAMPLE');
+```
 
 ## Development
 

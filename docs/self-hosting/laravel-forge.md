@@ -249,6 +249,13 @@ WAYFINDR_SITE_PUBLIC_KEY=replace-with-bootstrap-site-public-key \
 Then sign in to the Forge site as the demo agent, confirm the smoke conversation
 appears in the agent inbox, and send a short agent reply.
 
+For browser embed checks from an external static site, use the deployed widget
+script URL:
+
+```text
+https://replace-with-forge-site-host/widget.js
+```
+
 ## Rollback
 
 For zero-downtime deployments, use Forge's deployment history to reactivate the

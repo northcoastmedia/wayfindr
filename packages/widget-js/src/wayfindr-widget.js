@@ -68,6 +68,12 @@
           body: body,
         });
       },
+      fetchMessages: function (supportCode) {
+        return getJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages?' + toQueryString({
+          site_public_key: sitePublicKey,
+          anonymous_id: anonymousId,
+        }));
+      },
       sendFirstMessage: async function (body, details) {
         var conversation = await this.startConversation(body, details);
         var message = await this.sendMessage(conversation.support_code, body);
@@ -208,6 +214,15 @@
     return anonymousId;
   }
 
+  function getJson(fetcher, url) {
+    return fetcher(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    }).then(readJsonResponse);
+  }
+
   function postJson(fetcher, url, payload) {
     return fetcher(url, {
       method: 'POST',
@@ -216,17 +231,25 @@
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-    }).then(async function (response) {
-      var data = await response.json().catch(function () {
-        return {};
-      });
+    }).then(readJsonResponse);
+  }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Wayfindr request failed with status ' + response.status + '.');
-      }
-
-      return data.data;
+  async function readJsonResponse(response) {
+    var data = await response.json().catch(function () {
+      return {};
     });
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Wayfindr request failed with status ' + response.status + '.');
+    }
+
+    return data.data;
+  }
+
+  function toQueryString(values) {
+    return Object.keys(values).map(function (key) {
+      return encodeURIComponent(key) + '=' + encodeURIComponent(values[key]);
+    }).join('&');
   }
 
   function normalizeApiBaseUrl(value) {
