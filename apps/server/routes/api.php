@@ -3,6 +3,7 @@
 use App\Http\Controllers\Widget\BootstrapController;
 use App\Http\Controllers\Widget\BroadcastAuthController;
 use App\Http\Controllers\Widget\CobrowseConsentController;
+use App\Http\Controllers\Widget\CobrowseMutationController;
 use App\Http\Controllers\Widget\CobrowsePageStateController;
 use App\Http\Controllers\Widget\CobrowseSnapshotController;
 use App\Http\Controllers\Widget\CobrowseTelemetryController;
@@ -21,6 +22,8 @@ Route::post('/conversations/{supportCode}/cobrowse-page-state', [CobrowsePageSta
     ->name('conversations.cobrowse-page-state.store');
 Route::post('/conversations/{supportCode}/cobrowse-snapshot', [CobrowseSnapshotController::class, 'store'])
     ->name('conversations.cobrowse-snapshot.store');
+Route::post('/conversations/{supportCode}/cobrowse-mutations', [CobrowseMutationController::class, 'store'])
+    ->name('conversations.cobrowse-mutations.store');
 Route::get('/conversations/{supportCode}/messages', [ConversationMessageController::class, 'index'])
     ->name('conversations.messages.index');
 Route::post('/conversations/{supportCode}/messages', [ConversationMessageController::class, 'store'])

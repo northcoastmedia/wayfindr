@@ -7,7 +7,7 @@ use App\Models\Conversation;
 class CobrowseConsentState
 {
     /**
-     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null}
+     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null, mutation_stream: array<string, string>|null}
      */
     public function forConversation(Conversation $conversation): array
     {
@@ -23,6 +23,7 @@ class CobrowseConsentState
                 'telemetry' => null,
                 'page_state' => null,
                 'snapshot' => null,
+                'mutation_stream' => null,
             ];
         }
 
@@ -52,6 +53,7 @@ class CobrowseConsentState
         $state['telemetry'] = $this->formatTelemetry($session->metadata['telemetry'] ?? null);
         $state['page_state'] = $this->formatPageState($session->metadata['page_state'] ?? null);
         $state['snapshot'] = $this->formatSnapshot($session->metadata['snapshot'] ?? null);
+        $state['mutation_stream'] = $this->formatMutationStream($session->metadata['mutations'] ?? null);
 
         return $state;
     }
@@ -110,6 +112,25 @@ class CobrowseConsentState
             'node_count' => number_format((int) ($snapshot['node_count'] ?? 0)).' nodes',
             'masked_count' => number_format((int) ($snapshot['masked_count'] ?? 0)).' masked',
             'text' => filled($snapshot['text'] ?? null) ? (string) $snapshot['text'] : 'No text preview reported.',
+        ];
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function formatMutationStream(mixed $mutations): ?array
+    {
+        if (! is_array($mutations)) {
+            return null;
+        }
+
+        return [
+            'batch_count' => number_format((int) ($mutations['batch_count'] ?? 0)).' batches',
+            'mutation_count' => number_format((int) ($mutations['mutation_count'] ?? 0)).' mutations',
+            'dropped_count' => number_format((int) ($mutations['dropped_count'] ?? 0)).' dropped',
+            'skipped_count' => number_format((int) ($mutations['skipped_count'] ?? 0)).' skipped',
+            'last_sequence' => 'Sequence '.number_format((int) ($mutations['last_sequence'] ?? 0)),
+            'last_page_url' => filled($mutations['last_page_url'] ?? null) ? (string) $mutations['last_page_url'] : 'Not reported',
         ];
     }
 

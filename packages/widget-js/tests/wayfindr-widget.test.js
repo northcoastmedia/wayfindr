@@ -402,6 +402,72 @@ test('reports cobrowse snapshots through the public visitor API', async () => {
   assert.equal(result.snapshot.masked_count, 1);
 });
 
+test('reports cobrowse mutation batches through the public visitor API', async () => {
+  const calls = [];
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+          },
+          cobrowse: {
+            status: 'granted',
+          },
+          mutations: {
+            last_sequence: 3,
+            batch_count: 3,
+            mutation_count: 7,
+            dropped_count: 1,
+            skipped_count: 2,
+            recent_batches_count: 3,
+          },
+        },
+      });
+    },
+  });
+
+  const result = await client.reportCobrowseMutations('WF-TEST123', {
+    pageUrl: 'https://docs.example.test/install?step=2',
+    sequence: 3,
+    droppedCount: 1,
+    skippedCount: 2,
+    mutations: [
+      {
+        type: 'text',
+        path: 'body > main > p:nth-child(2)',
+        text: 'Updated public copy.',
+      },
+    ],
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/cobrowse-mutations');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    page_url: 'https://docs.example.test/install?step=2',
+    sequence: 3,
+    dropped_count: 1,
+    skipped_count: 2,
+    mutations: [
+      {
+        type: 'text',
+        path: 'body > main > p:nth-child(2)',
+        text: 'Updated public copy.',
+      },
+    ],
+  });
+  assert.equal(result.mutations.batch_count, 3);
+});
+
 test('creates a masked cobrowse snapshot from the document', () => {
   const dom = new JSDOM([
     '<!doctype html><html><head><title>Checkout</title></head><body>',
@@ -437,6 +503,73 @@ test('creates a masked cobrowse snapshot from the document', () => {
   assert.equal(snapshot.html.includes('Widget chrome'), false);
   assert.equal(snapshot.maskedCount, 3);
   assert(snapshot.nodeCount > 0);
+});
+
+test('creates sanitized cobrowse mutation batches from mutation records', () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Checkout</title></head><body>',
+    '<main>',
+    '  <h1>Checkout</h1>',
+    '  <p id="public-copy">Public checkout content.</p>',
+    '  <p id="secret-copy" data-wayfindr-mask>Card number 4111 1111 1111 1111</p>',
+    '  <button id="toggle" aria-expanded="false">Details</button>',
+    '</main>',
+    '<div class="wayfindr-widget">Widget chrome should not be mirrored.</div>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/checkout',
+  });
+  const doc = dom.window.document;
+  const publicCopy = doc.querySelector('#public-copy');
+  const secretCopy = doc.querySelector('#secret-copy');
+  const toggle = doc.querySelector('#toggle');
+  const added = doc.createElement('p');
+
+  publicCopy.textContent = 'Updated public checkout content.';
+  secretCopy.textContent = 'Card number 4242 4242 4242 4242';
+  toggle.setAttribute('aria-expanded', 'true');
+  added.textContent = 'Fresh public hint.';
+
+  const batch = Wayfindr.createCobrowseMutationBatch([
+    {
+      type: 'characterData',
+      target: publicCopy.firstChild,
+    },
+    {
+      type: 'characterData',
+      target: secretCopy.firstChild,
+    },
+    {
+      type: 'attributes',
+      target: toggle,
+      attributeName: 'aria-expanded',
+    },
+    {
+      type: 'childList',
+      target: doc.querySelector('main'),
+      addedNodes: [added],
+      removedNodes: [],
+    },
+  ], {
+    document: doc,
+    location: dom.window.location,
+    sequence: 9,
+  });
+
+  assert.equal(batch.pageUrl, 'https://docs.example.test/checkout');
+  assert.equal(batch.sequence, 9);
+  assert.equal(batch.mutations.length, 4);
+  assert.equal(batch.skippedCount, 0);
+  assert.equal(batch.mutations[0].type, 'text');
+  assert.equal(batch.mutations[0].text, 'Updated public checkout content.');
+  assert.equal(batch.mutations[1].text, '[masked]');
+  assert.equal(batch.mutations[2].type, 'attribute');
+  assert.equal(batch.mutations[2].attributeName, 'aria-expanded');
+  assert.equal(batch.mutations[2].attributeValue, 'true');
+  assert.equal(batch.mutations[3].type, 'added');
+  assert.match(batch.mutations[3].html, /Fresh public hint/);
+  assert.equal(JSON.stringify(batch).includes('4242 4242 4242 4242'), false);
+  assert.equal(JSON.stringify(batch).includes('Widget chrome'), false);
 });
 
 test('prepares private conversation subscriptions for realtime adapters', () => {
@@ -596,6 +729,7 @@ test('renders the embedded conversation timeline and refreshes replies', async (
     sitePublicKey: 'site_public_docs',
     anonymousId: 'anon-browser-123',
     storage: memoryStorage(),
+    mutationFlushMs: 0,
     fetch: async (url, options) => {
       calls.push({ url, options });
 
@@ -941,6 +1075,25 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
         });
       }
 
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-mutations')) {
+        const payload = JSON.parse(options.body);
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: { status: 'granted' },
+            mutations: {
+              last_sequence: payload.sequence,
+              batch_count: 1,
+              mutation_count: payload.mutations.length,
+              dropped_count: payload.dropped_count,
+              skipped_count: payload.skipped_count,
+              recent_batches_count: 1,
+            },
+          },
+        });
+      }
+
       return jsonResponse(200, {
         data: {
           conversation: { support_code: 'WF-TEST123', status: 'open' },
@@ -1030,6 +1183,24 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
   assert.equal(typeof snapshotPayload.node_count, 'number');
   assert.equal(snapshotPayload.masked_count, 2);
 
+  dom.window.document.querySelector('main p').textContent = 'Updated public install content.';
+  dom.window.document.querySelector('[data-secret]').textContent = 'Updated internal token def456';
+
+  await settle();
+  await wait(100);
+
+  const mutationCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-mutations'));
+  const mutationPayload = JSON.parse(mutationCall.options.body);
+
+  assert.equal(mutationPayload.site_public_key, 'site_public_docs');
+  assert.equal(mutationPayload.anonymous_id, 'anon-browser-123');
+  assert.equal(mutationPayload.visitor_token, 'visitor-token-123');
+  assert.equal(mutationPayload.page_url, 'https://docs.example.test/install');
+  assert.equal(mutationPayload.sequence, 1);
+  assert(mutationPayload.mutations.some((mutation) => mutation.type === 'text' && mutation.text === 'Updated public install content.'));
+  assert(mutationPayload.mutations.some((mutation) => mutation.type === 'text' && mutation.text === '[masked]'));
+  assert.equal(JSON.stringify(mutationPayload).includes('Updated internal token def456'), false);
+
   cobrowseButton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
 
   await settle();
@@ -1052,6 +1223,10 @@ function jsonResponse(status, payload) {
 async function settle() {
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+async function wait(milliseconds) {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function memoryStorage() {

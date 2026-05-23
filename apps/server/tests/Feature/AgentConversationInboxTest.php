@@ -352,6 +352,57 @@ test('agent can see a safe cobrowse snapshot preview on a conversation', functio
         ->assertDontSee('super-secret-token');
 });
 
+test('agent can see cobrowse mutation stream diagnostics on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-MUTATE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'mutations' => [
+                'batch_count' => 3,
+                'mutation_count' => 7,
+                'dropped_count' => 2,
+                'skipped_count' => 1,
+                'last_sequence' => 42,
+                'last_page_url' => 'https://docs.example.test/install?step=2',
+                'last_reported_at' => now()->toJSON(),
+                'recent_batches' => [
+                    [
+                        'sequence' => 42,
+                        'mutation_count' => 2,
+                        'dropped_count' => 0,
+                        'skipped_count' => 1,
+                        'page_url' => 'https://docs.example.test/install?step=2',
+                        'reported_at' => now()->toJSON(),
+                        'mutations' => [],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-MUTATE')
+        ->assertOk()
+        ->assertSee('Mutation stream')
+        ->assertSee('3 batches')
+        ->assertSee('7 mutations')
+        ->assertSee('2 dropped')
+        ->assertSee('1 skipped')
+        ->assertSee('Sequence 42')
+        ->assertSee('https://docs.example.test/install?step=2');
+});
+
 test('agent can reply to their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

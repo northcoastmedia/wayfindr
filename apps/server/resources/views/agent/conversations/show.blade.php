@@ -125,6 +125,41 @@
                     <p class="empty realtime-note">No sanitized page snapshot yet.</p>
                 @endif
 
+                @if ($cobrowseConsent['mutation_stream'])
+                    <div class="section-header">
+                        <strong>Mutation stream</strong>
+                    </div>
+
+                    <div class="meta-grid realtime-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Batches</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['batch_count'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Mutations</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['mutation_count'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Dropped</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['dropped_count'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Skipped</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['skipped_count'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Last sequence</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['last_sequence'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">URL</span>
+                            <span class="meta-value">{{ $cobrowseConsent['mutation_stream']['last_page_url'] }}</span>
+                        </div>
+                    </div>
+                @else
+                    <p class="empty realtime-note">No mutation stream diagnostics yet.</p>
+                @endif
+
                 @if ($cobrowseConsent['telemetry'])
                     <div class="section-header">
                         <strong>Connection telemetry</strong>

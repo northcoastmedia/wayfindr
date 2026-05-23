@@ -29,6 +29,16 @@
     'svg',
     '.wayfindr-widget',
   ];
+  var SAFE_MUTATION_ATTRIBUTES = [
+    'aria-current',
+    'aria-expanded',
+    'aria-hidden',
+    'checked',
+    'class',
+    'disabled',
+    'hidden',
+    'selected',
+  ];
 
   function createClient(options) {
     options = options || {};
@@ -170,6 +180,20 @@
           masked_count: snapshot.maskedCount,
         });
       },
+      reportCobrowseMutations: function (supportCode, batch) {
+        batch = batch || {};
+
+        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/cobrowse-mutations', {
+          site_public_key: sitePublicKey,
+          anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
+          page_url: batch.pageUrl,
+          sequence: batch.sequence,
+          dropped_count: batch.droppedCount || 0,
+          skipped_count: batch.skippedCount || 0,
+          mutations: (batch.mutations || []).map(mutationPayload),
+        });
+      },
       getMaskSelectors: function () {
         return maskSelectors.slice();
       },
@@ -278,6 +302,12 @@
     var messages = [];
     var realtimeSubscription = null;
     var cobrowseGranted = false;
+    var mutationObserver = null;
+    var pendingMutationRecords = [];
+    var mutationFlushTimer = null;
+    var mutationSequence = 0;
+    var droppedMutationBatches = 0;
+    var mutationFlushMs = typeof options.mutationFlushMs === 'number' ? options.mutationFlushMs : 50;
 
     function renderMessages(nextMessages) {
       messages = Array.isArray(nextMessages) ? nextMessages : messages;
@@ -371,6 +401,82 @@
       };
     }
 
+    function startMutationStream() {
+      var view = doc.defaultView || root;
+      var Observer = view && view.MutationObserver;
+
+      if (!Observer || mutationObserver || !doc.body || !supportCode) {
+        return;
+      }
+
+      mutationObserver = new Observer(function (records) {
+        pendingMutationRecords = pendingMutationRecords.concat(Array.prototype.slice.call(records || []));
+        scheduleMutationFlush();
+      });
+
+      mutationObserver.observe(doc.body, {
+        attributes: true,
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    function stopMutationStream() {
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+        mutationObserver = null;
+      }
+
+      if (mutationFlushTimer) {
+        clearTimeout(mutationFlushTimer);
+        mutationFlushTimer = null;
+      }
+
+      pendingMutationRecords = [];
+    }
+
+    function scheduleMutationFlush() {
+      if (mutationFlushTimer) {
+        return;
+      }
+
+      mutationFlushTimer = setTimeout(function () {
+        mutationFlushTimer = null;
+        flushMutationRecords();
+      }, mutationFlushMs);
+    }
+
+    async function flushMutationRecords() {
+      var records = pendingMutationRecords;
+      pendingMutationRecords = [];
+
+      if (!supportCode || records.length === 0) {
+        return;
+      }
+
+      var batch = createCobrowseMutationBatch(records, {
+        document: doc,
+        location: location,
+        maskSelectors: client.getMaskSelectors(),
+        sequence: mutationSequence + 1,
+        droppedCount: droppedMutationBatches,
+      });
+
+      if (batch.mutations.length === 0 && batch.droppedCount === 0) {
+        return;
+      }
+
+      mutationSequence = batch.sequence;
+
+      try {
+        await client.reportCobrowseMutations(supportCode, batch);
+        droppedMutationBatches = 0;
+      } catch (error) {
+        droppedMutationBatches += 1;
+      }
+    }
+
     async function toggleCobrowseConsent() {
       if (!supportCode) {
         return;
@@ -415,6 +521,10 @@
           } catch (error) {
             // Snapshot reporting should never undo a successful consent change.
           }
+
+          startMutationStream();
+        } else {
+          stopMutationStream();
         }
 
         status.textContent = cobrowseGranted ? 'Cobrowse consent granted.' : 'Cobrowse consent revoked.';
@@ -523,6 +633,7 @@
           realtimeSubscription.unsubscribe();
         }
 
+        stopMutationStream();
         rootEl.remove();
       },
     };
@@ -654,6 +765,190 @@
     };
   }
 
+  function createCobrowseMutationBatch(records, options) {
+    options = options || {};
+
+    var doc = options.document || null;
+    var location = options.location || (doc && doc.location) || null;
+    var maskSelectors = DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []);
+    var maxMutations = options.maxMutations || 50;
+    var mutations = [];
+    var skippedCount = 0;
+
+    Array.prototype.slice.call(records || []).forEach(function (record) {
+      if (mutations.length >= maxMutations) {
+        skippedCount += 1;
+
+        return;
+      }
+
+      var mutation = mutationFromRecord(record, {
+        maskSelectors: maskSelectors,
+      });
+
+      if (!mutation) {
+        skippedCount += 1;
+
+        return;
+      }
+
+      mutations.push(mutation);
+    });
+
+    return {
+      pageUrl: location ? String(location.href || '') : '',
+      sequence: Number(options.sequence || 1),
+      droppedCount: Number(options.droppedCount || 0),
+      skippedCount: skippedCount,
+      mutations: mutations,
+    };
+  }
+
+  function mutationPayload(mutation) {
+    return withoutNullValues({
+      type: mutation.type,
+      path: mutation.path,
+      text: mutation.text,
+      html: mutation.html,
+      attribute_name: mutation.attributeName,
+      attribute_value: mutation.attributeValue,
+      node_name: mutation.nodeName,
+      node_count: mutation.nodeCount,
+      masked_count: mutation.maskedCount,
+    });
+  }
+
+  function mutationFromRecord(record, options) {
+    if (!record || !record.type) {
+      return null;
+    }
+
+    if (record.type === 'characterData') {
+      return textMutationFromRecord(record, options);
+    }
+
+    if (record.type === 'attributes') {
+      return attributeMutationFromRecord(record, options);
+    }
+
+    if (record.type === 'childList') {
+      return childMutationFromRecord(record, options);
+    }
+
+    return null;
+  }
+
+  function textMutationFromRecord(record, options) {
+    var target = record.target || null;
+    var element = target && target.parentElement ? target.parentElement : null;
+
+    if (!element || shouldIgnoreElement(element)) {
+      return null;
+    }
+
+    return {
+      type: 'text',
+      path: elementPath(element),
+      text: isMaskedElement(element, options.maskSelectors)
+        ? '[masked]'
+        : truncateString(normalizeWhitespace(target.data || target.textContent || ''), 5000),
+    };
+  }
+
+  function attributeMutationFromRecord(record, options) {
+    var element = record.target || null;
+    var attributeName = String(record.attributeName || '').toLowerCase();
+
+    if (!element || shouldIgnoreElement(element) || !isSafeMutationAttribute(attributeName)) {
+      return null;
+    }
+
+    return {
+      type: 'attribute',
+      path: elementPath(element),
+      attributeName: attributeName,
+      attributeValue: isMaskedElement(element, options.maskSelectors)
+        ? '[masked]'
+        : truncateString(String(element.getAttribute(attributeName) || ''), 2048),
+    };
+  }
+
+  function childMutationFromRecord(record, options) {
+    var addedNodes = Array.prototype.slice.call(record.addedNodes || []);
+    var removedNodes = Array.prototype.slice.call(record.removedNodes || []);
+    var added = addedNodes.find(function (node) {
+      return node && node.nodeType === 1 && !shouldIgnoreElement(node);
+    });
+    var addedText = addedNodes.find(function (node) {
+      return node && node.nodeType === 3 && normalizeWhitespace(node.textContent || '');
+    });
+    var removed = removedNodes.find(function (node) {
+      return node && node.nodeType === 1;
+    });
+
+    if (added) {
+      return addedMutation(record, added, options);
+    }
+
+    if (addedText) {
+      return textMutationFromNode(record.target, addedText, options);
+    }
+
+    if (removed) {
+      return removedMutation(record, removed);
+    }
+
+    return null;
+  }
+
+  function addedMutation(record, element, options) {
+    var clone = element.cloneNode(true);
+    var maskedCount;
+
+    removeMatching(clone, DEFAULT_REMOVE_SELECTORS);
+    maskedCount = isMaskedElement(element, options.maskSelectors)
+      ? maskWholeElement(clone)
+      : maskMatching(clone, options.maskSelectors);
+    clearFormControlValues(clone);
+
+    return {
+      type: 'added',
+      path: elementPath(record.target || element.parentElement),
+      html: truncateString(clone.outerHTML || '', 10000),
+      text: truncateString(normalizeWhitespace(clone.textContent || ''), 5000),
+      nodeCount: clone.querySelectorAll ? clone.querySelectorAll('*').length + 1 : 1,
+      maskedCount: maskedCount,
+    };
+  }
+
+  function textMutationFromNode(element, node, options) {
+    if (!element || shouldIgnoreElement(element)) {
+      return null;
+    }
+
+    return {
+      type: 'text',
+      path: elementPath(element),
+      text: isMaskedElement(element, options.maskSelectors)
+        ? '[masked]'
+        : truncateString(normalizeWhitespace(node.textContent || ''), 5000),
+    };
+  }
+
+  function removedMutation(record, element) {
+    var target = record.target || element.parentElement;
+
+    if (!target || shouldIgnoreElement(target)) {
+      return null;
+    }
+
+    return {
+      type: 'removed',
+      path: elementPath(target),
+      nodeName: String(element.tagName || element.nodeName || '').toLowerCase(),
+    };
+  }
+
   function removeMatching(source, selectors) {
     selectors.forEach(function (selector) {
       queryAll(source, selector).forEach(function (element) {
@@ -709,6 +1004,78 @@
     element.textContent = '[masked]';
   }
 
+  function maskWholeElement(element) {
+    maskElement(element);
+
+    return 1;
+  }
+
+  function shouldIgnoreElement(element) {
+    return elementMatchesOrClosest(element, DEFAULT_REMOVE_SELECTORS);
+  }
+
+  function isMaskedElement(element, selectors) {
+    return elementMatchesOrClosest(element, selectors || DEFAULT_MASK_SELECTORS);
+  }
+
+  function elementMatchesOrClosest(element, selectors) {
+    if (!element || !selectors) {
+      return false;
+    }
+
+    return selectors.some(function (selector) {
+      try {
+        return (typeof element.matches === 'function' && element.matches(selector))
+          || (typeof element.closest === 'function' && Boolean(element.closest(selector)));
+      } catch (error) {
+        return false;
+      }
+    });
+  }
+
+  function isSafeMutationAttribute(attributeName) {
+    return SAFE_MUTATION_ATTRIBUTES.indexOf(attributeName) !== -1 || attributeName.indexOf('aria-') === 0;
+  }
+
+  function elementPath(element) {
+    var parts = [];
+    var current = element && element.nodeType === 1 ? element : null;
+
+    while (current && current.tagName) {
+      var tag = String(current.tagName).toLowerCase();
+
+      if (tag === 'html') {
+        break;
+      }
+
+      parts.unshift(tag + ':nth-of-type(' + elementIndex(current) + ')');
+
+      if (tag === 'body') {
+        break;
+      }
+
+      current = current.parentElement;
+    }
+
+    return parts.join(' > ') || 'document';
+  }
+
+  function elementIndex(element) {
+    var index = 1;
+    var sibling = element.previousElementSibling;
+    var tag = element.tagName;
+
+    while (sibling) {
+      if (sibling.tagName === tag) {
+        index += 1;
+      }
+
+      sibling = sibling.previousElementSibling;
+    }
+
+    return index;
+  }
+
   function clearFormControlValues(source) {
     queryAll(source, 'input, textarea, select').forEach(function (element) {
       if (element.getAttribute('value') === '[masked]' || element.textContent === '[masked]') {
@@ -737,6 +1104,18 @@
     }
 
     return value.slice(0, maxLength);
+  }
+
+  function withoutNullValues(values) {
+    var result = {};
+
+    Object.keys(values).forEach(function (key) {
+      if (values[key] !== null && typeof values[key] !== 'undefined') {
+        result[key] = values[key];
+      }
+    });
+
+    return result;
   }
 
   function visitorTokenStorageKey(sitePublicKey) {
@@ -964,6 +1343,7 @@
     version: VERSION,
     createClient: createClient,
     createCobrowseSnapshot: createCobrowseSnapshot,
+    createCobrowseMutationBatch: createCobrowseMutationBatch,
     init: init,
     normalizeApiBaseUrl: normalizeApiBaseUrl,
     resolveAnonymousId: resolveAnonymousId,
