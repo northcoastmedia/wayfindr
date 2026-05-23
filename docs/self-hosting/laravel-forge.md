@@ -160,7 +160,8 @@ as the Forge deploy script for new sites. It assumes Forge's zero-downtime
 release macros are available and that commands run from the monorepo root. The
 macro lines are Forge-specific and are not meant to run in a local shell. After
 the release is activated, the script restarts Laravel queues from the active
-`current` release with `php artisan queue:restart`.
+`current` release with `php artisan queue:restart` and asks Laravel Reverb to
+gracefully reload with `php artisan reverb:restart`.
 
 If the site was created with `Install Composer dependencies` enabled and Forge
 reports `Composer could not find a composer.json file`, the site can still be
@@ -237,24 +238,62 @@ Wayfindr can broadcast conversation messages over Laravel Reverb. Add a Forge
 daemon/background process from the Laravel app directory:
 
 ```bash
-php artisan reverb:start --host=0.0.0.0 --port=8080
+php8.4 artisan reverb:start --host=127.0.0.1 --port=8080
 ```
 
-Reverb's public connection settings are intentionally separate from the server
-bind address. In a TLS deployment, the common shape is:
+Use the `forge` user, one process, and autorestart. The process is long-running;
+`Starting server on 127.0.0.1:8080 (...)` means Reverb is listening.
+
+Reverb's public connection settings are intentionally separate from the private
+server bind address. In a TLS deployment that proxies WebSockets through the
+same site hostname, the common shape is:
 
 ```dotenv
 BROADCAST_CONNECTION=reverb
-REVERB_HOST=replace-with-websocket-host
+REVERB_APP_ID=wayfindr-production
+REVERB_APP_KEY=replace-with-public-reverb-key
+REVERB_APP_SECRET=replace-with-private-reverb-secret
+REVERB_HOST=replace-with-forge-site-host
 REVERB_PORT=443
 REVERB_SCHEME=https
-REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_HOST=127.0.0.1
 REVERB_SERVER_PORT=8080
 ```
 
-Forge-managed Reverb sites should route secure WebSocket traffic to the Reverb
-process. If the WebSocket host differs from `APP_URL`, make sure that hostname
-has TLS before testing from an external smoke site.
+Forge-managed Reverb sites should route secure WebSocket traffic to the private
+Reverb process. When using the same hostname as `APP_URL`, add Nginx proxy
+blocks for `/app` and `/apps` before the main `location /` block:
+
+```nginx
+location /app {
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header Scheme $scheme;
+    proxy_set_header SERVER_PORT $server_port;
+    proxy_set_header REMOTE_ADDR $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+
+    proxy_pass http://127.0.0.1:8080;
+}
+
+location /apps {
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header Scheme $scheme;
+    proxy_set_header SERVER_PORT $server_port;
+    proxy_set_header REMOTE_ADDR $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+
+    proxy_pass http://127.0.0.1:8080;
+}
+```
+
+If the WebSocket host differs from `APP_URL`, make sure that hostname has TLS
+before testing from an external smoke site.
 
 The widget needs the public Reverb connection settings plus `pusher-js` on the
 host page:
@@ -274,6 +313,9 @@ host page:
 
 The Reverb app key is safe to expose to browsers. Keep `REVERB_APP_SECRET`
 server-side only.
+
+The deploy scripts call `php artisan reverb:restart` after each deploy so the
+background process reloads the active release.
 
 ## First Deploy Checklist
 
@@ -333,6 +375,7 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan queue:restart
+php artisan reverb:restart
 ```
 
 ## References
