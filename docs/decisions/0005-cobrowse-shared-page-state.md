@@ -6,7 +6,7 @@ Date: 2026-05-23
 
 Wayfindr cobrowsing will begin as shared page state, not video or pixel streaming.
 
-After explicit visitor consent, the browser widget will send sanitized page state to Wayfindr so an agent can reconstruct enough context to help the visitor. Early cobrowse work prioritizes consent, masking, telemetry, an initial sanitized DOM snapshot, viewport state, and compact mutation streams before remote control.
+After explicit visitor consent, the browser widget will send sanitized page state to Wayfindr so an agent can reconstruct enough context to help the visitor. Early cobrowse work prioritizes consent, masking, telemetry, an initial sanitized DOM snapshot, viewport state, and bounded mutation streams before remote control.
 
 ## Rationale
 
@@ -24,6 +24,7 @@ Shared page state gives Wayfindr better defaults for:
 - Cobrowse is not positioned as full remote desktop streaming.
 - The first useful experience is passive co-viewing with agent guidance.
 - Initial snapshots are sanitized in the visitor browser and shown to agents as safe preview text before richer DOM reconstruction exists.
+- Mutation batches are compact and capped so small self-hosted installs can observe change pressure before trying richer replay.
 - Transport telemetry is first-class so hosts can see latency, payload size, reconnects, and dropped updates before tuning infrastructure.
 - Reverb can carry early cobrowse events while traffic is modest.
 - A separate cobrowse relay may be introduced later for high-throughput, ephemeral streams without moving auth, consent, audit, or account ownership out of Laravel.

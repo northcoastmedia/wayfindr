@@ -460,6 +460,125 @@ test('cobrowse snapshot rejects oversized html payloads', function (): void {
     expect($session->fresh()->metadata)->not->toHaveKey('snapshot');
 });
 
+test('visitor can report bounded cobrowse mutation batches for their active session', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-MUTATE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'mutations' => [
+                'batch_count' => 20,
+                'mutation_count' => 20,
+                'dropped_count' => 1,
+                'skipped_count' => 2,
+                'last_sequence' => 20,
+                'recent_batches' => collect(range(1, 20))->map(fn (int $sequence): array => [
+                    'sequence' => $sequence,
+                    'mutation_count' => 1,
+                    'dropped_count' => 0,
+                    'skipped_count' => 0,
+                    'page_url' => 'https://docs.example.test/install',
+                    'reported_at' => now()->subSeconds(30)->toJSON(),
+                    'mutations' => [
+                        [
+                            'type' => 'text',
+                            'path' => 'body > main > p',
+                            'text' => "Old text {$sequence}",
+                        ],
+                    ],
+                ])->all(),
+            ],
+        ],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-mutations", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'page_url' => 'https://docs.example.test/install?step=2',
+        'sequence' => 21,
+        'dropped_count' => 1,
+        'skipped_count' => 3,
+        'mutations' => [
+            [
+                'type' => 'text',
+                'path' => 'body > main > p:nth-child(2)',
+                'text' => 'Public copy changed.',
+            ],
+            [
+                'type' => 'attribute',
+                'path' => 'body > main > button',
+                'attribute_name' => 'aria-expanded',
+                'attribute_value' => 'true',
+            ],
+        ],
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-MUTATE')
+        ->assertJsonPath('data.cobrowse.status', 'granted')
+        ->assertJsonPath('data.mutations.last_sequence', 21)
+        ->assertJsonPath('data.mutations.batch_count', 21)
+        ->assertJsonPath('data.mutations.mutation_count', 22)
+        ->assertJsonPath('data.mutations.dropped_count', 2)
+        ->assertJsonPath('data.mutations.skipped_count', 5)
+        ->assertJsonPath('data.mutations.recent_batches_count', 20);
+
+    $mutations = $session->fresh()->metadata['mutations'];
+
+    expect($mutations)
+        ->last_sequence->toBe(21)
+        ->batch_count->toBe(21)
+        ->mutation_count->toBe(22)
+        ->dropped_count->toBe(2)
+        ->skipped_count->toBe(5)
+        ->last_page_url->toBe('https://docs.example.test/install?step=2')
+        ->last_reported_at->not->toBeNull()
+        ->and($mutations['recent_batches'])->toHaveCount(20)
+        ->and($mutations['recent_batches'][0]['sequence'])->toBe(2)
+        ->and($mutations['recent_batches'][19]['sequence'])->toBe(21)
+        ->and($mutations['recent_batches'][19]['mutations'][0]['text'])->toBe('Public copy changed.');
+});
+
+test('cobrowse mutations reject oversized batches', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-MUTATE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-mutations", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'page_url' => 'https://docs.example.test/install',
+        'sequence' => 1,
+        'mutations' => collect(range(1, 51))->map(fn (int $index): array => [
+            'type' => 'text',
+            'path' => "body > main > p:nth-child({$index})",
+            'text' => "Changed {$index}",
+        ])->all(),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('mutations');
+
+    expect($session->fresh()->metadata)->not->toHaveKey('mutations');
+});
+
 test('visitor cannot change cobrowse consent for another visitors conversation', function (): void {
     $site = Site::factory()->create(['public_key' => 'site_public_docs']);
     $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);

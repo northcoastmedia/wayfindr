@@ -23,7 +23,7 @@ See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
 3. The visitor appears in the agent workspace.
 4. Visitor and agent can chat.
 5. Agent can request cobrowsing consent.
-6. After consent, the widget reports sanitized page state and an initial DOM snapshot to the agent viewer.
+6. After consent, the widget reports sanitized page state, an initial DOM snapshot, and bounded mutation batches to the agent viewer.
 7. The conversation can become a ticket.
 
 ## Architecture Biases
@@ -33,5 +33,6 @@ See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
 - Keep masking client-side.
 - Treat cobrowse as shared page state instead of video streaming.
 - Measure cobrowse latency and payload pressure before adding heavier transport.
+- Keep mutation streams bounded until agent-side replay proves the event shape.
 - Keep public APIs stable only after the prototype proves them.
 - Avoid microservices until operational pressure justifies them.
