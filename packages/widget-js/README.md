@@ -54,6 +54,7 @@ The widget currently supports the first visitor loop:
 - grant or revoke cobrowse consent,
 - report lightweight cobrowse connection telemetry after consent,
 - report passive page state after consent,
+- report an initial sanitized DOM snapshot after consent,
 - manually refresh for agent replies when realtime is unavailable.
 
 ```js
@@ -75,9 +76,11 @@ Lower-level calls such as `startConversation`, `sendMessage`, and
 `subscribeToConversation` prepares a private `conversations.{supportCode}`
 subscription for realtime adapters and uses Wayfindr's signed visitor session
 when authorizing the channel.
-`setCobrowseConsent`, `reportCobrowseTelemetry`, and
-`reportCobrowsePageState` prepare the consent and measurement path for shared
-page-state cobrowsing.
+`setCobrowseConsent`, `reportCobrowseTelemetry`,
+`reportCobrowsePageState`, and `reportCobrowseSnapshot` prepare the consent,
+measurement, and initial snapshot path for shared page-state cobrowsing.
+`createCobrowseSnapshot` masks password fields, hidden fields, and configured
+mask selectors before snapshot data leaves the visitor browser.
 
 ## Development
 

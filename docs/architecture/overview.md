@@ -8,7 +8,7 @@ Wayfindr is planned as a Laravel-first support platform with portable client int
 - Agent workspace.
 - Browser widget SDK.
 - Realtime WebSocket layer.
-- Cobrowse page-state telemetry and relay path.
+- Cobrowse page-state, snapshot, telemetry, and relay path.
 - Queue workers.
 - Postgres database.
 - Redis for cache, queues, and realtime support.
@@ -23,7 +23,7 @@ See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
 3. The visitor appears in the agent workspace.
 4. Visitor and agent can chat.
 5. Agent can request cobrowsing consent.
-6. After consent, the widget streams sanitized page state to the agent viewer.
+6. After consent, the widget reports sanitized page state and an initial DOM snapshot to the agent viewer.
 7. The conversation can become a ticket.
 
 ## Architecture Biases
