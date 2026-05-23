@@ -20,3 +20,7 @@ Open `http://127.0.0.1:4173/examples/plain-html/`.
 
 The demo uses the seeded site public key `site_demo_public_key` and talks to
 the local Laravel server at `http://127.0.0.1:8000`.
+
+To smoke test live replies instead of the manual refresh path, start Reverb from
+`apps/server`, include `pusher-js` on the page, and pass the local Reverb
+settings to `Wayfindr.init`.

@@ -233,12 +233,8 @@ the staging runtime close to the expected production shape.
 
 ## Reverb Process
 
-Wayfindr is prepared to broadcast conversation messages over Laravel Reverb, but
-the embedded widget still uses HTTP polling until the live subscription slice is
-implemented.
-
-When live broadcasting is enabled, add a Forge daemon/background process from
-the Laravel app directory:
+Wayfindr can broadcast conversation messages over Laravel Reverb. Add a Forge
+daemon/background process from the Laravel app directory:
 
 ```bash
 php artisan reverb:start --host=0.0.0.0 --port=8080
@@ -259,6 +255,25 @@ REVERB_SERVER_PORT=8080
 Forge-managed Reverb sites should route secure WebSocket traffic to the Reverb
 process. If the WebSocket host differs from `APP_URL`, make sure that hostname
 has TLS before testing from an external smoke site.
+
+The widget needs the public Reverb connection settings plus `pusher-js` on the
+host page:
+
+```html
+<script src="https://js.pusher.com/8.3.0/pusher.min.js"></script>
+<script
+  src="https://replace-with-forge-site-host/widget.js"
+  data-wayfindr-api-base-url="https://replace-with-forge-site-host"
+  data-wayfindr-site-key="replace-with-bootstrap-site-public-key"
+  data-wayfindr-reverb-app-key="replace-with-public-reverb-app-key"
+  data-wayfindr-reverb-host="replace-with-websocket-host"
+  data-wayfindr-reverb-port="443"
+  data-wayfindr-reverb-scheme="https"
+></script>
+```
+
+The Reverb app key is safe to expose to browsers. Keep `REVERB_APP_SECRET`
+server-side only.
 
 ## First Deploy Checklist
 

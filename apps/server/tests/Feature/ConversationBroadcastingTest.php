@@ -12,6 +12,7 @@ use App\Support\VisitorSessionToken;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 
 uses(RefreshDatabase::class);
@@ -110,6 +111,59 @@ test('visitor messages dispatch conversation message broadcasts', function (): v
             && $event->message->sender_id === $visitor->id
             && $event->message->body === 'Hello from the widget.',
     );
+});
+
+test('visitor broadcast auth signs their private conversation channel', function (): void {
+    config()->set('broadcasting.connections.reverb.key', 'reverb-key');
+    config()->set('broadcasting.connections.reverb.secret', 'reverb-secret');
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    Broadcast::purge('reverb');
+
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-LIVE',
+    ]);
+    $token = app(VisitorSessionToken::class)->issue($site, $visitor);
+
+    $response = $this->postJson('/api/widget/broadcasting/auth', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'socket_id' => '1234.5678',
+        'channel_name' => 'private-conversations.WF-LIVE',
+    ]);
+
+    $signature = hash_hmac('sha256', '1234.5678:private-conversations.WF-LIVE', 'reverb-secret');
+
+    $response
+        ->assertOk()
+        ->assertJson([
+            'auth' => 'reverb-key:'.$signature,
+        ]);
+});
+
+test('visitor broadcast auth rejects another visitors conversation channel', function (): void {
+    config()->set('broadcasting.connections.reverb.key', 'reverb-key');
+    config()->set('broadcasting.connections.reverb.secret', 'reverb-secret');
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    Broadcast::purge('reverb');
+
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $otherVisitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-other']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-LIVE',
+    ]);
+    $token = app(VisitorSessionToken::class)->issue($site, $otherVisitor);
+
+    $this->postJson('/api/widget/broadcasting/auth', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-other',
+        'visitor_token' => $token,
+        'socket_id' => '1234.5678',
+        'channel_name' => 'private-conversations.WF-LIVE',
+    ])->assertForbidden();
 });
 
 test('conversation channel authorizes account agents and matching visitors', function (): void {

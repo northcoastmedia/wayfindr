@@ -65,9 +65,10 @@ REVERB_SERVER_PORT=8080
 php artisan reverb:start
 ```
 
-Conversation messages are prepared for private `conversations.{supportCode}`
-channels. The widget still uses HTTP polling until the dedicated client-side
-subscription slice lands.
+Conversation messages broadcast on private `conversations.{supportCode}`
+channels. The classic widget subscribes to those channels when it has Reverb
+configuration and `pusher-js` is available on the page; otherwise, the manual
+refresh button remains the fallback.
 
 ## Root Shortcuts
 
@@ -85,6 +86,6 @@ make server-serve
 
 The current prototype supports agent login, public widget intake, visitor
 conversation creation, agent replies from the conversation inbox, and
-visitor-visible message retrieval through the public widget API. Reverb
-broadcast scaffolding is in place, but live widget subscriptions, cobrowsing,
-ticket workflows, and production hardening are still ahead.
+visitor-visible message retrieval through the public widget API. Live widget
+subscriptions can receive Reverb message broadcasts when Reverb is running, but
+cobrowsing, ticket workflows, and production hardening are still ahead.
