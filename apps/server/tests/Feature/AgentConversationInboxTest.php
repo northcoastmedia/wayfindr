@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
@@ -175,6 +176,50 @@ test('agent can view their account conversation timeline', function (): void {
         ->assertSee('name="body"', false)
         ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
 });
+
+test('agent can see cobrowse consent state on a conversation', function (?array $sessionAttributes, string $label, string $message): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-COBROWSE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    if ($sessionAttributes) {
+        CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create($sessionAttributes);
+    }
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-COBROWSE')
+        ->assertOk()
+        ->assertSee('Cobrowse')
+        ->assertSee($label)
+        ->assertSee($message);
+})->with([
+    'unavailable' => [
+        null,
+        'Unavailable',
+        'Visitor has not granted cobrowse consent.',
+    ],
+    'pending' => [
+        ['status' => 'requested', 'consented_at' => null, 'ended_at' => null],
+        'Pending consent',
+        'Waiting for visitor consent before cobrowsing can start.',
+    ],
+    'granted' => [
+        ['status' => 'granted', 'consented_at' => now()->subMinute(), 'ended_at' => null],
+        'Granted',
+        'Visitor granted cobrowse consent.',
+    ],
+    'revoked' => [
+        ['status' => 'revoked', 'consented_at' => now()->subMinutes(2), 'ended_at' => now()->subMinute()],
+        'Revoked',
+        'Visitor revoked cobrowse consent.',
+    ],
+]);
 
 test('agent can reply to their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);

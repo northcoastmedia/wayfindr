@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\ConversationMessageCreated;
 use App\Models\Conversation;
 use App\Models\User;
+use App\Support\CobrowseConsentState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class AgentConversationController extends Controller
 {
-    public function show(Request $request, string $supportCode): View
+    public function show(Request $request, string $supportCode, CobrowseConsentState $cobrowseConsentState): View
     {
         $agent = $request->user();
 
@@ -28,6 +29,7 @@ class AgentConversationController extends Controller
         return view('agent.conversations.show', [
             'account' => $agent->account()->firstOrFail(),
             'agent' => $agent,
+            'cobrowseConsent' => $cobrowseConsentState->forConversation($conversation),
             'conversation' => $conversation,
             'messages' => $messages,
         ]);

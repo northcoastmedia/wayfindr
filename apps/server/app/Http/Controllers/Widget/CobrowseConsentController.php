@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Http\Controllers\Widget;
+
+use App\Http\Controllers\Controller;
+use App\Models\CobrowseSession;
+use App\Models\Conversation;
+use App\Models\Site;
+use App\Support\VisitorSessionToken;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class CobrowseConsentController extends Controller
+{
+    public function store(Request $request, string $supportCode, VisitorSessionToken $visitorSessionToken): JsonResponse
+    {
+        $validated = $request->validate([
+            'site_public_key' => ['required', 'string', 'max:255'],
+            'anonymous_id' => ['required', 'string', 'max:255'],
+            'visitor_token' => ['nullable', 'string', 'max:4096'],
+            'granted' => ['required', 'boolean'],
+        ]);
+
+        $site = Site::query()
+            ->where('public_key', $validated['site_public_key'])
+            ->first();
+
+        abort_unless($site, 404, 'Site not found.');
+
+        $visitor = $visitorSessionToken->visitorFromRequest($request, $site, $validated['anonymous_id']);
+
+        $conversation = Conversation::query()
+            ->where('support_code', $supportCode)
+            ->where('site_id', $site->id)
+            ->where('visitor_id', $visitor->id)
+            ->first();
+
+        abort_unless($conversation, 404, 'Conversation not found.');
+
+        $cobrowseSession = CobrowseSession::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNull('ended_at')
+            ->latest('id')
+            ->first();
+
+        if (! $cobrowseSession) {
+            $cobrowseSession = new CobrowseSession([
+                'conversation_id' => $conversation->id,
+                'site_id' => $site->id,
+                'visitor_id' => $visitor->id,
+            ]);
+        }
+
+        if ($validated['granted']) {
+            $cobrowseSession->forceFill([
+                'status' => 'granted',
+                'consented_at' => now(),
+                'ended_at' => null,
+            ])->save();
+        } else {
+            $cobrowseSession->forceFill([
+                'status' => 'revoked',
+                'ended_at' => now(),
+            ])->save();
+        }
+
+        return response()->json([
+            'data' => [
+                'conversation' => [
+                    'support_code' => $conversation->support_code,
+                ],
+                'cobrowse' => [
+                    'status' => $cobrowseSession->status,
+                    'consent' => $cobrowseSession->status === 'granted' ? 'granted' : 'revoked',
+                    'consented_at' => $cobrowseSession->consented_at?->toJSON(),
+                    'ended_at' => $cobrowseSession->ended_at?->toJSON(),
+                ],
+            ],
+        ]);
+    }
+}
