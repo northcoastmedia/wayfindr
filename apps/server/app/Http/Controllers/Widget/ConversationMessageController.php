@@ -7,19 +7,23 @@ use App\Models\Conversation;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ConversationMessageController extends Controller
 {
-    public function index(Request $request, string $supportCode): JsonResponse
+    public function index(Request $request, string $supportCode, VisitorSessionToken $visitorSessionToken): JsonResponse
     {
         $validated = $request->validate([
             'site_public_key' => ['required', 'string', 'max:255'],
             'anonymous_id' => ['required', 'string', 'max:255'],
+            'visitor_token' => ['nullable', 'string', 'max:4096'],
         ]);
 
         $conversation = $this->conversationForVisitor(
+            $request,
+            $visitorSessionToken,
             $supportCode,
             $validated['site_public_key'],
             $validated['anonymous_id'],
@@ -49,15 +53,18 @@ class ConversationMessageController extends Controller
         ]);
     }
 
-    public function store(Request $request, string $supportCode): JsonResponse
+    public function store(Request $request, string $supportCode, VisitorSessionToken $visitorSessionToken): JsonResponse
     {
         $validated = $request->validate([
             'site_public_key' => ['required', 'string', 'max:255'],
             'anonymous_id' => ['required', 'string', 'max:255'],
+            'visitor_token' => ['nullable', 'string', 'max:4096'],
             'body' => ['required', 'string', 'max:4000'],
         ]);
 
         $conversation = $this->conversationForVisitor(
+            $request,
+            $visitorSessionToken,
             $supportCode,
             $validated['site_public_key'],
             $validated['anonymous_id'],
@@ -89,20 +96,20 @@ class ConversationMessageController extends Controller
         ], 201);
     }
 
-    private function conversationForVisitor(string $supportCode, string $sitePublicKey, string $anonymousId): Conversation
-    {
+    private function conversationForVisitor(
+        Request $request,
+        VisitorSessionToken $visitorSessionToken,
+        string $supportCode,
+        string $sitePublicKey,
+        string $anonymousId
+    ): Conversation {
         $site = Site::query()
             ->where('public_key', $sitePublicKey)
             ->first();
 
         abort_unless($site, 404, 'Site not found.');
 
-        $visitor = Visitor::query()
-            ->where('site_id', $site->id)
-            ->where('anonymous_id', $anonymousId)
-            ->first();
-
-        abort_unless($visitor, 404, 'Visitor not found.');
+        $visitor = $visitorSessionToken->visitorFromRequest($request, $site, $anonymousId);
 
         $conversation = Conversation::query()
             ->where('support_code', $supportCode)

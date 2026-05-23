@@ -5,18 +5,19 @@ namespace App\Http\Controllers\Widget;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Site;
-use App\Models\Visitor;
+use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class ConversationController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, VisitorSessionToken $visitorSessionToken): JsonResponse
     {
         $validated = $request->validate([
             'site_public_key' => ['required', 'string', 'max:255'],
             'anonymous_id' => ['required', 'string', 'max:255'],
+            'visitor_token' => ['nullable', 'string', 'max:4096'],
             'subject' => ['nullable', 'string', 'max:255'],
             'page_url' => ['nullable', 'url', 'max:2048'],
         ]);
@@ -27,18 +28,14 @@ class ConversationController extends Controller
 
         abort_unless($site, 404, 'Site not found.');
 
-        $visitor = Visitor::query()->firstOrCreate(
-            [
-                'site_id' => $site->id,
-                'anonymous_id' => $validated['anonymous_id'],
+        $visitor = $visitorSessionToken->visitorFromRequest($request, $site, $validated['anonymous_id']);
+
+        $visitor->forceFill([
+            'metadata' => [
+                'last_page_url' => $validated['page_url'] ?? null,
             ],
-            [
-                'metadata' => [
-                    'last_page_url' => $validated['page_url'] ?? null,
-                ],
-                'last_seen_at' => now(),
-            ],
-        );
+            'last_seen_at' => now(),
+        ])->save();
 
         $conversation = Conversation::query()->create([
             'site_id' => $site->id,
