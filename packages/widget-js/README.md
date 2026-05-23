@@ -23,7 +23,8 @@ The widget currently supports the first visitor loop:
 - bootstrap the site config and anonymous visitor,
 - start a conversation,
 - send visitor messages,
-- fetch the visitor-visible conversation message timeline.
+- render the visitor-visible conversation message timeline,
+- manually refresh for agent replies.
 
 ```js
 const client = Wayfindr.createClient({

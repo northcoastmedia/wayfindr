@@ -21,6 +21,8 @@
     var sitePublicKey = options.sitePublicKey;
     var anonymousId = options.anonymousId;
     var fetcher = options.fetch || (root && root.fetch ? root.fetch.bind(root) : null);
+    var hasStorageOption = Object.prototype.hasOwnProperty.call(options, 'storage');
+    var storage = hasStorageOption ? options.storage : null;
 
     if (!apiBaseUrl) {
       throw new Error('Wayfindr requires an apiBaseUrl option.');
@@ -31,9 +33,13 @@
     }
 
     if (!anonymousId) {
+      if (!hasStorageOption) {
+        storage = defaultStorage();
+      }
+
       anonymousId = resolveAnonymousId({
         sitePublicKey: sitePublicKey,
-        storage: options.storage || (root ? root.localStorage : null),
+        storage: storage,
       });
     }
 
@@ -101,7 +107,7 @@
       sitePublicKey: options.sitePublicKey,
       anonymousId: options.anonymousId,
       fetch: options.fetch,
-      storage: options.storage || (root ? root.localStorage : null),
+      storage: options.storage,
     });
 
     injectStyles(doc);
@@ -116,10 +122,14 @@
       '    <strong>' + escapeHtml(options.title || 'Wayfindr Support') + '</strong>',
       '    <button class="wayfindr-widget__close" type="button" aria-label="Close support chat">&times;</button>',
       '  </header>',
+      '  <div class="wayfindr-widget__timeline" role="log" aria-live="polite" aria-label="Conversation messages" hidden></div>',
       '  <form class="wayfindr-widget__form">',
       '    <label class="wayfindr-widget__label" for="wayfindr-message">How can we help?</label>',
       '    <textarea id="wayfindr-message" class="wayfindr-widget__textarea" name="message" rows="4" required placeholder="' + escapeHtml(options.placeholder || 'Type your message...') + '"></textarea>',
-      '    <button class="wayfindr-widget__send" type="submit">Send message</button>',
+      '    <div class="wayfindr-widget__actions">',
+      '      <button class="wayfindr-widget__send" type="submit">Send message</button>',
+      '      <button class="wayfindr-widget__refresh" type="button" hidden>Refresh</button>',
+      '    </div>',
       '  </form>',
       '  <p class="wayfindr-widget__status" role="status"></p>',
       '</section>',
@@ -131,10 +141,65 @@
     var panel = rootEl.querySelector('.wayfindr-widget__panel');
     var close = rootEl.querySelector('.wayfindr-widget__close');
     var form = rootEl.querySelector('.wayfindr-widget__form');
+    var timeline = rootEl.querySelector('.wayfindr-widget__timeline');
     var textarea = rootEl.querySelector('.wayfindr-widget__textarea');
     var status = rootEl.querySelector('.wayfindr-widget__status');
     var send = rootEl.querySelector('.wayfindr-widget__send');
+    var refresh = rootEl.querySelector('.wayfindr-widget__refresh');
     var bootstrapped = false;
+    var supportCode = null;
+
+    function renderMessages(messages) {
+      timeline.textContent = '';
+
+      messages.forEach(function (message) {
+        var sender = message.sender || {};
+        var senderKind = sender.kind === 'agent' ? 'agent' : 'visitor';
+        var item = doc.createElement('article');
+        var name = doc.createElement('strong');
+        var body = doc.createElement('p');
+
+        item.className = 'wayfindr-widget__message wayfindr-widget__message--' + senderKind;
+        name.className = 'wayfindr-widget__message-name';
+        name.textContent = sender.name || (senderKind === 'agent' ? 'Support' : 'Visitor');
+        body.className = 'wayfindr-widget__message-body';
+        body.textContent = message.body || '';
+
+        item.appendChild(name);
+        item.appendChild(body);
+        timeline.appendChild(item);
+      });
+
+      timeline.hidden = messages.length === 0;
+      refresh.hidden = false;
+    }
+
+    async function refreshMessages(options) {
+      options = options || {};
+
+      if (!supportCode) {
+        return;
+      }
+
+      refresh.disabled = true;
+
+      if (!options.silent) {
+        status.textContent = 'Refreshing...';
+      }
+
+      try {
+        var result = await client.fetchMessages(supportCode);
+        renderMessages(result.messages || []);
+
+        if (!options.silent) {
+          status.textContent = 'Messages refreshed.';
+        }
+      } catch (error) {
+        status.textContent = error.message || 'Wayfindr could not refresh messages.';
+      } finally {
+        refresh.disabled = false;
+      }
+    }
 
     function open() {
       panel.hidden = false;
@@ -150,6 +215,9 @@
 
     launcher.addEventListener('click', open);
     close.addEventListener('click', closePanel);
+    refresh.addEventListener('click', function () {
+      refreshMessages();
+    });
     form.addEventListener('submit', async function (event) {
       event.preventDefault();
 
@@ -168,12 +236,19 @@
           bootstrapped = true;
         }
 
-        var result = await client.sendFirstMessage(body, {
-          pageUrl: location ? location.href : null,
-        });
+        if (supportCode) {
+          await client.sendMessage(supportCode, body);
+        } else {
+          var result = await client.sendFirstMessage(body, {
+            pageUrl: location ? location.href : null,
+          });
+
+          supportCode = result.conversation.support_code;
+        }
 
         textarea.value = '';
-        status.textContent = 'Message sent. Support code ' + result.conversation.support_code + '.';
+        await refreshMessages({ silent: true });
+        status.textContent = 'Message sent. Support code ' + supportCode + '.';
       } catch (error) {
         status.textContent = error.message || 'Wayfindr could not send that message.';
       } finally {
@@ -288,6 +363,14 @@
     }
   }
 
+  function defaultStorage() {
+    try {
+      return root ? root.localStorage : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function resolveMount(doc, mount) {
     if (!mount) {
       return doc.body;
@@ -324,10 +407,19 @@
       '.wayfindr-widget__panel{width:min(360px,calc(100vw - 32px));border:1px solid #d8dfdc;border-radius:8px;background:#fff;box-shadow:0 20px 55px rgba(8,37,34,.2);overflow:hidden}',
       '.wayfindr-widget__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #d8dfdc;background:#f7f7f3}',
       '.wayfindr-widget__close{border:0;background:transparent;color:#62706b;cursor:pointer;font:700 24px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:0}',
+      '.wayfindr-widget__timeline{display:grid;gap:10px;max-height:280px;overflow:auto;padding:14px 16px;border-bottom:1px solid #eef1ef;background:#fbfbf8}',
+      '.wayfindr-widget__message{display:grid;gap:4px;width:88%;border:1px solid #d8dfdc;border-radius:8px;padding:9px 10px;background:#fff}',
+      '.wayfindr-widget__message--agent{justify-self:end;background:#eef6f3;border-color:#cfe1dc}',
+      '.wayfindr-widget__message-name{color:#62706b;font-size:12px;line-height:1.2}',
+      '.wayfindr-widget__message-body{margin:0;white-space:pre-wrap;color:#1d2523;font-size:14px;line-height:1.4}',
       '.wayfindr-widget__form{display:grid;gap:10px;padding:16px}',
       '.wayfindr-widget__label{font-size:13px;font-weight:700}',
       '.wayfindr-widget__textarea{width:100%;resize:vertical;border:1px solid #d8dfdc;border-radius:6px;padding:10px;color:#1d2523;font:14px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
       '.wayfindr-widget__textarea:focus{outline:3px solid rgba(13,111,104,.2);border-color:#0d6f68}',
+      '.wayfindr-widget__actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
+      '.wayfindr-widget__refresh{min-height:40px;border:1px solid #d8dfdc;border-radius:6px;background:#fff;color:#1d2523;cursor:pointer;padding:0 12px;font:700 14px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
+      '.wayfindr-widget__refresh:hover{border-color:#0d6f68;color:#0d6f68}',
+      '.wayfindr-widget__refresh:disabled{cursor:wait;opacity:.7}',
       '.wayfindr-widget__status{min-height:20px;margin:0;padding:0 16px 16px;color:#62706b;font-size:13px}',
       '@media (max-width:480px){.wayfindr-widget{right:12px;bottom:12px}.wayfindr-widget__panel{width:calc(100vw - 24px)}}',
     ].join('');

@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { JSDOM } = require('jsdom');
 
 const Wayfindr = require('../src/wayfindr-widget.js');
 
@@ -171,10 +172,137 @@ test('fetches visitor-visible conversation messages', async () => {
   assert.equal(result.messages[0].body, 'Hello from support.');
 });
 
+test('renders the embedded conversation timeline and refreshes replies', async () => {
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+    url: 'https://docs.example.test/install',
+  });
+  const calls = [];
+  let timelineFetches = 0;
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    storage: memoryStorage(),
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      timelineFetches += 1;
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+          messages: [
+            {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+            ...(timelineFetches > 1
+              ? [{
+                  id: 2,
+                  sender: { kind: 'agent', name: 'Ada Agent' },
+                  type: 'text',
+                  body: 'Absolutely, happy to help.',
+                  created_at: '2026-05-23T14:01:00.000000Z',
+                }]
+              : []),
+          ],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+
+  assert.match(
+    widget.root.querySelector('.wayfindr-widget__status').textContent,
+    /Support code WF-TEST123/,
+  );
+  assert.deepEqual(
+    [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
+    ['VisitorCan you help me?'],
+  );
+
+  const refresh = widget.root.querySelector('.wayfindr-widget__refresh');
+
+  assert.equal(refresh.hidden, false);
+
+  refresh.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  assert.deepEqual(
+    [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
+    ['VisitorCan you help me?', 'Ada AgentAbsolutely, happy to help.'],
+  );
+});
+
 function jsonResponse(status, payload) {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => payload,
+  };
+}
+
+async function settle() {
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+function memoryStorage() {
+  const values = new Map();
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
   };
 }
