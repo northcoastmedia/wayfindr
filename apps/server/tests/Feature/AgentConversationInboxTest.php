@@ -312,6 +312,46 @@ test('agent can see cobrowse page state on a conversation', function (): void {
         ->assertSee('Focused');
 });
 
+test('agent can see a safe cobrowse snapshot preview on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-SNAPSHOT',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'snapshot' => [
+                'page_url' => 'https://docs.example.test/install?step=2',
+                'title' => 'Install Guide',
+                'html' => '<main><input value="super-secret-token"><p>Public checkout content.</p></main>',
+                'text' => 'Public checkout content. [masked]',
+                'node_count' => 8,
+                'masked_count' => 2,
+                'reported_at' => now()->toJSON(),
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-SNAPSHOT')
+        ->assertOk()
+        ->assertSee('Page snapshot')
+        ->assertSee('Install Guide')
+        ->assertSee('https://docs.example.test/install?step=2')
+        ->assertSee('8 nodes')
+        ->assertSee('2 masked')
+        ->assertSee('Public checkout content. [masked]')
+        ->assertDontSee('super-secret-token');
+});
+
 test('agent can reply to their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

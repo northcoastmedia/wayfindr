@@ -376,6 +376,90 @@ test('visitor can report cobrowse page state for their active session', function
         ->reported_at->not->toBeNull();
 });
 
+test('visitor can report a cobrowse snapshot for their active session', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-SNAPSHOT',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'page_state' => [
+                'page_url' => 'https://docs.example.test/old',
+                'reported_at' => now()->subMinute()->toJSON(),
+            ],
+        ],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-snapshot", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'page_url' => 'https://docs.example.test/install?step=2',
+        'title' => 'Install Guide',
+        'html' => '<main><h1>Install Guide</h1><p>Hello visitor.</p><input value="[masked]"></main>',
+        'text' => 'Install Guide Hello visitor. [masked]',
+        'node_count' => 4,
+        'masked_count' => 1,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-SNAPSHOT')
+        ->assertJsonPath('data.cobrowse.status', 'granted')
+        ->assertJsonPath('data.snapshot.page_url', 'https://docs.example.test/install?step=2')
+        ->assertJsonPath('data.snapshot.title', 'Install Guide')
+        ->assertJsonPath('data.snapshot.node_count', 4)
+        ->assertJsonPath('data.snapshot.masked_count', 1)
+        ->assertJsonPath('data.snapshot.html_length', 80)
+        ->assertJsonPath('data.snapshot.text_length', 37);
+
+    expect($session->fresh()->metadata)
+        ->page_state->page_url->toBe('https://docs.example.test/old')
+        ->snapshot->page_url->toBe('https://docs.example.test/install?step=2')
+        ->snapshot->title->toBe('Install Guide')
+        ->snapshot->html->toBe('<main><h1>Install Guide</h1><p>Hello visitor.</p><input value="[masked]"></main>')
+        ->snapshot->text->toBe('Install Guide Hello visitor. [masked]')
+        ->snapshot->node_count->toBe(4)
+        ->snapshot->masked_count->toBe(1)
+        ->snapshot->reported_at->not->toBeNull();
+});
+
+test('cobrowse snapshot rejects oversized html payloads', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-SNAPSHOT',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-snapshot", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'page_url' => 'https://docs.example.test/install',
+        'title' => 'Install Guide',
+        'html' => str_repeat('x', 65536),
+        'text' => 'Install Guide',
+        'node_count' => 1,
+        'masked_count' => 0,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('html');
+
+    expect($session->fresh()->metadata)->not->toHaveKey('snapshot');
+});
+
 test('visitor cannot change cobrowse consent for another visitors conversation', function (): void {
     $site = Site::factory()->create(['public_key' => 'site_public_docs']);
     $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);

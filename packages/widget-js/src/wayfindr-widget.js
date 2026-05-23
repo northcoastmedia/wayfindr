@@ -13,6 +13,22 @@
 
   var VERSION = '0.0.0';
   var STYLE_ID = 'wayfindr-widget-styles';
+  var DEFAULT_MASK_SELECTORS = [
+    'input[type="password"]',
+    'input[type="hidden"]',
+    '[data-wayfindr-mask]',
+    '[data-wayfindr-private]',
+    '[data-secret]',
+  ];
+  var DEFAULT_REMOVE_SELECTORS = [
+    'script',
+    'style',
+    'noscript',
+    'iframe',
+    'canvas',
+    'svg',
+    '.wayfindr-widget',
+  ];
 
   function createClient(options) {
     options = options || {};
@@ -25,6 +41,7 @@
     var storage = hasStorageOption ? options.storage : null;
     var visitorToken = options.visitorToken || null;
     var realtime = resolveRealtime(options, fetcher);
+    var maskSelectors = [];
 
     if (!apiBaseUrl) {
       throw new Error('Wayfindr requires an apiBaseUrl option.');
@@ -68,6 +85,8 @@
             visitorToken = token;
             storageSet(storage, visitorTokenStorageKey(sitePublicKey), token);
           }
+
+          maskSelectors = siteMaskSelectors(result);
 
           return result;
         });
@@ -135,6 +154,24 @@
           visibility_state: pageState.visibilityState,
           focused: pageState.focused,
         });
+      },
+      reportCobrowseSnapshot: function (supportCode, snapshot) {
+        snapshot = snapshot || {};
+
+        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/cobrowse-snapshot', {
+          site_public_key: sitePublicKey,
+          anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
+          page_url: snapshot.pageUrl,
+          title: snapshot.title,
+          html: snapshot.html,
+          text: snapshot.text,
+          node_count: snapshot.nodeCount,
+          masked_count: snapshot.maskedCount,
+        });
+      },
+      getMaskSelectors: function () {
+        return maskSelectors.slice();
       },
       subscribeToConversation: function (supportCode, onMessage) {
         if (!realtime) {
@@ -369,6 +406,15 @@
           } catch (error) {
             // Page-state reporting should never undo a successful consent change.
           }
+
+          try {
+            await client.reportCobrowseSnapshot(supportCode, createCobrowseSnapshot(doc, {
+              location: location,
+              maskSelectors: client.getMaskSelectors(),
+            }));
+          } catch (error) {
+            // Snapshot reporting should never undo a successful consent change.
+          }
         }
 
         status.textContent = cobrowseGranted ? 'Cobrowse consent granted.' : 'Cobrowse consent revoked.';
@@ -565,6 +611,132 @@
     storageSet(storage, key, anonymousId);
 
     return anonymousId;
+  }
+
+  function siteMaskSelectors(result) {
+    var settings = result && result.site ? result.site.settings || {} : {};
+    var selectors = settings.mask_selectors;
+
+    return Array.isArray(selectors) ? selectors.filter(function (selector) {
+      return typeof selector === 'string' && selector.trim();
+    }) : [];
+  }
+
+  function createCobrowseSnapshot(doc, options) {
+    options = options || {};
+
+    var location = options.location || (doc && doc.location) || null;
+    var source = doc && doc.body ? doc.body.cloneNode(true) : null;
+
+    if (!source) {
+      return {
+        pageUrl: location ? String(location.href || '') : '',
+        title: doc && doc.title ? doc.title : '',
+        html: '',
+        text: '',
+        nodeCount: 0,
+        maskedCount: 0,
+      };
+    }
+
+    removeMatching(source, DEFAULT_REMOVE_SELECTORS);
+
+    var maskedCount = maskMatching(source, DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []));
+    clearFormControlValues(source);
+
+    return {
+      pageUrl: location ? String(location.href || '') : '',
+      title: doc.title || '',
+      html: truncateString(source.innerHTML || '', options.maxHtmlLength || 60000),
+      text: truncateString(normalizeWhitespace(source.textContent || ''), options.maxTextLength || 10000),
+      nodeCount: source.querySelectorAll ? source.querySelectorAll('*').length : 0,
+      maskedCount: maskedCount,
+    };
+  }
+
+  function removeMatching(source, selectors) {
+    selectors.forEach(function (selector) {
+      queryAll(source, selector).forEach(function (element) {
+        if (element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      });
+    });
+  }
+
+  function maskMatching(source, selectors) {
+    var masked = [];
+
+    selectors.forEach(function (selector) {
+      queryAll(source, selector).forEach(function (element) {
+        if (masked.indexOf(element) !== -1) {
+          return;
+        }
+
+        masked.push(element);
+        maskElement(element);
+      });
+    });
+
+    return masked.length;
+  }
+
+  function queryAll(source, selector) {
+    try {
+      return Array.prototype.slice.call(source.querySelectorAll(selector));
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function maskElement(element) {
+    var tagName = String(element.tagName || '').toLowerCase();
+
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+      element.setAttribute('value', '[masked]');
+
+      if (element.hasAttribute('placeholder')) {
+        element.setAttribute('placeholder', '[masked]');
+      }
+
+      if (tagName === 'textarea' || tagName === 'select') {
+        element.textContent = '[masked]';
+      }
+
+      return;
+    }
+
+    element.textContent = '[masked]';
+  }
+
+  function clearFormControlValues(source) {
+    queryAll(source, 'input, textarea, select').forEach(function (element) {
+      if (element.getAttribute('value') === '[masked]' || element.textContent === '[masked]') {
+        return;
+      }
+
+      if (element.hasAttribute('value')) {
+        element.setAttribute('value', '');
+      }
+
+      if (String(element.tagName || '').toLowerCase() !== 'input') {
+        element.textContent = '';
+      }
+    });
+  }
+
+  function normalizeWhitespace(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function truncateString(value, maxLength) {
+    value = String(value || '');
+
+    if (value.length <= maxLength) {
+      return value;
+    }
+
+    return value.slice(0, maxLength);
   }
 
   function visitorTokenStorageKey(sitePublicKey) {
@@ -791,6 +963,7 @@
   var api = {
     version: VERSION,
     createClient: createClient,
+    createCobrowseSnapshot: createCobrowseSnapshot,
     init: init,
     normalizeApiBaseUrl: normalizeApiBaseUrl,
     resolveAnonymousId: resolveAnonymousId,

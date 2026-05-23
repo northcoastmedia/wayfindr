@@ -92,6 +92,39 @@
                     <p class="empty realtime-note">No visitor page state yet.</p>
                 @endif
 
+                @if ($cobrowseConsent['snapshot'])
+                    <div class="section-header">
+                        <strong>Page snapshot</strong>
+                    </div>
+
+                    <div class="meta-grid realtime-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Title</span>
+                            <span class="meta-value">{{ $cobrowseConsent['snapshot']['title'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">URL</span>
+                            <span class="meta-value">{{ $cobrowseConsent['snapshot']['page_url'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Nodes</span>
+                            <span class="meta-value">{{ $cobrowseConsent['snapshot']['node_count'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Masked</span>
+                            <span class="meta-value">{{ $cobrowseConsent['snapshot']['masked_count'] }}</span>
+                        </div>
+                    </div>
+
+                    <div class="message-list">
+                        <article class="message">
+                            <p class="message-body">{{ $cobrowseConsent['snapshot']['text'] }}</p>
+                        </article>
+                    </div>
+                @else
+                    <p class="empty realtime-note">No sanitized page snapshot yet.</p>
+                @endif
+
                 @if ($cobrowseConsent['telemetry'])
                     <div class="section-header">
                         <strong>Connection telemetry</strong>

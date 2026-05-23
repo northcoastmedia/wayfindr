@@ -7,7 +7,7 @@ use App\Models\Conversation;
 class CobrowseConsentState
 {
     /**
-     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null}
+     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null}
      */
     public function forConversation(Conversation $conversation): array
     {
@@ -22,6 +22,7 @@ class CobrowseConsentState
                 'status' => 'unavailable',
                 'telemetry' => null,
                 'page_state' => null,
+                'snapshot' => null,
             ];
         }
 
@@ -50,6 +51,7 @@ class CobrowseConsentState
 
         $state['telemetry'] = $this->formatTelemetry($session->metadata['telemetry'] ?? null);
         $state['page_state'] = $this->formatPageState($session->metadata['page_state'] ?? null);
+        $state['snapshot'] = $this->formatSnapshot($session->metadata['snapshot'] ?? null);
 
         return $state;
     }
@@ -90,6 +92,24 @@ class CobrowseConsentState
             'scroll' => $this->formatCoordinates($pageState['scroll_x'] ?? null, $pageState['scroll_y'] ?? null),
             'visibility_state' => filled($pageState['visibility_state'] ?? null) ? (string) $pageState['visibility_state'] : 'Not reported',
             'focus' => ($pageState['focused'] ?? false) ? 'Focused' : 'Not focused',
+        ];
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function formatSnapshot(mixed $snapshot): ?array
+    {
+        if (! is_array($snapshot)) {
+            return null;
+        }
+
+        return [
+            'title' => filled($snapshot['title'] ?? null) ? (string) $snapshot['title'] : 'Untitled page',
+            'page_url' => filled($snapshot['page_url'] ?? null) ? (string) $snapshot['page_url'] : 'Not reported',
+            'node_count' => number_format((int) ($snapshot['node_count'] ?? 0)).' nodes',
+            'masked_count' => number_format((int) ($snapshot['masked_count'] ?? 0)).' masked',
+            'text' => filled($snapshot['text'] ?? null) ? (string) $snapshot['text'] : 'No text preview reported.',
         ];
     }
 

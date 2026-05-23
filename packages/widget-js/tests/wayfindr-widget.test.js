@@ -346,6 +346,99 @@ test('reports cobrowse page state through the public visitor API', async () => {
   assert.equal(result.page_state.page_url, 'https://docs.example.test/install?step=2');
 });
 
+test('reports cobrowse snapshots through the public visitor API', async () => {
+  const calls = [];
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+          },
+          cobrowse: {
+            status: 'granted',
+          },
+          snapshot: {
+            page_url: 'https://docs.example.test/install?step=2',
+            title: 'Install Guide',
+            html_length: 53,
+            text_length: 27,
+            node_count: 4,
+            masked_count: 1,
+          },
+        },
+      });
+    },
+  });
+
+  const result = await client.reportCobrowseSnapshot('WF-TEST123', {
+    pageUrl: 'https://docs.example.test/install?step=2',
+    title: 'Install Guide',
+    html: '<main><p>Hello visitor.</p><input value="[masked]"></main>',
+    text: 'Hello visitor. [masked]',
+    nodeCount: 4,
+    maskedCount: 1,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/cobrowse-snapshot');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    page_url: 'https://docs.example.test/install?step=2',
+    title: 'Install Guide',
+    html: '<main><p>Hello visitor.</p><input value="[masked]"></main>',
+    text: 'Hello visitor. [masked]',
+    node_count: 4,
+    masked_count: 1,
+  });
+  assert.equal(result.snapshot.masked_count, 1);
+});
+
+test('creates a masked cobrowse snapshot from the document', () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Checkout</title></head><body>',
+    '<main>',
+    '  <h1>Checkout</h1>',
+    '  <p>Public checkout content.</p>',
+    '  <input type="password" value="secret-password">',
+    '  <div data-wayfindr-mask>Card number 4111 1111 1111 1111</div>',
+    '  <div data-secret>Internal token abc123</div>',
+    '  <script>window.stolen = "nope";</script>',
+    '</main>',
+    '<div class="wayfindr-widget">Widget chrome should not be mirrored.</div>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/checkout',
+  });
+
+  const snapshot = Wayfindr.createCobrowseSnapshot(dom.window.document, {
+    location: dom.window.location,
+    maskSelectors: ['[data-secret]'],
+  });
+
+  assert.equal(snapshot.pageUrl, 'https://docs.example.test/checkout');
+  assert.equal(snapshot.title, 'Checkout');
+  assert.match(snapshot.html, /Public checkout content/);
+  assert.match(snapshot.text, /Public checkout content/);
+  assert.match(snapshot.html, /\[masked\]/);
+  assert.match(snapshot.text, /\[masked\]/);
+  assert.equal(snapshot.html.includes('secret-password'), false);
+  assert.equal(snapshot.html.includes('4111 1111 1111 1111'), false);
+  assert.equal(snapshot.html.includes('Internal token abc123'), false);
+  assert.equal(snapshot.html.includes('window.stolen'), false);
+  assert.equal(snapshot.html.includes('Widget chrome'), false);
+  assert.equal(snapshot.maskedCount, 3);
+  assert(snapshot.nodeCount > 0);
+});
+
 test('prepares private conversation subscriptions for realtime adapters', () => {
   let subscriptionPayload = null;
   const received = [];
@@ -719,7 +812,17 @@ test('appends live agent messages from the realtime subscription', async () => {
 });
 
 test('renders widget cobrowse consent controls after a conversation starts', async () => {
-  const dom = new JSDOM('<!doctype html><html><head><title>Install Guide</title></head><body><div id="support"></div></body></html>', {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Install Guide</title></head><body>',
+    '<main>',
+    '  <h1>Install Guide</h1>',
+    '  <p>Public install content.</p>',
+    '  <input type="password" value="secret-password">',
+    '  <div data-secret>Internal token abc123</div>',
+    '</main>',
+    '<div id="support"></div>',
+    '</body></html>',
+  ].join(''), {
     url: 'https://docs.example.test/install',
   });
   const calls = [];
@@ -738,7 +841,7 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
       if (url.endsWith('/api/widget/bootstrap')) {
         return jsonResponse(201, {
           data: {
-            site: { public_key: 'site_public_docs', settings: {} },
+            site: { public_key: 'site_public_docs', settings: { mask_selectors: ['[data-secret]'] } },
             visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
           },
         });
@@ -819,6 +922,25 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
         });
       }
 
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-snapshot')) {
+        const payload = JSON.parse(options.body);
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: { status: 'granted' },
+            snapshot: {
+              page_url: payload.page_url,
+              title: payload.title,
+              html_length: payload.html.length,
+              text_length: payload.text.length,
+              node_count: payload.node_count,
+              masked_count: payload.masked_count,
+            },
+          },
+        });
+      }
+
       return jsonResponse(200, {
         data: {
           conversation: { support_code: 'WF-TEST123', status: 'open' },
@@ -891,6 +1013,22 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
   assert.equal(typeof pageStatePayload.scroll_y, 'number');
   assert.equal(typeof pageStatePayload.visibility_state, 'string');
   assert.equal(typeof pageStatePayload.focused, 'boolean');
+
+  const snapshotCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-snapshot'));
+  const snapshotPayload = JSON.parse(snapshotCall.options.body);
+
+  assert.equal(snapshotPayload.site_public_key, 'site_public_docs');
+  assert.equal(snapshotPayload.anonymous_id, 'anon-browser-123');
+  assert.equal(snapshotPayload.visitor_token, 'visitor-token-123');
+  assert.equal(snapshotPayload.page_url, 'https://docs.example.test/install');
+  assert.equal(snapshotPayload.title, 'Install Guide');
+  assert.match(snapshotPayload.html, /Public install content/);
+  assert.match(snapshotPayload.html, /\[masked\]/);
+  assert.equal(snapshotPayload.html.includes('secret-password'), false);
+  assert.equal(snapshotPayload.html.includes('Internal token abc123'), false);
+  assert.equal(snapshotPayload.html.includes('Can you help me?'), false);
+  assert.equal(typeof snapshotPayload.node_count, 'number');
+  assert.equal(snapshotPayload.masked_count, 2);
 
   cobrowseButton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
 
