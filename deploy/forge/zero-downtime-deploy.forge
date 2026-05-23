@@ -69,4 +69,7 @@ cd "$FORGE_SITE_PATH/apps/server"
 echo "Restarting Laravel queues."
 forge_php artisan queue:restart
 
+echo "Restarting Laravel Reverb."
+forge_php artisan reverb:restart
+
 echo "Deployment script complete."
