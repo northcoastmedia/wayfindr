@@ -19,7 +19,17 @@ The widget currently supports the first visitor loop:
 
 - bootstrap the site config and anonymous visitor,
 - start a conversation,
-- send the first visitor message.
+- send visitor messages,
+- fetch the visitor-visible conversation message timeline.
+
+```js
+const client = Wayfindr.createClient({
+  apiBaseUrl: 'http://127.0.0.1:8000',
+  sitePublicKey: 'site_demo_public_key',
+});
+
+const timeline = await client.fetchMessages('WF-EXAMPLE');
+```
 
 ## Development
 

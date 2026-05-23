@@ -127,6 +127,50 @@ test('starts a conversation and sends the first visitor message', async () => {
   assert.equal(result.message.body, 'Can you help me?');
 });
 
+test('fetches visitor-visible conversation messages', async () => {
+  const calls = [];
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+          },
+          messages: [
+            {
+              id: 1,
+              sender: {
+                kind: 'agent',
+                name: 'Ada Agent',
+              },
+              type: 'text',
+              body: 'Hello from support.',
+              created_at: '2026-05-23T13:00:00.000000Z',
+            },
+          ],
+        },
+      });
+    },
+  });
+
+  const result = await client.fetchMessages('WF-TEST123');
+
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].url,
+    'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages?site_public_key=site_public_docs&anonymous_id=anon-browser-123',
+  );
+  assert.equal(calls[0].options.method, 'GET');
+  assert.equal(result.conversation.support_code, 'WF-TEST123');
+  assert.equal(result.messages[0].sender.kind, 'agent');
+  assert.equal(result.messages[0].body, 'Hello from support.');
+});
+
 function jsonResponse(status, payload) {
   return {
     ok: status >= 200 && status < 300,

@@ -53,5 +53,6 @@ make server-serve
 ## Current Limits
 
 The current prototype supports agent login, public widget intake, visitor
-conversation creation, and agent replies from the conversation inbox. Realtime
+conversation creation, agent replies from the conversation inbox, and
+visitor-visible message retrieval through the public widget API. Realtime
 updates, cobrowsing, ticket workflows, and production hardening are still ahead.

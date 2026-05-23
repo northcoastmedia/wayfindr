@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
+use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -141,5 +142,72 @@ class WidgetIntakeApiTest extends TestCase
         $this->assertSame(Visitor::class, $message->sender_type);
         $this->assertSame($visitor->id, $message->sender_id);
         $this->assertNotNull($conversation->refresh()->last_message_at);
+    }
+
+    public function test_visitor_can_read_their_conversation_messages(): void
+    {
+        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+        $agent = User::factory()->create(['name' => 'Ada Agent']);
+        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+            'support_code' => 'WF-MESSAGES',
+        ]);
+
+        ConversationMessage::factory()->for($conversation)->create([
+            'sender_type' => Visitor::class,
+            'sender_id' => $visitor->id,
+            'body' => 'Hello from the visitor.',
+            'created_at' => now()->subMinute(),
+        ]);
+
+        ConversationMessage::factory()->for($conversation)->create([
+            'sender_type' => User::class,
+            'sender_id' => $agent->id,
+            'body' => 'Hello from support.',
+            'created_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/conversations/WF-MESSAGES/messages?'.http_build_query([
+            'site_public_key' => 'site_public_docs',
+            'anonymous_id' => 'anon-docs',
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGES')
+            ->assertJsonPath('data.messages.0.sender.kind', 'visitor')
+            ->assertJsonPath('data.messages.0.sender.name', 'Visitor')
+            ->assertJsonPath('data.messages.0.body', 'Hello from the visitor.')
+            ->assertJsonPath('data.messages.1.sender.kind', 'agent')
+            ->assertJsonPath('data.messages.1.sender.name', 'Ada Agent')
+            ->assertJsonPath('data.messages.1.body', 'Hello from support.');
+
+        $payload = $response->json('data.messages.0');
+
+        $this->assertArrayNotHasKey('sender_id', $payload);
+        $this->assertArrayNotHasKey('sender_type', $payload);
+    }
+
+    public function test_visitor_message_read_cannot_cross_site_boundaries(): void
+    {
+        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+        $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
+        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+        Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-other']);
+        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+            'support_code' => 'WF-BOUNDARY',
+        ]);
+
+        ConversationMessage::factory()->for($conversation)->create([
+            'sender_type' => Visitor::class,
+            'sender_id' => $visitor->id,
+            'body' => 'This should stay private to the docs visitor.',
+        ]);
+
+        $this->getJson('/api/conversations/WF-BOUNDARY/messages?'.http_build_query([
+            'site_public_key' => 'site_public_other',
+            'anonymous_id' => 'anon-other',
+        ]))
+            ->assertNotFound();
     }
 }
