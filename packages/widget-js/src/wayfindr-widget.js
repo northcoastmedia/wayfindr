@@ -24,6 +24,7 @@
     var hasStorageOption = Object.prototype.hasOwnProperty.call(options, 'storage');
     var storage = hasStorageOption ? options.storage : null;
     var visitorToken = options.visitorToken || null;
+    var realtime = resolveRealtime(options, fetcher);
 
     if (!apiBaseUrl) {
       throw new Error('Wayfindr requires an apiBaseUrl option.');
@@ -97,6 +98,24 @@
           visitor_token: requireVisitorToken(visitorToken),
         }));
       },
+      subscribeToConversation: function (supportCode, onMessage) {
+        if (!realtime) {
+          return null;
+        }
+
+        return realtime.subscribe({
+          supportCode: supportCode,
+          channelName: conversationChannelName(supportCode),
+          eventName: 'conversation.message.created',
+          authEndpoint: apiBaseUrl + '/api/widget/broadcasting/auth',
+          authPayload: {
+            site_public_key: sitePublicKey,
+            anonymous_id: anonymousId,
+            visitor_token: requireVisitorToken(visitorToken),
+          },
+          onMessage: onMessage,
+        });
+      },
       sendFirstMessage: async function (body, details) {
         details = details || {};
 
@@ -132,6 +151,9 @@
       fetch: options.fetch,
       storage: options.storage,
       visitorToken: options.visitorToken,
+      realtime: options.realtime,
+      reverb: options.reverb,
+      Pusher: options.Pusher,
     });
 
     injectStyles(doc);
@@ -172,8 +194,11 @@
     var refresh = rootEl.querySelector('.wayfindr-widget__refresh');
     var bootstrapped = false;
     var supportCode = null;
+    var messages = [];
+    var realtimeSubscription = null;
 
-    function renderMessages(messages) {
+    function renderMessages(nextMessages) {
+      messages = Array.isArray(nextMessages) ? nextMessages : messages;
       timeline.textContent = '';
 
       messages.forEach(function (message) {
@@ -196,6 +221,36 @@
 
       timeline.hidden = messages.length === 0;
       refresh.hidden = false;
+    }
+
+    function appendMessage(message) {
+      if (!message) {
+        return;
+      }
+
+      if (message.id && messages.some(function (existing) {
+        return String(existing.id) === String(message.id);
+      })) {
+        return;
+      }
+
+      renderMessages(messages.concat([message]));
+    }
+
+    function connectRealtime() {
+      if (!supportCode || realtimeSubscription) {
+        return;
+      }
+
+      realtimeSubscription = client.subscribeToConversation(supportCode, function (event) {
+        var eventSupportCode = event && event.conversation ? event.conversation.support_code : supportCode;
+
+        if (eventSupportCode !== supportCode) {
+          return;
+        }
+
+        appendMessage(event.message);
+      });
     }
 
     async function refreshMessages(options) {
@@ -268,6 +323,7 @@
           });
 
           supportCode = result.conversation.support_code;
+          connectRealtime();
         }
 
         textarea.value = '';
@@ -287,7 +343,75 @@
       open: open,
       close: closePanel,
       destroy: function () {
+        if (realtimeSubscription && typeof realtimeSubscription.unsubscribe === 'function') {
+          realtimeSubscription.unsubscribe();
+        }
+
         rootEl.remove();
+      },
+    };
+  }
+
+  function resolveRealtime(options, fetcher) {
+    if (options.realtime === false) {
+      return null;
+    }
+
+    if (options.realtime && typeof options.realtime.subscribe === 'function') {
+      return options.realtime;
+    }
+
+    if (!options.reverb) {
+      return null;
+    }
+
+    var Pusher = options.Pusher || (root && root.Pusher);
+
+    if (!Pusher || !options.reverb.appKey) {
+      return null;
+    }
+
+    return createPusherRealtime(options.reverb, Pusher, fetcher);
+  }
+
+  function createPusherRealtime(reverb, Pusher, fetcher) {
+    return {
+      subscribe: function (config) {
+        var scheme = reverb.scheme || 'https';
+        var port = reverb.port || (scheme === 'https' ? 443 : 80);
+        var pusher = new Pusher(reverb.appKey, {
+          wsHost: reverb.host,
+          wsPort: reverb.wsPort || port,
+          wssPort: reverb.wssPort || port,
+          forceTLS: scheme === 'https',
+          enabledTransports: reverb.enabledTransports || ['ws', 'wss'],
+          channelAuthorization: {
+            customHandler: function (params, callback) {
+              postJsonRaw(fetcher, config.authEndpoint, Object.assign({}, config.authPayload, {
+                socket_id: params.socketId,
+                channel_name: params.channelName,
+              })).then(function (payload) {
+                callback(null, payload);
+              }).catch(function (error) {
+                callback(error, null);
+              });
+            },
+          },
+        });
+        var channel = pusher.subscribe(config.channelName);
+
+        channel.bind(config.eventName, config.onMessage);
+
+        return {
+          unsubscribe: function () {
+            channel.unbind(config.eventName, config.onMessage);
+            pusher.unsubscribe(config.channelName);
+
+            if (typeof pusher.disconnect === 'function') {
+              pusher.disconnect();
+            }
+          },
+        };
       },
     };
   }
@@ -345,6 +469,17 @@
     }).then(readJsonResponse);
   }
 
+  function postJsonRaw(fetcher, url, payload) {
+    return fetcher(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }).then(readRawJsonResponse);
+  }
+
   async function readJsonResponse(response) {
     var data = await response.json().catch(function () {
       return {};
@@ -357,6 +492,18 @@
     return data.data;
   }
 
+  async function readRawJsonResponse(response) {
+    var data = await response.json().catch(function () {
+      return {};
+    });
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Wayfindr request failed with status ' + response.status + '.');
+    }
+
+    return data;
+  }
+
   function toQueryString(values) {
     return Object.keys(values).map(function (key) {
       return encodeURIComponent(key) + '=' + encodeURIComponent(values[key]);
@@ -365,6 +512,10 @@
 
   function normalizeApiBaseUrl(value) {
     return String(value || '').replace(/\/+$/, '');
+  }
+
+  function conversationChannelName(supportCode) {
+    return 'private-conversations.' + supportCode;
   }
 
   function summarize(body) {
@@ -485,7 +636,21 @@
       sitePublicKey: script.dataset.wayfindrSiteKey,
       launcherLabel: script.dataset.wayfindrLauncherLabel,
       title: script.dataset.wayfindrTitle,
+      reverb: reverbOptionsFromScript(script),
     });
+  }
+
+  function reverbOptionsFromScript(script) {
+    if (!script.dataset.wayfindrReverbAppKey) {
+      return null;
+    }
+
+    return {
+      appKey: script.dataset.wayfindrReverbAppKey,
+      host: script.dataset.wayfindrReverbHost || root.location.hostname,
+      port: script.dataset.wayfindrReverbPort ? Number(script.dataset.wayfindrReverbPort) : undefined,
+      scheme: script.dataset.wayfindrReverbScheme || root.location.protocol.replace(':', ''),
+    };
   }
 
   var api = {

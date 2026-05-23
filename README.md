@@ -76,6 +76,7 @@ Pre-alpha. The current prototype supports a local first support loop: a plain
 JavaScript widget can create a visitor conversation, and an authenticated agent
 can read and reply to the conversation in the dashboard. The public widget API
 can also retrieve the visitor-visible message timeline, and the embedded widget
-renders that timeline with a manual refresh path for agent replies. The Laravel
-app serves the classic widget script from `/widget.js`. Realtime updates,
-cobrowsing, ticket workflows, and production hardening are still ahead.
+renders that timeline with live Reverb updates when configured and a manual
+refresh fallback when realtime is unavailable. The Laravel app serves the
+classic widget script from `/widget.js`. Cobrowsing, ticket workflows, and
+production hardening are still ahead.
