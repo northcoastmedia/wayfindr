@@ -323,6 +323,59 @@ test('visitor can report cobrowse telemetry for their active session', function 
         ->reported_at->not->toBeNull();
 });
 
+test('visitor can report cobrowse page state for their active session', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-PAGESTATE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/cobrowse-page-state", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'page_url' => 'https://docs.example.test/install?step=2',
+        'title' => 'Install Guide',
+        'viewport_width' => 1366,
+        'viewport_height' => 768,
+        'scroll_x' => 0,
+        'scroll_y' => 420,
+        'visibility_state' => 'visible',
+        'focused' => true,
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-PAGESTATE')
+        ->assertJsonPath('data.cobrowse.status', 'granted')
+        ->assertJsonPath('data.page_state.page_url', 'https://docs.example.test/install?step=2')
+        ->assertJsonPath('data.page_state.title', 'Install Guide')
+        ->assertJsonPath('data.page_state.viewport_width', 1366)
+        ->assertJsonPath('data.page_state.viewport_height', 768)
+        ->assertJsonPath('data.page_state.scroll_x', 0)
+        ->assertJsonPath('data.page_state.scroll_y', 420)
+        ->assertJsonPath('data.page_state.visibility_state', 'visible')
+        ->assertJsonPath('data.page_state.focused', true);
+
+    expect($session->fresh()->metadata['page_state'])
+        ->page_url->toBe('https://docs.example.test/install?step=2')
+        ->title->toBe('Install Guide')
+        ->viewport_width->toBe(1366)
+        ->viewport_height->toBe(768)
+        ->scroll_x->toBe(0)
+        ->scroll_y->toBe(420)
+        ->visibility_state->toBe('visible')
+        ->focused->toBeTrue()
+        ->reported_at->not->toBeNull();
+});
+
 test('visitor cannot change cobrowse consent for another visitors conversation', function (): void {
     $site = Site::factory()->create(['public_key' => 'site_public_docs']);
     $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);

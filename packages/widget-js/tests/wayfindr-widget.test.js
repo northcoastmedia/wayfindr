@@ -284,6 +284,68 @@ test('reports cobrowse telemetry through the public visitor API', async () => {
   assert.equal(result.telemetry.samples, 3);
 });
 
+test('reports cobrowse page state through the public visitor API', async () => {
+  const calls = [];
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+          },
+          cobrowse: {
+            status: 'granted',
+          },
+          page_state: {
+            page_url: 'https://docs.example.test/install?step=2',
+            title: 'Install Guide',
+            viewport_width: 1366,
+            viewport_height: 768,
+            scroll_x: 0,
+            scroll_y: 420,
+            visibility_state: 'visible',
+            focused: true,
+          },
+        },
+      });
+    },
+  });
+
+  const result = await client.reportCobrowsePageState('WF-TEST123', {
+    pageUrl: 'https://docs.example.test/install?step=2',
+    title: 'Install Guide',
+    viewportWidth: 1366,
+    viewportHeight: 768,
+    scrollX: 0,
+    scrollY: 420,
+    visibilityState: 'visible',
+    focused: true,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/cobrowse-page-state');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    page_url: 'https://docs.example.test/install?step=2',
+    title: 'Install Guide',
+    viewport_width: 1366,
+    viewport_height: 768,
+    scroll_x: 0,
+    scroll_y: 420,
+    visibility_state: 'visible',
+    focused: true,
+  });
+  assert.equal(result.page_state.page_url, 'https://docs.example.test/install?step=2');
+});
+
 test('prepares private conversation subscriptions for realtime adapters', () => {
   let subscriptionPayload = null;
   const received = [];
@@ -657,7 +719,7 @@ test('appends live agent messages from the realtime subscription', async () => {
 });
 
 test('renders widget cobrowse consent controls after a conversation starts', async () => {
-  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+  const dom = new JSDOM('<!doctype html><html><head><title>Install Guide</title></head><body><div id="support"></div></body></html>', {
     url: 'https://docs.example.test/install',
   });
   const calls = [];
@@ -736,6 +798,27 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
         });
       }
 
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-page-state')) {
+        const payload = JSON.parse(options.body);
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: { status: 'granted' },
+            page_state: {
+              page_url: payload.page_url,
+              title: payload.title,
+              viewport_width: payload.viewport_width,
+              viewport_height: payload.viewport_height,
+              scroll_x: payload.scroll_x,
+              scroll_y: payload.scroll_y,
+              visibility_state: payload.visibility_state,
+              focused: payload.focused,
+            },
+          },
+        });
+      }
+
       return jsonResponse(200, {
         data: {
           conversation: { support_code: 'WF-TEST123', status: 'open' },
@@ -793,6 +876,21 @@ test('renders widget cobrowse consent controls after a conversation starts', asy
   assert.equal(typeof telemetryPayload.payload_bytes, 'number');
   assert.equal(telemetryPayload.dropped_batches, 0);
   assert.equal(telemetryPayload.reconnects, 0);
+
+  const pageStateCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-page-state'));
+  const pageStatePayload = JSON.parse(pageStateCall.options.body);
+
+  assert.equal(pageStatePayload.site_public_key, 'site_public_docs');
+  assert.equal(pageStatePayload.anonymous_id, 'anon-browser-123');
+  assert.equal(pageStatePayload.visitor_token, 'visitor-token-123');
+  assert.equal(pageStatePayload.page_url, 'https://docs.example.test/install');
+  assert.equal(pageStatePayload.title, 'Install Guide');
+  assert.equal(typeof pageStatePayload.viewport_width, 'number');
+  assert.equal(typeof pageStatePayload.viewport_height, 'number');
+  assert.equal(typeof pageStatePayload.scroll_x, 'number');
+  assert.equal(typeof pageStatePayload.scroll_y, 'number');
+  assert.equal(typeof pageStatePayload.visibility_state, 'string');
+  assert.equal(typeof pageStatePayload.focused, 'boolean');
 
   cobrowseButton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
 

@@ -57,6 +57,41 @@
 
                 <p class="empty">{{ $cobrowseConsent['message'] }}</p>
 
+                @if ($cobrowseConsent['page_state'])
+                    <div class="section-header">
+                        <strong>Visitor page</strong>
+                    </div>
+
+                    <div class="meta-grid realtime-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Title</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['title'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">URL</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['page_url'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Viewport</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['viewport'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Scroll</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['scroll'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Visibility</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['visibility_state'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Focus</span>
+                            <span class="meta-value">{{ $cobrowseConsent['page_state']['focus'] }}</span>
+                        </div>
+                    </div>
+                @else
+                    <p class="empty realtime-note">No visitor page state yet.</p>
+                @endif
+
                 @if ($cobrowseConsent['telemetry'])
                     <div class="section-header">
                         <strong>Connection telemetry</strong>
