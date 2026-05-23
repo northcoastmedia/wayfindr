@@ -105,10 +105,25 @@ REDIS_HOST=127.0.0.1
 REDIS_PASSWORD=null
 REDIS_PORT=6379
 
+REVERB_APP_ID=replace-with-reverb-app-id
+REVERB_APP_KEY=replace-with-random-public-key
+REVERB_APP_SECRET=replace-with-random-secret
+REVERB_HOST=replace-with-websocket-host
+REVERB_PORT=443
+REVERB_SCHEME=https
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+REVERB_SERVER_PATH=
+
 MAIL_MAILER=log
 MAIL_FROM_ADDRESS=hello@example.test
 MAIL_FROM_NAME="${APP_NAME}"
 ```
+
+Keep `BROADCAST_CONNECTION=log` until a Reverb process and WebSocket routing are
+ready. Switch it to `reverb` when the site should publish live conversation
+message events. `REVERB_APP_KEY` and `REVERB_APP_SECRET` should be long random
+strings; `openssl rand -hex 16` is fine for each value.
 
 Generate the `APP_KEY` on the server with:
 
@@ -168,7 +183,7 @@ Both scripts:
 - skip the frontend build until a `package-lock.json` exists,
 - run migrations with `--force`,
 - cache config, routes, and views,
-- restart queues after deploy.
+- restart queues and Reverb after deploy.
 
 ## First Account Bootstrap
 
@@ -216,6 +231,35 @@ configure it to run once per minute using the site's selected PHP version.
 There are no critical scheduled tasks yet, but enabling the scheduler now keeps
 the staging runtime close to the expected production shape.
 
+## Reverb Process
+
+Wayfindr is prepared to broadcast conversation messages over Laravel Reverb, but
+the embedded widget still uses HTTP polling until the live subscription slice is
+implemented.
+
+When live broadcasting is enabled, add a Forge daemon/background process from
+the Laravel app directory:
+
+```bash
+php artisan reverb:start --host=0.0.0.0 --port=8080
+```
+
+Reverb's public connection settings are intentionally separate from the server
+bind address. In a TLS deployment, the common shape is:
+
+```dotenv
+BROADCAST_CONNECTION=reverb
+REVERB_HOST=replace-with-websocket-host
+REVERB_PORT=443
+REVERB_SCHEME=https
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+```
+
+Forge-managed Reverb sites should route secure WebSocket traffic to the Reverb
+process. If the WebSocket host differs from `APP_URL`, make sure that hostname
+has TLS before testing from an external smoke site.
+
 ## First Deploy Checklist
 
 1. Provision a Forge server with PHP 8.3+, Postgres, Redis, and Nginx.
@@ -234,7 +278,8 @@ the staging runtime close to the expected production shape.
 14. Enable the deployment health check against `/up`.
 15. Run `php artisan wayfindr:bootstrap` from `apps/server`.
 16. Add the queue worker and scheduler.
-17. Sign in with the generated first agent credentials.
+17. Add the Reverb process when switching `BROADCAST_CONNECTION` to `reverb`.
+18. Sign in with the generated first agent credentials.
 
 ## Smoke Test
 

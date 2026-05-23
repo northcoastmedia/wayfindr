@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ConversationMessageCreated;
 use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
@@ -60,6 +61,8 @@ class AgentConversationController extends Controller
         $conversation->forceFill([
             'last_message_at' => $message->created_at,
         ])->save();
+
+        event(new ConversationMessageCreated($message));
 
         return redirect()
             ->route('dashboard.conversations.show', $conversation->support_code)

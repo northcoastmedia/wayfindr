@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Widget;
 
+use App\Events\ConversationMessageCreated;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Site;
@@ -81,6 +82,8 @@ class ConversationMessageController extends Controller
         $conversation->forceFill([
             'last_message_at' => $message->created_at,
         ])->save();
+
+        event(new ConversationMessageCreated($message));
 
         return response()->json([
             'data' => [
