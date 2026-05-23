@@ -300,6 +300,21 @@
             margin: 0;
         }
 
+        .cobrowse-preview-frame {
+            background: var(--surface-muted);
+            border-top: 1px solid var(--border);
+            padding: 16px;
+        }
+
+        .cobrowse-preview {
+            display: block;
+            width: 100%;
+            min-height: 360px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #ffffff;
+        }
+
         .message-list {
             display: grid;
             gap: 14px;

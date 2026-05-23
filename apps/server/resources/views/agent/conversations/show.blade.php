@@ -160,6 +160,28 @@
                     <p class="empty realtime-note">No mutation stream diagnostics yet.</p>
                 @endif
 
+                @if ($cobrowseConsent['replay_preview'])
+                    <div class="section-header">
+                        <strong>Replay preview</strong>
+                        <span class="lede">
+                            {{ $cobrowseConsent['replay_preview']['applied_mutations'] }}
+                            /
+                            {{ $cobrowseConsent['replay_preview']['skipped_mutations'] }}
+                        </span>
+                    </div>
+
+                    <div class="cobrowse-preview-frame">
+                        <iframe
+                            class="cobrowse-preview"
+                            title="Cobrowse replay preview"
+                            sandbox
+                            srcdoc="{{ $cobrowseConsent['replay_preview']['srcdoc'] }}"
+                        ></iframe>
+                    </div>
+                @else
+                    <p class="empty realtime-note">No replay preview yet.</p>
+                @endif
+
                 @if ($cobrowseConsent['telemetry'])
                     <div class="section-header">
                         <strong>Connection telemetry</strong>
