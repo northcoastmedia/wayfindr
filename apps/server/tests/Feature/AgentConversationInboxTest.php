@@ -403,6 +403,99 @@ test('agent can see cobrowse mutation stream diagnostics on a conversation', fun
         ->assertSee('https://docs.example.test/install?step=2');
 });
 
+test('agent can see a sandboxed cobrowse replay preview on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REPLAY',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'snapshot' => [
+                'page_url' => 'https://docs.example.test/install?step=2',
+                'title' => 'Install Guide',
+                'html' => '<main><h1>Install Guide</h1><p>Original public copy.</p><button aria-expanded="false">Details</button><script>window.secret="steal-token"</script></main>',
+                'text' => 'Install Guide. [masked]',
+                'node_count' => 6,
+                'masked_count' => 1,
+                'reported_at' => now()->subMinute()->toJSON(),
+            ],
+            'mutations' => [
+                'batch_count' => 2,
+                'mutation_count' => 3,
+                'dropped_count' => 0,
+                'skipped_count' => 0,
+                'last_sequence' => 2,
+                'last_page_url' => 'https://docs.example.test/install?step=2',
+                'last_reported_at' => now()->toJSON(),
+                'recent_batches' => [
+                    [
+                        'sequence' => 1,
+                        'mutation_count' => 2,
+                        'dropped_count' => 0,
+                        'skipped_count' => 0,
+                        'page_url' => 'https://docs.example.test/install?step=2',
+                        'reported_at' => now()->toJSON(),
+                        'mutations' => [
+                            [
+                                'type' => 'text',
+                                'path' => 'body:nth-of-type(1) > main:nth-of-type(1) > p:nth-of-type(1)',
+                                'text' => 'Updated public copy.',
+                            ],
+                            [
+                                'type' => 'attribute',
+                                'path' => 'body:nth-of-type(1) > main:nth-of-type(1) > button:nth-of-type(1)',
+                                'attribute_name' => 'aria-expanded',
+                                'attribute_value' => 'true',
+                            ],
+                        ],
+                    ],
+                    [
+                        'sequence' => 2,
+                        'mutation_count' => 1,
+                        'dropped_count' => 0,
+                        'skipped_count' => 0,
+                        'page_url' => 'https://docs.example.test/install?step=2',
+                        'reported_at' => now()->toJSON(),
+                        'mutations' => [
+                            [
+                                'type' => 'added',
+                                'path' => 'body:nth-of-type(1) > main:nth-of-type(1)',
+                                'html' => '<p>Fresh public hint.</p><script>window.secret="mutation-token"</script>',
+                                'text' => 'Fresh public hint.',
+                                'node_count' => 1,
+                                'masked_count' => 0,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-REPLAY')
+        ->assertOk()
+        ->assertSee('Replay preview')
+        ->assertSee('sandbox', false)
+        ->assertSee('srcdoc=', false)
+        ->assertSee('Updated public copy.')
+        ->assertSee('Fresh public hint.')
+        ->assertSee('aria-expanded=&quot;true&quot;', false)
+        ->assertSee('3 applied')
+        ->assertSee('0 skipped')
+        ->assertDontSee('steal-token')
+        ->assertDontSee('mutation-token');
+});
+
 test('agent can reply to their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

@@ -6,8 +6,10 @@ use App\Models\Conversation;
 
 class CobrowseConsentState
 {
+    public function __construct(private readonly CobrowseReplayPreview $replayPreview) {}
+
     /**
-     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null, mutation_stream: array<string, string>|null}
+     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null, mutation_stream: array<string, string>|null, replay_preview: array<string, string>|null}
      */
     public function forConversation(Conversation $conversation): array
     {
@@ -24,6 +26,7 @@ class CobrowseConsentState
                 'page_state' => null,
                 'snapshot' => null,
                 'mutation_stream' => null,
+                'replay_preview' => null,
             ];
         }
 
@@ -54,6 +57,7 @@ class CobrowseConsentState
         $state['page_state'] = $this->formatPageState($session->metadata['page_state'] ?? null);
         $state['snapshot'] = $this->formatSnapshot($session->metadata['snapshot'] ?? null);
         $state['mutation_stream'] = $this->formatMutationStream($session->metadata['mutations'] ?? null);
+        $state['replay_preview'] = $this->replayPreview->fromMetadata($session->metadata ?? []);
 
         return $state;
     }
