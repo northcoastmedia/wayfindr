@@ -8,7 +8,7 @@ help:
 	@printf '%s\n' '  make services-down    Stop local services'
 	@printf '%s\n' '  make server-install   Install Laravel dependencies and create .env'
 	@printf '%s\n' '  make server-migrate   Run Laravel migrations'
-	@printf '%s\n' '  make server-test      Run Laravel tests'
+	@printf '%s\n' '  make server-test      Run the Laravel Pest suite'
 	@printf '%s\n' '  make server-serve     Serve Laravel on http://localhost:8000'
 
 services-up:

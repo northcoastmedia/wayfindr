@@ -1,213 +1,204 @@
 <?php
 
-namespace Tests\Feature;
-
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
-class WidgetIntakeApiTest extends TestCase
-{
-    use RefreshDatabase;
+uses(RefreshDatabase::class);
 
-    public function test_widget_bootstrap_creates_a_site_scoped_visitor_and_returns_safe_config(): void
-    {
-        $site = Site::factory()->create([
-            'name' => 'Docs Site',
-            'domain' => 'docs.example.test',
-            'public_key' => 'site_public_docs',
-            'settings' => [
-                'mask_selectors' => ['input[type="password"]', '[data-secret]'],
-                'internal_note' => 'do not leak this',
-            ],
-        ]);
+test('widget bootstrap creates a site scoped visitor and returns safe config', function (): void {
+    $site = Site::factory()->create([
+        'name' => 'Docs Site',
+        'domain' => 'docs.example.test',
+        'public_key' => 'site_public_docs',
+        'settings' => [
+            'mask_selectors' => ['input[type="password"]', '[data-secret]'],
+            'internal_note' => 'do not leak this',
+        ],
+    ]);
 
-        $response = $this->postJson('/api/widget/bootstrap', [
-            'site_public_key' => 'site_public_docs',
-            'anonymous_id' => 'anon-browser-123',
-            'page_url' => 'https://docs.example.test/install',
-        ]);
+    $response = $this->postJson('/api/widget/bootstrap', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-browser-123',
+        'page_url' => 'https://docs.example.test/install',
+    ]);
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('data.site.public_key', 'site_public_docs')
-            ->assertJsonPath('data.site.name', 'Docs Site')
-            ->assertJsonPath('data.site.settings.mask_selectors', ['input[type="password"]', '[data-secret]'])
-            ->assertJsonPath('data.visitor.anonymous_id', 'anon-browser-123');
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.site.public_key', 'site_public_docs')
+        ->assertJsonPath('data.site.name', 'Docs Site')
+        ->assertJsonPath('data.site.settings.mask_selectors', ['input[type="password"]', '[data-secret]'])
+        ->assertJsonPath('data.visitor.anonymous_id', 'anon-browser-123');
 
-        $payload = $response->json('data');
+    $payload = $response->json('data');
 
-        $this->assertArrayNotHasKey('id', $payload['site']);
-        $this->assertArrayNotHasKey('account_id', $payload['site']);
-        $this->assertArrayNotHasKey('internal_note', $payload['site']['settings']);
-        $this->assertDatabaseHas('visitors', [
-            'site_id' => $site->id,
-            'anonymous_id' => 'anon-browser-123',
-        ]);
-    }
+    expect($payload['site'])
+        ->not->toHaveKey('id')
+        ->not->toHaveKey('account_id');
 
-    public function test_widget_bootstrap_rejects_an_unknown_public_key(): void
-    {
-        $this->postJson('/api/widget/bootstrap', [
-            'site_public_key' => 'missing_key',
-            'anonymous_id' => 'anon-browser-123',
-        ])
-            ->assertNotFound()
-            ->assertJsonPath('message', 'Site not found.');
-    }
+    expect($payload['site']['settings'])->not->toHaveKey('internal_note');
 
-    public function test_conversation_creation_uses_the_site_scoped_visitor(): void
-    {
-        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
-        $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
+    $this->assertDatabaseHas('visitors', [
+        'site_id' => $site->id,
+        'anonymous_id' => 'anon-browser-123',
+    ]);
+});
 
-        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'shared-anon']);
-        Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'shared-anon']);
+test('widget bootstrap rejects an unknown public key', function (): void {
+    $this->postJson('/api/widget/bootstrap', [
+        'site_public_key' => 'missing_key',
+        'anonymous_id' => 'anon-browser-123',
+    ])
+        ->assertNotFound()
+        ->assertJsonPath('message', 'Site not found.');
+});
 
-        $response = $this->postJson('/api/conversations', [
-            'site_public_key' => 'site_public_docs',
-            'anonymous_id' => 'shared-anon',
-            'subject' => 'Need help installing',
-            'page_url' => 'https://docs.example.test/install',
-        ]);
+test('conversation creation uses the site scoped visitor', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'open')
-            ->assertJsonPath('data.subject', 'Need help installing')
-            ->assertJsonPath('data.visitor.anonymous_id', 'shared-anon');
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'shared-anon']);
+    Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'shared-anon']);
 
-        $supportCode = $response->json('data.support_code');
+    $response = $this->postJson('/api/conversations', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'shared-anon',
+        'subject' => 'Need help installing',
+        'page_url' => 'https://docs.example.test/install',
+    ]);
 
-        $this->assertIsString($supportCode);
-        $this->assertStringStartsWith('WF-', $supportCode);
-        $this->assertDatabaseHas('conversations', [
-            'site_id' => $site->id,
-            'visitor_id' => $visitor->id,
-            'subject' => 'Need help installing',
-            'status' => 'open',
-        ]);
-    }
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'open')
+        ->assertJsonPath('data.subject', 'Need help installing')
+        ->assertJsonPath('data.visitor.anonymous_id', 'shared-anon');
 
-    public function test_visitor_message_creation_cannot_cross_site_boundaries(): void
-    {
-        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
-        $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
-        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
-        $otherVisitor = Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-other']);
-        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
-            'support_code' => 'WF-BOUNDARY',
-        ]);
+    $supportCode = $response->json('data.support_code');
 
-        $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
-            'site_public_key' => 'site_public_other',
-            'anonymous_id' => 'anon-other',
-            'body' => 'This should not land in the docs conversation.',
-        ])
-            ->assertNotFound();
+    expect($supportCode)->toBeString()->toStartWith('WF-');
 
-        $this->assertDatabaseMissing('conversation_messages', [
-            'conversation_id' => $conversation->id,
-            'sender_id' => $otherVisitor->id,
-        ]);
-    }
+    $this->assertDatabaseHas('conversations', [
+        'site_id' => $site->id,
+        'visitor_id' => $visitor->id,
+        'subject' => 'Need help installing',
+        'status' => 'open',
+    ]);
+});
 
-    public function test_visitor_can_add_a_message_to_their_conversation(): void
-    {
-        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
-        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
-        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
-            'support_code' => 'WF-MESSAGE',
-        ]);
+test('visitor message creation cannot cross site boundaries', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $otherVisitor = Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-other']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BOUNDARY',
+    ]);
 
-        $response = $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
-            'site_public_key' => 'site_public_docs',
-            'anonymous_id' => 'anon-docs',
-            'body' => 'Can you help me with this checkout error?',
-        ]);
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_other',
+        'anonymous_id' => 'anon-other',
+        'body' => 'This should not land in the docs conversation.',
+    ])
+        ->assertNotFound();
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGE')
-            ->assertJsonPath('data.message.type', 'text')
-            ->assertJsonPath('data.message.body', 'Can you help me with this checkout error?');
+    $this->assertDatabaseMissing('conversation_messages', [
+        'conversation_id' => $conversation->id,
+        'sender_id' => $otherVisitor->id,
+    ]);
+});
 
-        $message = ConversationMessage::query()->firstOrFail();
+test('visitor can add a message to their conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-MESSAGE',
+    ]);
 
-        $this->assertSame($conversation->id, $message->conversation_id);
-        $this->assertSame(Visitor::class, $message->sender_type);
-        $this->assertSame($visitor->id, $message->sender_id);
-        $this->assertNotNull($conversation->refresh()->last_message_at);
-    }
+    $response = $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'body' => 'Can you help me with this checkout error?',
+    ]);
 
-    public function test_visitor_can_read_their_conversation_messages(): void
-    {
-        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
-        $agent = User::factory()->create(['name' => 'Ada Agent']);
-        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
-        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
-            'support_code' => 'WF-MESSAGES',
-        ]);
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGE')
+        ->assertJsonPath('data.message.type', 'text')
+        ->assertJsonPath('data.message.body', 'Can you help me with this checkout error?');
 
-        ConversationMessage::factory()->for($conversation)->create([
-            'sender_type' => Visitor::class,
-            'sender_id' => $visitor->id,
-            'body' => 'Hello from the visitor.',
-            'created_at' => now()->subMinute(),
-        ]);
+    $message = ConversationMessage::query()->firstOrFail();
 
-        ConversationMessage::factory()->for($conversation)->create([
-            'sender_type' => User::class,
-            'sender_id' => $agent->id,
-            'body' => 'Hello from support.',
-            'created_at' => now(),
-        ]);
+    expect($message->conversation_id)->toBe($conversation->id)
+        ->and($message->sender_type)->toBe(Visitor::class)
+        ->and($message->sender_id)->toBe($visitor->id)
+        ->and($conversation->refresh()->last_message_at)->not->toBeNull();
+});
 
-        $response = $this->getJson('/api/conversations/WF-MESSAGES/messages?'.http_build_query([
-            'site_public_key' => 'site_public_docs',
-            'anonymous_id' => 'anon-docs',
-        ]));
+test('visitor can read their conversation messages', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $agent = User::factory()->create(['name' => 'Ada Agent']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-MESSAGES',
+    ]);
 
-        $response
-            ->assertOk()
-            ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGES')
-            ->assertJsonPath('data.messages.0.sender.kind', 'visitor')
-            ->assertJsonPath('data.messages.0.sender.name', 'Visitor')
-            ->assertJsonPath('data.messages.0.body', 'Hello from the visitor.')
-            ->assertJsonPath('data.messages.1.sender.kind', 'agent')
-            ->assertJsonPath('data.messages.1.sender.name', 'Ada Agent')
-            ->assertJsonPath('data.messages.1.body', 'Hello from support.');
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Hello from the visitor.',
+        'created_at' => now()->subMinute(),
+    ]);
 
-        $payload = $response->json('data.messages.0');
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'Hello from support.',
+        'created_at' => now(),
+    ]);
 
-        $this->assertArrayNotHasKey('sender_id', $payload);
-        $this->assertArrayNotHasKey('sender_type', $payload);
-    }
+    $response = $this->getJson('/api/conversations/WF-MESSAGES/messages?'.http_build_query([
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+    ]));
 
-    public function test_visitor_message_read_cannot_cross_site_boundaries(): void
-    {
-        $site = Site::factory()->create(['public_key' => 'site_public_docs']);
-        $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
-        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
-        Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-other']);
-        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
-            'support_code' => 'WF-BOUNDARY',
-        ]);
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGES')
+        ->assertJsonPath('data.messages.0.sender.kind', 'visitor')
+        ->assertJsonPath('data.messages.0.sender.name', 'Visitor')
+        ->assertJsonPath('data.messages.0.body', 'Hello from the visitor.')
+        ->assertJsonPath('data.messages.1.sender.kind', 'agent')
+        ->assertJsonPath('data.messages.1.sender.name', 'Ada Agent')
+        ->assertJsonPath('data.messages.1.body', 'Hello from support.');
 
-        ConversationMessage::factory()->for($conversation)->create([
-            'sender_type' => Visitor::class,
-            'sender_id' => $visitor->id,
-            'body' => 'This should stay private to the docs visitor.',
-        ]);
+    $payload = $response->json('data.messages.0');
 
-        $this->getJson('/api/conversations/WF-BOUNDARY/messages?'.http_build_query([
-            'site_public_key' => 'site_public_other',
-            'anonymous_id' => 'anon-other',
-        ]))
-            ->assertNotFound();
-    }
-}
+    expect($payload)
+        ->not->toHaveKey('sender_id')
+        ->not->toHaveKey('sender_type');
+});
+
+test('visitor message read cannot cross site boundaries', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $otherSite = Site::factory()->create(['public_key' => 'site_public_other']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-other']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BOUNDARY',
+    ]);
+
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'This should stay private to the docs visitor.',
+    ]);
+
+    $this->getJson('/api/conversations/WF-BOUNDARY/messages?'.http_build_query([
+        'site_public_key' => 'site_public_other',
+        'anonymous_id' => 'anon-other',
+    ]))
+        ->assertNotFound();
+});

@@ -33,6 +33,11 @@ composer test
 php artisan serve
 ```
 
+`composer test` runs the Laravel server's Pest 4 suite, including feature,
+unit, and architecture tests.
+
+See [testing.md](testing.md) for the current testing posture.
+
 The server runs at [http://localhost:8000](http://localhost:8000). A lightweight health check is available at [http://localhost:8000/up](http://localhost:8000/up).
 
 The local bootstrap credentials above are `agent@example.com` / `password`, and
