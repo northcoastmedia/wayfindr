@@ -3,11 +3,14 @@
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\Widget\WidgetScriptController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/widget.js', WidgetScriptController::class)->name('widget.script');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SessionController::class, 'create'])->name('login');

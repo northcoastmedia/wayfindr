@@ -73,5 +73,6 @@ See [public-information-policy.md](docs/governance/public-information-policy.md)
 Pre-alpha. The current prototype supports a local first support loop: a plain
 JavaScript widget can create a visitor conversation, and an authenticated agent
 can read and reply to the conversation in the dashboard. The public widget API
-can also retrieve the visitor-visible message timeline. Realtime updates,
-cobrowsing, ticket workflows, and production hardening are still ahead.
+can also retrieve the visitor-visible message timeline, and the Laravel app
+serves the classic widget script from `/widget.js`. Realtime updates, cobrowsing,
+ticket workflows, and production hardening are still ahead.
