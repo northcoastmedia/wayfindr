@@ -288,6 +288,16 @@
             display: block;
             font-weight: 700;
             margin-top: 4px;
+            overflow-wrap: anywhere;
+        }
+
+        .realtime-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+
+        .realtime-note {
+            border-top: 1px solid var(--border);
+            margin: 0;
         }
 
         .message-list {
