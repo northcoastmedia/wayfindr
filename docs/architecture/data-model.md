@@ -17,7 +17,7 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 ## Design Notes
 
 - Status fields are strings instead of database enums so early product states can change without database-type churn.
-- Visitor identity supports both `anonymous_id` and optional host-provided `external_id`.
+- Visitor identity supports both `anonymous_id` and optional host-provided `external_id`. Public widget requests bootstrap a signed visitor token before they can create conversations or read/write visitor messages.
 - Cobrowsing state is separate from conversations because consent, start, and end timing need their own lifecycle.
 - Audit actors and subjects are polymorphic so the model can track agent, visitor, conversation, ticket, and cobrowse events without creating a new audit table per feature.
 - Integration packages should stay thin and write through Laravel APIs rather than owning product persistence directly.

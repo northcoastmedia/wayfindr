@@ -23,6 +23,7 @@
     var fetcher = options.fetch || (root && root.fetch ? root.fetch.bind(root) : null);
     var hasStorageOption = Object.prototype.hasOwnProperty.call(options, 'storage');
     var storage = hasStorageOption ? options.storage : null;
+    var visitorToken = options.visitorToken || null;
 
     if (!apiBaseUrl) {
       throw new Error('Wayfindr requires an apiBaseUrl option.');
@@ -32,15 +33,19 @@
       throw new Error('Wayfindr requires a sitePublicKey option.');
     }
 
-    if (!anonymousId) {
-      if (!hasStorageOption) {
-        storage = defaultStorage();
-      }
+    if (!hasStorageOption) {
+      storage = defaultStorage();
+    }
 
+    if (!anonymousId) {
       anonymousId = resolveAnonymousId({
         sitePublicKey: sitePublicKey,
         storage: storage,
       });
+    }
+
+    if (!visitorToken) {
+      visitorToken = storageGet(storage, visitorTokenStorageKey(sitePublicKey));
     }
 
     if (!fetcher) {
@@ -55,6 +60,15 @@
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
           page_url: pageUrl || null,
+        }).then(function (result) {
+          var token = result && result.visitor ? result.visitor.token : null;
+
+          if (token) {
+            visitorToken = token;
+            storageSet(storage, visitorTokenStorageKey(sitePublicKey), token);
+          }
+
+          return result;
         });
       },
       startConversation: function (body, details) {
@@ -63,6 +77,7 @@
         return postJson(fetcher, apiBaseUrl + '/api/conversations', {
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
           subject: details.subject || summarize(body),
           page_url: details.pageUrl || null,
         });
@@ -71,6 +86,7 @@
         return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages', {
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
           body: body,
         });
       },
@@ -78,9 +94,16 @@
         return getJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages?' + toQueryString({
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
+          visitor_token: requireVisitorToken(visitorToken),
         }));
       },
       sendFirstMessage: async function (body, details) {
+        details = details || {};
+
+        if (!visitorToken) {
+          await this.bootstrap(details.pageUrl || null);
+        }
+
         var conversation = await this.startConversation(body, details);
         var message = await this.sendMessage(conversation.support_code, body);
 
@@ -108,6 +131,7 @@
       anonymousId: options.anonymousId,
       fetch: options.fetch,
       storage: options.storage,
+      visitorToken: options.visitorToken,
     });
 
     injectStyles(doc);
@@ -289,6 +313,18 @@
     return anonymousId;
   }
 
+  function visitorTokenStorageKey(sitePublicKey) {
+    return 'wayfindr:' + sitePublicKey + ':visitor-token';
+  }
+
+  function requireVisitorToken(visitorToken) {
+    if (!visitorToken) {
+      throw new Error('Wayfindr visitor session is not bootstrapped.');
+    }
+
+    return visitorToken;
+  }
+
   function getJson(fetcher, url) {
     return fetcher(url, {
       method: 'GET',
@@ -365,7 +401,7 @@
 
   function defaultStorage() {
     try {
-      return root ? root.localStorage : null;
+      return root && root.document ? root.localStorage : null;
     } catch (error) {
       return null;
     }

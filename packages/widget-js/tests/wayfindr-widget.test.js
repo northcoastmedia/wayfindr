@@ -56,6 +56,7 @@ test('bootstraps the widget against the public intake API', async () => {
           },
           visitor: {
             anonymous_id: 'anon-browser-123',
+            token: 'visitor-token-123',
           },
         },
       });
@@ -72,6 +73,7 @@ test('bootstraps the widget against the public intake API', async () => {
     page_url: 'https://docs.example.test/install',
   });
   assert.equal(result.site.public_key, 'site_public_docs');
+  assert.equal(result.visitor.token, 'visitor-token-123');
 });
 
 test('starts a conversation and sends the first visitor message', async () => {
@@ -82,6 +84,21 @@ test('starts a conversation and sends the first visitor message', async () => {
     anonymousId: 'anon-browser-123',
     fetch: async (url, options) => {
       calls.push({ url, options });
+
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(200, {
+          data: {
+            site: {
+              public_key: 'site_public_docs',
+              settings: {},
+            },
+            visitor: {
+              anonymous_id: 'anon-browser-123',
+              token: 'visitor-token-123',
+            },
+          },
+        });
+      }
 
       if (url.endsWith('/api/conversations')) {
         return jsonResponse(201, {
@@ -110,18 +127,21 @@ test('starts a conversation and sends the first visitor message', async () => {
     pageUrl: 'https://docs.example.test/install',
   });
 
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/conversations');
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    site_public_key: 'site_public_docs',
-    anonymous_id: 'anon-browser-123',
-    subject: 'Can you help me?',
-    page_url: 'https://docs.example.test/install',
-  });
-  assert.equal(calls[1].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages');
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/widget/bootstrap');
+  assert.equal(calls[1].url, 'http://127.0.0.1:8000/api/conversations');
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     site_public_key: 'site_public_docs',
     anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    subject: 'Can you help me?',
+    page_url: 'https://docs.example.test/install',
+  });
+  assert.equal(calls[2].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages');
+  assert.deepEqual(JSON.parse(calls[2].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
     body: 'Can you help me?',
   });
   assert.equal(result.conversation.support_code, 'WF-TEST123');
@@ -134,6 +154,7 @@ test('fetches visitor-visible conversation messages', async () => {
     apiBaseUrl: 'http://127.0.0.1:8000/',
     sitePublicKey: 'site_public_docs',
     anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
     fetch: async (url, options) => {
       calls.push({ url, options });
 
@@ -164,7 +185,7 @@ test('fetches visitor-visible conversation messages', async () => {
   assert.equal(calls.length, 1);
   assert.equal(
     calls[0].url,
-    'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages?site_public_key=site_public_docs&anonymous_id=anon-browser-123',
+    'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages?site_public_key=site_public_docs&anonymous_id=anon-browser-123&visitor_token=visitor-token-123',
   );
   assert.equal(calls[0].options.method, 'GET');
   assert.equal(result.conversation.support_code, 'WF-TEST123');
@@ -194,7 +215,7 @@ test('renders the embedded conversation timeline and refreshes replies', async (
         return jsonResponse(201, {
           data: {
             site: { public_key: 'site_public_docs', settings: {} },
-            visitor: { anonymous_id: 'anon-browser-123' },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
           },
         });
       }
@@ -266,6 +287,13 @@ test('renders the embedded conversation timeline and refreshes replies', async (
     widget.root.querySelector('.wayfindr-widget__status').textContent,
     /Support code WF-TEST123/,
   );
+  assert.deepEqual(JSON.parse(calls.find((call) => call.url.endsWith('/api/conversations')).options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    visitor_token: 'visitor-token-123',
+    subject: 'Can you help me?',
+    page_url: 'https://docs.example.test/install',
+  });
   assert.deepEqual(
     [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
     ['VisitorCan you help me?'],
