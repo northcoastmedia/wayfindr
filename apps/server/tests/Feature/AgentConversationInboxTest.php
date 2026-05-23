@@ -68,6 +68,77 @@ test('dashboard shows an empty conversation state', function (): void {
         ->assertSee('No active conversations yet.');
 });
 
+test('dashboard shows ready realtime status when reverb is configured', function (): void {
+    config()->set('broadcasting.default', 'reverb');
+    config()->set('broadcasting.connections.reverb.key', 'reverb-key');
+    config()->set('broadcasting.connections.reverb.secret', 'reverb-secret');
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    config()->set('broadcasting.connections.reverb.options.host', 'wayfindr.test');
+    config()->set('broadcasting.connections.reverb.options.port', 443);
+    config()->set('broadcasting.connections.reverb.options.scheme', 'https');
+
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Realtime')
+        ->assertSee('Ready')
+        ->assertSee('Reverb broadcasts are configured.')
+        ->assertSee('Broadcast driver')
+        ->assertSee('reverb')
+        ->assertSee('wayfindr.test:443')
+        ->assertSee('https')
+        ->assertSee('App ID')
+        ->assertSee('Secret')
+        ->assertSee('Set');
+});
+
+test('dashboard shows realtime setup guidance when reverb is incomplete', function (): void {
+    config()->set('broadcasting.default', 'reverb');
+    config()->set('broadcasting.connections.reverb.key', null);
+    config()->set('broadcasting.connections.reverb.secret', null);
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    config()->set('broadcasting.connections.reverb.options.host', null);
+    config()->set('broadcasting.connections.reverb.options.port', 443);
+    config()->set('broadcasting.connections.reverb.options.scheme', 'https');
+
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Realtime')
+        ->assertSee('Needs setup')
+        ->assertSee('Add Reverb app credentials and public host settings before enabling live updates.')
+        ->assertSee('App key')
+        ->assertSee('Missing')
+        ->assertSee('App ID')
+        ->assertSee('Set')
+        ->assertSee('Secret')
+        ->assertSee('Missing')
+        ->assertSee('Endpoint')
+        ->assertSee('Incomplete');
+});
+
+test('dashboard shows realtime disabled when broadcasting is not using reverb', function (): void {
+    config()->set('broadcasting.default', 'log');
+
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Realtime')
+        ->assertSee('Disabled')
+        ->assertSee('Set BROADCAST_CONNECTION=reverb to deliver live updates.')
+        ->assertSee('Broadcast driver')
+        ->assertSee('log');
+});
+
 test('agent can view their account conversation timeline', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

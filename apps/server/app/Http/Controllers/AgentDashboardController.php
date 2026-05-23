@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 class AgentDashboardController extends Controller
 {
-    public function __invoke(Request $request): View
+    public function __invoke(Request $request, RealtimeHealth $realtimeHealth): View
     {
         $agent = $request->user();
 
@@ -28,6 +29,7 @@ class AgentDashboardController extends Controller
             'account' => $account,
             'agent' => $agent,
             'conversations' => $conversations,
+            'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
         ]);
     }
