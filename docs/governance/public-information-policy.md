@@ -16,6 +16,8 @@ Commit information that helps people understand, use, self-host, audit, or contr
 - API and SDK documentation,
 - public roadmap items,
 - release notes.
+- AI feature posture, provider-neutral configuration guidance, and synthetic
+  examples that help users understand Wayfindr's behavior.
 
 ## Keep Private
 
@@ -27,9 +29,12 @@ Do not commit:
 - customer or prospect names,
 - sales notes,
 - private support incidents,
+- customer transcripts, AI prompts, AI outputs, or evaluation datasets that
+  contain real customer, visitor, employee, or private business information,
 - private infrastructure details,
 - cloud cost models,
 - vendor credentials,
+- AI provider API keys or account identifiers,
 - tokens or secrets,
 - competitive strategy,
 - internal-only launch plans.

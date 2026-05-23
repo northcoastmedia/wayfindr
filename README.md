@@ -60,6 +60,8 @@ See [0001-license-and-repo-structure.md](docs/decisions/0001-license-and-repo-st
 
 See [0003-laravel-forge-as-first-class-deployment-path.md](docs/decisions/0003-laravel-forge-as-first-class-deployment-path.md) for the current Forge deployment posture.
 
+See [0004-ai-as-assistive-product-and-development-layer.md](docs/decisions/0004-ai-as-assistive-product-and-development-layer.md) for the current AI posture.
+
 ## Public Documentation Boundary
 
 This is a public open source repository. Product, architecture, security, license, and contribution decisions should be documented here when they affect users or contributors.
