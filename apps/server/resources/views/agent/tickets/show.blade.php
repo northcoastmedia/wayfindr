@@ -166,6 +166,48 @@
                     <button class="button" type="submit">Add note</button>
                 </form>
             </section>
+
+            <section class="section" aria-labelledby="ticket-activity-heading">
+                <div class="section-header">
+                    <h2 id="ticket-activity-heading">Activity</h2>
+                    <span class="lede">{{ $ticketActivity->count() }} total</span>
+                </div>
+
+                <div class="message-list">
+                    @forelse ($ticketActivity as $activity)
+                        <article class="message-card">
+                            <div class="message-meta">
+                                <strong>{{ $activity->actor?->name ?? 'System' }}</strong>
+                                <span>{{ $activity->occurred_at->diffForHumans() }}</span>
+                            </div>
+                            <p>
+                                @switch($activity->action)
+                                    @case('ticket.closed')
+                                        Ticket closed
+                                        @break
+
+                                    @case('ticket.reopened')
+                                        Ticket reopened
+                                        @break
+
+                                    @case('ticket.note_added')
+                                        Internal note added
+                                        @break
+
+                                    @case('ticket.assignee_updated')
+                                        Assignee changed from {{ data_get($activity->metadata, 'old_assignee_name') ?? 'Unassigned' }} to {{ data_get($activity->metadata, 'new_assignee_name') ?? 'Unassigned' }}
+                                        @break
+
+                                    @default
+                                        {{ ucfirst(str_replace(['ticket.', '_'], ['', ' '], $activity->action)) }}
+                                @endswitch
+                            </p>
+                        </article>
+                    @empty
+                        <div class="empty-state">No ticket activity yet.</div>
+                    @endforelse
+                </div>
+            </section>
         </main>
     </div>
 </x-layouts.app>

@@ -1020,6 +1020,23 @@ test('agent can close a ticket from its detail page', function (): void {
     expect($ticket->fresh())
         ->status->toBe('closed')
         ->closed_at->not->toBeNull();
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.closed',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Ticket closed')
+        ->assertSee('Ada Agent');
 });
 
 test('agent cannot view another account ticket record', function (): void {
@@ -1150,6 +1167,23 @@ test('agent can reopen a linked ticket from their account conversation', functio
         ->status->toBe('open')
         ->closed_at->toBeNull();
 
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.reopened',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Ticket reopened')
+        ->assertSee('Escalated checkout issue');
+
     $this->actingAs($agent)
         ->get('/dashboard')
         ->assertOk()
@@ -1194,6 +1228,22 @@ test('agent can reassign a linked ticket to another account agent', function ():
         ->assertSessionHas('status', 'Ticket assignee updated.');
 
     expect($ticket->fresh()->assignee_id)->toBe($assignee->id);
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.assignee_updated',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Assignee changed from Ada Agent to Bea Builder');
 
     $this->actingAs($agent)
         ->get('/dashboard')
