@@ -151,6 +151,107 @@ test('dashboard shows conversation attention state from the latest message', fun
         ->assertSeeInOrder(['Fresh conversation', 'Needs reply']);
 });
 
+test('dashboard filters conversations by attention state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    $needsReplyConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-NEEDS2',
+        'subject' => 'Visitor needs a hand',
+        'status' => 'open',
+        'last_message_at' => now()->subMinutes(2),
+    ]);
+    ConversationMessage::factory()->for($needsReplyConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Can someone help?',
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    $waitingConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-WAIT2',
+        'subject' => 'Agent is waiting',
+        'status' => 'open',
+        'last_message_at' => now()->subMinute(),
+    ]);
+    ConversationMessage::factory()->for($waitingConversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'Can you try again?',
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?conversation_filter=needs_reply')
+        ->assertOk()
+        ->assertSee('Needs reply')
+        ->assertSee('Visitor needs a hand')
+        ->assertDontSee('Agent is waiting');
+});
+
+test('dashboard filters conversations by assignment state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-MINE',
+        'subject' => 'Mine to answer',
+        'status' => 'open',
+    ]);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-OPEN',
+        'subject' => 'Ready to claim',
+        'status' => 'open',
+    ]);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $otherAgent->id,
+        'support_code' => 'WF-THEIRS',
+        'subject' => 'Assigned elsewhere',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?conversation_filter=assigned_to_me')
+        ->assertOk()
+        ->assertSee('Assigned to me')
+        ->assertSee('Mine to answer')
+        ->assertDontSee('Ready to claim')
+        ->assertDontSee('Assigned elsewhere');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?conversation_filter=unassigned')
+        ->assertOk()
+        ->assertSee('Unassigned')
+        ->assertSee('Ready to claim')
+        ->assertDontSee('Mine to answer')
+        ->assertDontSee('Assigned elsewhere');
+});
+
+test('dashboard exposes conversation queue filter links', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('All open')
+        ->assertSee('Needs reply')
+        ->assertSee('Assigned to me')
+        ->assertSee('Unassigned')
+        ->assertSee('/dashboard?conversation_filter=needs_reply', false)
+        ->assertSee('/dashboard?conversation_filter=assigned_to_me', false)
+        ->assertSee('/dashboard?conversation_filter=unassigned', false);
+});
+
 test('dashboard lists open tickets for the agent account', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $otherAccount = Account::factory()->create(['name' => 'Other Support']);
