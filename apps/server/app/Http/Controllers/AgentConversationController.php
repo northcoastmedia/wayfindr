@@ -7,6 +7,7 @@ use App\Events\ConversationMessageCreated;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\User;
+use App\Notifications\ConversationNeedsReply;
 use App\Support\CobrowseConsentState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +22,8 @@ class AgentConversationController extends Controller
 
         $conversation = $this->conversationForAgent($agent, $supportCode)
             ->load(['assignedAgent', 'latestMessage', 'site', 'visitor']);
+
+        $this->markConversationNotificationsRead($agent, $conversation);
 
         $messages = $conversation->messages()
             ->with('sender')
@@ -74,6 +77,8 @@ class AgentConversationController extends Controller
             'closed_at' => null,
             'last_message_at' => $message->created_at,
         ])->save();
+
+        $this->markConversationNotificationsRead($agent, $conversation);
 
         event(new ConversationMessageCreated($message));
 
@@ -261,6 +266,16 @@ class AgentConversationController extends Controller
             ->whereIn('status', ['requested', 'granted'])
             ->latest('id')
             ->first();
+    }
+
+    private function markConversationNotificationsRead(User $agent, Conversation $conversation): void
+    {
+        $agent->unreadNotifications()
+            ->where('type', ConversationNeedsReply::class)
+            ->get()
+            ->filter(fn ($notification): bool => (int) data_get($notification->data, 'conversation_id') === $conversation->id)
+            ->each
+            ->markAsRead();
     }
 
     private function ticketDescription(Conversation $conversation): string
