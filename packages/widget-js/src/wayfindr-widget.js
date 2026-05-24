@@ -382,6 +382,8 @@
     var mutationSequence = 0;
     var droppedMutationBatches = 0;
     var mutationFlushMs = typeof options.mutationFlushMs === 'number' ? options.mutationFlushMs : 50;
+    var messagePollMs = typeof options.messagePollMs === 'number' ? Math.max(0, options.messagePollMs) : 5000;
+    var messagePollTimer = null;
     var cobrowseStatusPollMs = typeof options.cobrowseStatusPollMs === 'number' ? Math.max(0, options.cobrowseStatusPollMs) : 5000;
     var cobrowseStatusTimer = null;
 
@@ -439,6 +441,31 @@
 
         appendMessage(event.message);
       });
+    }
+
+    function scheduleMessagePoll() {
+      if (!supportCode || messagePollMs <= 0 || messagePollTimer) {
+        return;
+      }
+
+      messagePollTimer = setTimeout(async function () {
+        messagePollTimer = null;
+        await refreshMessages({ silent: true });
+        scheduleMessagePoll();
+      }, messagePollMs);
+
+      if (typeof messagePollTimer.unref === 'function') {
+        messagePollTimer.unref();
+      }
+    }
+
+    function stopMessagePoll() {
+      if (!messagePollTimer) {
+        return;
+      }
+
+      clearTimeout(messagePollTimer);
+      messagePollTimer = null;
     }
 
     function renderCobrowseConsent() {
@@ -706,7 +733,9 @@
           status.textContent = 'Messages refreshed.';
         }
       } catch (error) {
-        status.textContent = error.message || 'Wayfindr could not refresh messages.';
+        if (!options.silent) {
+          status.textContent = error.message || 'Wayfindr could not refresh messages.';
+        }
       } finally {
         refresh.disabled = false;
       }
@@ -763,6 +792,7 @@
           supportCode = result.conversation.support_code;
           connectRealtime();
           renderCobrowseConsent();
+          scheduleMessagePoll();
           scheduleCobrowseStatusPoll();
         }
 
@@ -790,6 +820,7 @@
         }
 
         stopCobrowseStatusPoll();
+        stopMessagePoll();
         stopMutationStream();
         rootEl.remove();
       },
@@ -843,12 +874,17 @@
           },
         });
         var channel = pusher.subscribe(config.channelName);
+        var eventNames = pusherBroadcastEventNames(config.eventName);
 
-        channel.bind(config.eventName, config.onMessage);
+        eventNames.forEach(function (eventName) {
+          channel.bind(eventName, config.onMessage);
+        });
 
         return {
           unsubscribe: function () {
-            channel.unbind(config.eventName, config.onMessage);
+            eventNames.forEach(function (eventName) {
+              channel.unbind(eventName, config.onMessage);
+            });
             pusher.unsubscribe(config.channelName);
 
             if (typeof pusher.disconnect === 'function') {
@@ -858,6 +894,14 @@
         };
       },
     };
+  }
+
+  function pusherBroadcastEventNames(eventName) {
+    if (!eventName || eventName.charAt(0) === '.') {
+      return [eventName];
+    }
+
+    return [eventName, '.' + eventName];
   }
 
   function resolveAnonymousId(options) {

@@ -23,8 +23,9 @@ plain HTML sites:
 ```
 
 The Pusher script is only required for live Reverb updates. Without it, the
-widget still works with the manual refresh button. The Reverb app key is public
-client configuration; never expose `REVERB_APP_SECRET` in browser code.
+widget falls back to light message polling and the manual refresh button. The
+Reverb app key is public client configuration; never expose
+`REVERB_APP_SECRET` in browser code.
 
 Classic script tags can also use data attributes:
 
@@ -63,7 +64,7 @@ The widget currently supports the first visitor loop:
 - report passive page state after consent,
 - report an initial sanitized DOM snapshot after consent,
 - report bounded sanitized DOM mutation batches after consent,
-- manually refresh for agent replies when realtime is unavailable.
+- poll lightly and manually refresh for agent replies when realtime is unavailable.
 
 ```js
 const client = Wayfindr.createClient({

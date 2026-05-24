@@ -843,6 +843,55 @@ test('authorizes built-in Pusher subscriptions through the widget endpoint', asy
   assert.equal(disconnected, true);
 });
 
+test('binds Laravel custom broadcast names for built-in Pusher subscriptions', () => {
+  const boundEvents = [];
+  const unboundEvents = [];
+
+  function FakePusher() {
+    this.subscribe = () => ({
+      bind: (eventName) => {
+        boundEvents.push(eventName);
+      },
+      unbind: (eventName) => {
+        unboundEvents.push(eventName);
+      },
+    });
+    this.unsubscribe = () => {};
+    this.disconnect = () => {};
+  }
+
+  const client = Wayfindr.createClient({
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    visitorToken: 'visitor-token-123',
+    Pusher: FakePusher,
+    reverb: {
+      appKey: 'reverb-key',
+      host: 'localhost',
+      port: 8080,
+      scheme: 'http',
+    },
+    fetch: async () => jsonResponse(200, {
+      auth: 'reverb-key:signed-channel',
+    }),
+  });
+
+  const subscription = client.subscribeToConversation('WF-TEST123', () => {});
+
+  assert.deepEqual(boundEvents, [
+    'conversation.message.created',
+    '.conversation.message.created',
+  ]);
+
+  subscription.unsubscribe();
+
+  assert.deepEqual(unboundEvents, [
+    'conversation.message.created',
+    '.conversation.message.created',
+  ]);
+});
+
 test('renders the embedded conversation timeline and refreshes replies', async () => {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
     url: 'https://docs.example.test/install',
@@ -976,6 +1025,119 @@ test('renders the embedded conversation timeline and refreshes replies', async (
     [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
     ['VisitorCan you help me?', 'Ada AgentAbsolutely, happy to help.'],
   );
+});
+
+test('polls active conversations so agent replies appear when realtime is unavailable', async () => {
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+    url: 'https://docs.example.test/install',
+  });
+  let timelineFetches = 0;
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    storage: memoryStorage(),
+    cobrowseStatusPollMs: 0,
+    messagePollMs: 10,
+    fetch: async (url, options) => {
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/conversations/WF-TEST123/cobrowse?')) {
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: {
+              status: 'unavailable',
+              consent: 'unavailable',
+              requested_by: null,
+            },
+          },
+        });
+      }
+
+      timelineFetches += 1;
+
+      return jsonResponse(200, {
+        data: {
+          conversation: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+          messages: [
+            {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+            ...(timelineFetches > 1
+              ? [{
+                  id: 2,
+                  sender: { kind: 'agent', name: 'Ada Agent' },
+                  type: 'text',
+                  body: 'Fallback hello.',
+                  created_at: '2026-05-23T14:01:00.000000Z',
+                }]
+              : []),
+          ],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+  await wait(30);
+  await settle();
+
+  assert.deepEqual(
+    [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
+    ['VisitorCan you help me?', 'Ada AgentFallback hello.'],
+  );
+
+  widget.destroy();
 });
 
 test('appends live agent messages from the realtime subscription', async () => {
