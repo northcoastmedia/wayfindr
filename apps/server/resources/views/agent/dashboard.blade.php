@@ -83,6 +83,36 @@
                 @endif
             </section>
 
+            <section class="section" aria-labelledby="team-heading">
+                <div class="section-header">
+                    <h2 id="team-heading">Team</h2>
+                    <span class="lede">{{ $agents->count() }} active</span>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Open conversations</th>
+                                <th scope="col">Open tickets</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($agents as $accountAgent)
+                                <tr>
+                                    <td>{{ $accountAgent->name }}</td>
+                                    <td>{{ $accountAgent->email }}</td>
+                                    <td>{{ $accountAgent->open_assigned_conversations_count }}</td>
+                                    <td>{{ $accountAgent->open_assigned_tickets_count }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <section class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>

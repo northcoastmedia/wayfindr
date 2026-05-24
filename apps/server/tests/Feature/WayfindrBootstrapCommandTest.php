@@ -72,3 +72,68 @@ test('force allows bootstrap to create missing records', function (): void {
     $this->assertDatabaseHas('users', ['email' => 'ada@example.com']);
     $this->assertDatabaseHas('sites', ['public_key' => 'site_acme_public_key']);
 });
+
+test('it creates an additional agent for an existing account', function (): void {
+    $account = Account::factory()->create([
+        'name' => 'Acme Support',
+        'slug' => 'acme-support',
+    ]);
+
+    $this->artisan('wayfindr:agent', [
+        '--account' => 'acme-support',
+        '--name' => 'Bea Builder',
+        '--email' => 'bea@example.com',
+        '--password' => 'correct-horse-battery-staple',
+    ])
+        ->expectsOutputToContain('Agent ready.')
+        ->expectsOutputToContain('Account: Acme Support')
+        ->expectsOutputToContain('Agent email: bea@example.com')
+        ->expectsOutputToContain('Agent password: [provided]')
+        ->assertExitCode(0);
+
+    $agent = User::query()->where('email', 'bea@example.com')->firstOrFail();
+
+    expect($agent->account_id)->toBe($account->id)
+        ->and($agent->name)->toBe('Bea Builder')
+        ->and(Hash::check('correct-horse-battery-staple', $agent->password))->toBeTrue();
+});
+
+test('it can infer the account when only one account exists', function (): void {
+    $account = Account::factory()->create([
+        'name' => 'Acme Support',
+        'slug' => 'acme-support',
+    ]);
+
+    $this->artisan('wayfindr:agent', [
+        '--name' => 'Bea Builder',
+        '--email' => 'bea@example.com',
+        '--password' => 'correct-horse-battery-staple',
+    ])
+        ->expectsOutputToContain('Agent ready.')
+        ->expectsOutputToContain('Account: Acme Support')
+        ->assertExitCode(0);
+
+    expect(User::query()->where('email', 'bea@example.com')->firstOrFail()->account_id)->toBe($account->id);
+});
+
+test('it requires an account option when multiple accounts exist', function (): void {
+    Account::factory()->create(['slug' => 'acme-support']);
+    Account::factory()->create(['slug' => 'other-support']);
+
+    $this->artisan('wayfindr:agent', [
+        '--email' => 'bea@example.com',
+    ])
+        ->expectsOutputToContain('Pass --account with an account slug or ID.')
+        ->assertExitCode(1);
+});
+
+test('it refuses to create an agent for an unknown account', function (): void {
+    Account::factory()->create(['slug' => 'acme-support']);
+
+    $this->artisan('wayfindr:agent', [
+        '--account' => 'missing-account',
+        '--email' => 'bea@example.com',
+    ])
+        ->expectsOutputToContain('No matching account was found.')
+        ->assertExitCode(1);
+});
