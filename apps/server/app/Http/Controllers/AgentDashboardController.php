@@ -37,6 +37,7 @@ class AgentDashboardController extends Controller
             'account' => $account,
             'agent' => $agent,
             'conversations' => $conversations,
+            'dataResponsibility' => config('wayfindr.data_responsibility'),
             'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
             'tickets' => $tickets,

@@ -39,6 +39,66 @@
     'hidden',
     'selected',
   ];
+  var SENSITIVE_FIELD_TERMS = [
+    'password',
+    'passwd',
+    'pwd',
+    'passcode',
+    'secret',
+    'token',
+    'api key',
+    'apikey',
+    'auth',
+    'authorization',
+    'one time code',
+    'otp',
+    'ssn',
+    'social security',
+    'tax id',
+    'ein',
+    'sin',
+    'national id',
+    'credit card',
+    'card number',
+    'cardnumber',
+    'cc number',
+    'ccnumber',
+    'cvc',
+    'cvv',
+    'security code',
+    'expiration',
+    'expiry',
+    'routing number',
+    'account number',
+    'bank account',
+    'iban',
+    'sort code',
+    'username',
+    'user name',
+    'login',
+    'email',
+    'e mail',
+    'phone',
+    'telephone',
+    'address',
+    'postal code',
+    'zip',
+    'birthdate',
+    'date of birth',
+    'dob',
+  ];
+  var SENSITIVE_FIELD_ATTRIBUTES = [
+    'id',
+    'name',
+    'autocomplete',
+    'aria-label',
+    'placeholder',
+    'data-field',
+    'data-wayfindr-field',
+    'data-testid',
+    'data-test',
+    'data-cy',
+  ];
 
   function createClient(options) {
     options = options || {};
@@ -850,6 +910,7 @@
     removeMatching(source, DEFAULT_REMOVE_SELECTORS);
 
     var maskedCount = maskMatching(source, DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []));
+    maskedCount += maskInferredSensitiveElements(source);
     clearFormControlValues(source);
 
     return {
@@ -1006,6 +1067,7 @@
     maskedCount = isMaskedElement(element, options.maskSelectors)
       ? maskWholeElement(clone)
       : maskMatching(clone, options.maskSelectors);
+    maskedCount += maskInferredSensitiveElements(clone);
     clearFormControlValues(clone);
 
     return {
@@ -1073,6 +1135,31 @@
     return masked.length;
   }
 
+  function maskInferredSensitiveElements(source) {
+    var masked = [];
+
+    allElements(source).forEach(function (element) {
+      if (
+        masked.indexOf(element) !== -1
+        || isAlreadyMaskedElement(element)
+        || !isInferredSensitiveElement(element, source)
+      ) {
+        return;
+      }
+
+      masked.push(element);
+      maskElement(element);
+    });
+
+    return masked.length;
+  }
+
+  function allElements(source) {
+    var elements = source && source.nodeType === 1 ? [source] : [];
+
+    return elements.concat(queryAll(source, '*'));
+  }
+
   function queryAll(source, selector) {
     try {
       return Array.prototype.slice.call(source.querySelectorAll(selector));
@@ -1101,6 +1188,16 @@
     element.textContent = '[masked]';
   }
 
+  function isAlreadyMaskedElement(element) {
+    var tagName = String(element.tagName || '').toLowerCase();
+
+    if (tagName === 'input') {
+      return element.getAttribute('value') === '[masked]';
+    }
+
+    return normalizeWhitespace(element.textContent || '') === '[masked]';
+  }
+
   function maskWholeElement(element) {
     maskElement(element);
 
@@ -1112,7 +1209,82 @@
   }
 
   function isMaskedElement(element, selectors) {
-    return elementMatchesOrClosest(element, selectors || DEFAULT_MASK_SELECTORS);
+    return elementMatchesOrClosest(element, selectors || DEFAULT_MASK_SELECTORS)
+      || isInferredSensitiveElement(element, element ? element.ownerDocument : null);
+  }
+
+  function isInferredSensitiveElement(element, source) {
+    if (!element || elementMatchesOrClosest(element, ['[data-wayfindr-allow]'])) {
+      return false;
+    }
+
+    if (hasSensitiveAttribute(element)) {
+      return true;
+    }
+
+    return isFormControl(element) && hasSensitiveLabel(element, source || element.ownerDocument);
+  }
+
+  function hasSensitiveAttribute(element) {
+    return SENSITIVE_FIELD_ATTRIBUTES.some(function (attributeName) {
+      return hasSensitiveTerm(element.getAttribute(attributeName));
+    });
+  }
+
+  function hasSensitiveLabel(element, source) {
+    var id = element.getAttribute('id');
+    var labels = [];
+
+    if (element.labels) {
+      labels = labels.concat(Array.prototype.slice.call(element.labels));
+    }
+
+    if (id) {
+      queryAll(source, 'label').forEach(function (label) {
+        if (label.getAttribute('for') === id && labels.indexOf(label) === -1) {
+          labels.push(label);
+        }
+      });
+    }
+
+    if (typeof element.closest === 'function') {
+      var wrappingLabel = element.closest('label');
+
+      if (wrappingLabel && labels.indexOf(wrappingLabel) === -1) {
+        labels.push(wrappingLabel);
+      }
+    }
+
+    return labels.some(function (label) {
+      return hasSensitiveTerm(label.textContent || '');
+    });
+  }
+
+  function hasSensitiveTerm(value) {
+    var normalized = normalizeSensitiveToken(value);
+
+    if (!normalized) {
+      return false;
+    }
+
+    return SENSITIVE_FIELD_TERMS.some(function (term) {
+      return normalized.indexOf(term) !== -1;
+    });
+  }
+
+  function normalizeSensitiveToken(value) {
+    return String(value || '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isFormControl(element) {
+    var tagName = String(element.tagName || '').toLowerCase();
+
+    return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
   }
 
   function elementMatchesOrClosest(element, selectors) {

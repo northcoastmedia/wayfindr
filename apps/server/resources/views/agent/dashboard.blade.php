@@ -18,6 +18,23 @@
             <h1>{{ $account->name }}</h1>
             <p class="lede">Signed in as {{ $agent->email }}</p>
 
+            <section class="section" aria-labelledby="data-responsibility-heading">
+                <div class="section-header">
+                    <h2 id="data-responsibility-heading">Data responsibility</h2>
+                    <span class="lede">{{ $dataResponsibility['label'] }}</span>
+                </div>
+
+                <div class="notice-copy">
+                    <p>{{ $dataResponsibility['message'] }}</p>
+                    <p>{{ $dataResponsibility['guidance'] }}</p>
+                    <p>
+                        <a class="text-link" href="{{ $dataResponsibility['docs_url'] }}" target="_blank" rel="noreferrer">
+                            Review the data responsibility docs
+                        </a>
+                    </p>
+                </div>
+            </section>
+
             <section class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>

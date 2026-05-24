@@ -10,12 +10,13 @@ Commit information that helps people understand, use, self-host, audit, or contr
 - user-facing product decisions,
 - architecture decisions,
 - security and privacy model,
+- data inventory, retention posture, and operator responsibility,
 - license decisions,
 - contribution process,
 - self-hosting documentation,
 - API and SDK documentation,
 - public roadmap items,
-- release notes.
+- release notes,
 - AI feature posture, provider-neutral configuration guidance, and synthetic
   examples that help users understand Wayfindr's behavior.
 
