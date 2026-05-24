@@ -372,6 +372,72 @@ test('dashboard exposes ticket queue filter links', function (): void {
         ->assertSee('/dashboard?ticket_filter=unassigned', false);
 });
 
+test('dashboard lists account agents with active workload counts', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $agent = User::factory()->for($account)->create([
+        'email' => 'ada@example.test',
+        'name' => 'Ada Agent',
+    ]);
+    $teammate = User::factory()->for($account)->create([
+        'email' => 'bea@example.test',
+        'name' => 'Bea Builder',
+    ]);
+    $otherAgent = User::factory()->for($otherAccount)->create([
+        'email' => 'otto@example.test',
+        'name' => 'Otto Outside',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create(['name' => 'Other Docs']);
+    $otherVisitor = Visitor::factory()->for($otherSite)->create();
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'status' => 'open',
+    ]);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'status' => 'closed',
+    ]);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create(['status' => 'open']);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create(['status' => 'closed']);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($teammate, 'assignee')
+        ->count(2)
+        ->create(['status' => 'open']);
+    Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+        'assigned_agent_id' => $otherAgent->id,
+        'status' => 'open',
+    ]);
+    Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->for($otherAgent, 'assignee')
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Team')
+        ->assertSee('Open conversations')
+        ->assertSee('Open tickets')
+        ->assertSeeInOrder(['Ada Agent', 'ada@example.test', '1', '1'])
+        ->assertSeeInOrder(['Bea Builder', 'bea@example.test', '0', '2'])
+        ->assertDontSee('Otto Outside')
+        ->assertDontSee('otto@example.test');
+});
+
 test('dashboard shows ready realtime status when reverb is configured', function (): void {
     config()->set('broadcasting.default', 'reverb');
     config()->set('broadcasting.connections.reverb.key', 'reverb-key');

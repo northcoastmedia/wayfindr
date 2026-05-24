@@ -23,6 +23,17 @@ class AgentDashboardController extends Controller
             ->with('latestVisitor')
             ->orderBy('name')
             ->get();
+        $agents = $account->agents()
+            ->withCount([
+                'assignedConversations as open_assigned_conversations_count' => fn ($query) => $query
+                    ->where('status', 'open')
+                    ->whereHas('site', fn ($query) => $query->where('account_id', $account->id)),
+                'assignedTickets as open_assigned_tickets_count' => fn ($query) => $query
+                    ->where('account_id', $account->id)
+                    ->where('status', 'open'),
+            ])
+            ->orderBy('name')
+            ->get();
 
         $conversationFilters = [
             'all' => 'All open',
@@ -78,6 +89,7 @@ class AgentDashboardController extends Controller
         return view('agent.dashboard', [
             'account' => $account,
             'agent' => $agent,
+            'agents' => $agents,
             'conversationFilter' => $conversationFilter,
             'conversationFilters' => $conversationFilters,
             'conversations' => $conversations,
