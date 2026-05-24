@@ -3,8 +3,10 @@
 namespace App\Listeners;
 
 use App\Events\ConversationMessageCreated;
+use App\Models\User;
 use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
+use Illuminate\Notifications\DatabaseNotification;
 
 class NotifyAgentsOfVisitorMessage
 {
@@ -30,7 +32,35 @@ class NotifyAgentsOfVisitorMessage
 
         $agentQuery
             ->get()
-            ->each
-            ->notify(new ConversationNeedsReply($message));
+            ->each(fn (User $agent) => $this->notifyAgent($agent, new ConversationNeedsReply($message), $conversation->id));
+    }
+
+    private function notifyAgent(User $agent, ConversationNeedsReply $notification, int $conversationId): void
+    {
+        $existingNotification = $this->existingUnreadConversationNotification($agent, $conversationId);
+
+        if (! $existingNotification) {
+            $agent->notify($notification);
+
+            return;
+        }
+
+        $existingData = $existingNotification->data;
+        $messageCount = max(1, (int) data_get($existingData, 'message_count', 1)) + 1;
+
+        $existingNotification->forceFill([
+            'data' => [
+                ...$notification->toArray($agent),
+                'message_count' => $messageCount,
+            ],
+        ])->save();
+    }
+
+    private function existingUnreadConversationNotification(User $agent, int $conversationId): ?DatabaseNotification
+    {
+        return $agent->unreadNotifications()
+            ->where('type', ConversationNeedsReply::class)
+            ->get()
+            ->first(fn (DatabaseNotification $notification): bool => (int) data_get($notification->data, 'conversation_id') === $conversationId);
     }
 }

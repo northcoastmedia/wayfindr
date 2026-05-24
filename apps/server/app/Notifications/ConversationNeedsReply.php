@@ -42,6 +42,8 @@ class ConversationNeedsReply extends Notification
             'kind' => 'conversation_needs_reply',
             'conversation_id' => $conversation->id,
             'message_id' => $this->message->id,
+            'latest_message_id' => $this->message->id,
+            'message_count' => 1,
             'support_code' => $conversation->support_code,
             'subject' => $conversation->subject ?? 'Untitled conversation',
             'site_name' => $conversation->site->name,
