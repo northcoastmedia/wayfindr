@@ -990,6 +990,117 @@ test('agent can add an internal note to a ticket record', function (): void {
         ->assertSee('Customer wants an update before noon.');
 });
 
+test('agent can update ticket fields from the detail page', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Old checkout issue',
+            'description' => 'The original ticket description.',
+            'priority' => 'normal',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->put("/dashboard/tickets/{$ticket->id}", [
+            'subject' => 'Updated checkout issue',
+            'description' => 'The visitor cannot finish checkout on mobile.',
+            'priority' => 'high',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Ticket updated.');
+
+    expect($ticket->fresh())
+        ->subject->toBe('Updated checkout issue')
+        ->description->toBe('The visitor cannot finish checkout on mobile.')
+        ->priority->toBe('high');
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.updated',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Updated checkout issue')
+        ->assertSee('The visitor cannot finish checkout on mobile.')
+        ->assertSee('High')
+        ->assertSee('Subject changed from Old checkout issue to Updated checkout issue')
+        ->assertSee('Priority changed from Normal to High')
+        ->assertSee('Description updated');
+});
+
+test('ticket field updates validate editable fields', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Original subject',
+            'description' => 'Original description.',
+            'priority' => 'normal',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->put("/dashboard/tickets/{$ticket->id}", [
+            'subject' => '',
+            'description' => 'Still valid text.',
+            'priority' => 'maximum-chaos',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHasErrors(['subject', 'priority']);
+
+    expect($ticket->fresh())
+        ->subject->toBe('Original subject')
+        ->description->toBe('Original description.')
+        ->priority->toBe('normal');
+
+    $this->assertDatabaseMissing('audit_events', [
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.updated',
+    ]);
+});
+
+test('agent cannot update another account ticket fields', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherTicket = Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'subject' => 'Other account issue',
+            'priority' => 'normal',
+        ]);
+
+    $this->actingAs($agent)
+        ->put("/dashboard/tickets/{$otherTicket->id}", [
+            'subject' => 'Nope',
+            'description' => 'Still nope.',
+            'priority' => 'high',
+        ])
+        ->assertNotFound();
+
+    expect($otherTicket->fresh())
+        ->subject->toBe('Other account issue')
+        ->priority->toBe('normal');
+});
+
 test('agent can close a ticket from its detail page', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

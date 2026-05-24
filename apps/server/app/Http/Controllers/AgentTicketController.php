@@ -58,6 +58,31 @@ class AgentTicketController extends Controller
         return $this->redirectAfterUpdate($ticket, 'Ticket note added.');
     }
 
+    public function update(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        $validated = $request->validate([
+            'subject' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
+        ]);
+
+        $changes = $this->ticketFieldChanges($ticket, $validated);
+
+        $ticket->forceFill($validated)->save();
+
+        if ($changes !== []) {
+            $this->recordActivity($ticket, $agent, 'ticket.updated', [
+                'changes' => $changes,
+            ]);
+        }
+
+        return $this->redirectAfterUpdate($ticket, 'Ticket updated.');
+    }
+
     public function close(Request $request, Ticket $ticket): RedirectResponse
     {
         $agent = $request->user();
@@ -141,11 +166,35 @@ class AgentTicketController extends Controller
     private function visibleActivityActions(): array
     {
         return [
+            'ticket.updated',
             'ticket.closed',
             'ticket.reopened',
             'ticket.assignee_updated',
             'ticket.note_added',
         ];
+    }
+
+    /**
+     * @param  array{subject: string, description?: string|null, priority: string}  $validated
+     * @return array<string, array{old: string|null, new: string|null}>
+     */
+    private function ticketFieldChanges(Ticket $ticket, array $validated): array
+    {
+        $changes = [];
+
+        foreach (['subject', 'description', 'priority'] as $field) {
+            $oldValue = $ticket->{$field};
+            $newValue = $validated[$field] ?? null;
+
+            if ($oldValue !== $newValue) {
+                $changes[$field] = [
+                    'old' => $oldValue,
+                    'new' => $newValue,
+                ];
+            }
+        }
+
+        return $changes;
     }
 
     private function recordActivity(Ticket $ticket, User $agent, string $action, array $metadata = []): void
