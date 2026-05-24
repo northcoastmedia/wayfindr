@@ -54,10 +54,16 @@
                                     <th scope="col">Name</th>
                                     <th scope="col">Domain</th>
                                     <th scope="col">Public Key</th>
+                                    <th scope="col">Last check-in</th>
+                                    <th scope="col">Last page</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($sites as $site)
+                                    @php
+                                        $latestVisitor = $site->latestVisitor;
+                                        $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
+                                    @endphp
                                     <tr>
                                         <td>
                                             <a class="text-link" href="{{ route('dashboard.sites.show', $site) }}">
@@ -66,6 +72,14 @@
                                         </td>
                                         <td>{{ $site->domain ?? 'Not set' }}</td>
                                         <td>{{ $site->public_key }}</td>
+                                        <td>
+                                            @if ($latestVisitor?->last_seen_at)
+                                                Seen {{ $latestVisitor->last_seen_at->diffForHumans() }}
+                                            @else
+                                                Not seen yet
+                                            @endif
+                                        </td>
+                                        <td>{{ $lastPageUrl ?: 'Not reported' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>

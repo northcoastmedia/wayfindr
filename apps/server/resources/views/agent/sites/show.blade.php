@@ -23,6 +23,11 @@
                 <p class="status-message">{{ session('status') }}</p>
             @endif
 
+            @php
+                $latestVisitor = $site->latestVisitor;
+                $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
+            @endphp
+
             <section class="section" aria-labelledby="site-context-heading">
                 <div class="section-header">
                     <h2 id="site-context-heading">Site</h2>
@@ -45,6 +50,20 @@
                     <div class="meta-item">
                         <span class="meta-label">Public config</span>
                         <span class="meta-value">Mask selectors only</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Latest check-in</span>
+                        <span class="meta-value">
+                            @if ($latestVisitor?->last_seen_at)
+                                Seen {{ $latestVisitor->last_seen_at->diffForHumans() }}
+                            @else
+                                Not seen yet
+                            @endif
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Last page</span>
+                        <span class="meta-value">{{ $lastPageUrl ?: 'Not reported' }}</span>
                     </div>
                 </div>
             </section>

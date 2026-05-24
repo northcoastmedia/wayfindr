@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['account_id', 'name', 'domain', 'public_key', 'settings'])]
 class Site extends Model
@@ -30,6 +31,11 @@ class Site extends Model
     public function visitors(): HasMany
     {
         return $this->hasMany(Visitor::class);
+    }
+
+    public function latestVisitor(): HasOne
+    {
+        return $this->hasOne(Visitor::class)->latestOfMany('last_seen_at');
     }
 
     public function conversations(): HasMany
