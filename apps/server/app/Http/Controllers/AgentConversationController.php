@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\CobrowseStateUpdated;
 use App\Events\ConversationMessageCreated;
+use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Support\CobrowseConsentState;
@@ -119,6 +121,64 @@ class AgentConversationController extends Controller
             ->with('status', 'Ticket created.');
     }
 
+    public function requestCobrowse(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode)
+            ->load(['site', 'visitor']);
+
+        if ($this->activeCobrowseSession($conversation)) {
+            return redirect()
+                ->route('dashboard.conversations.show', $conversation->support_code)
+                ->with('status', 'Cobrowse request already active.');
+        }
+
+        $cobrowseSession = $conversation->cobrowseSessions()->create([
+            'site_id' => $conversation->site_id,
+            'visitor_id' => $conversation->visitor_id,
+            'requested_by_id' => $agent->id,
+            'status' => 'requested',
+            'metadata' => [],
+            'consented_at' => null,
+            'ended_at' => null,
+        ]);
+
+        event(new CobrowseStateUpdated($cobrowseSession, 'consent_requested'));
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Cobrowse requested.');
+    }
+
+    public function endCobrowse(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $cobrowseSession = $this->activeCobrowseSession($conversation);
+
+        if (! $cobrowseSession) {
+            return redirect()
+                ->route('dashboard.conversations.show', $conversation->support_code)
+                ->with('status', 'No active cobrowse session.');
+        }
+
+        $metadata = $cobrowseSession->metadata ?? [];
+        $metadata['ended_by_id'] = $agent->id;
+        $metadata['ended_by_type'] = 'agent';
+
+        $cobrowseSession->forceFill([
+            'status' => 'ended',
+            'metadata' => $metadata,
+            'ended_at' => now(),
+        ])->save();
+
+        event(new CobrowseStateUpdated($cobrowseSession, 'ended'));
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Cobrowse session ended.');
+    }
+
     private function conversationForAgent(User $agent, string $supportCode): Conversation
     {
         abort_unless($agent->account_id, 403);
@@ -127,6 +187,15 @@ class AgentConversationController extends Controller
             ->where('support_code', $supportCode)
             ->whereHas('site', fn ($query) => $query->where('account_id', $agent->account_id))
             ->firstOrFail();
+    }
+
+    private function activeCobrowseSession(Conversation $conversation): ?CobrowseSession
+    {
+        return $conversation->cobrowseSessions()
+            ->whereNull('ended_at')
+            ->whereIn('status', ['requested', 'granted'])
+            ->latest('id')
+            ->first();
     }
 
     private function ticketDescription(Conversation $conversation): string

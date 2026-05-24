@@ -109,6 +109,20 @@
 
                 <p class="empty">{{ $cobrowseConsent['message'] }}</p>
 
+                @if (in_array($cobrowseConsent['status'], ['unavailable', 'revoked', 'ended'], true))
+                    <form class="section-form" method="POST" action="{{ route('dashboard.conversations.cobrowse.request', $conversation->support_code) }}">
+                        @csrf
+                        <button class="button" type="submit">Request cobrowse</button>
+                    </form>
+                @elseif (in_array($cobrowseConsent['status'], ['pending', 'granted'], true))
+                    <form class="section-form" method="POST" action="{{ route('dashboard.conversations.cobrowse.end', $conversation->support_code) }}">
+                        @csrf
+                        <button class="button secondary" type="submit">
+                            {{ $cobrowseConsent['status'] === 'pending' ? 'Cancel request' : 'End cobrowse' }}
+                        </button>
+                    </form>
+                @endif
+
                 @if ($realtime)
                     <div class="live-update" data-cobrowse-update-panel data-state="idle">
                         <div>

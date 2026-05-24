@@ -25,5 +25,9 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.conversations.messages.store');
     Route::post('/dashboard/conversations/{supportCode}/tickets', [AgentConversationController::class, 'storeTicket'])
         ->name('dashboard.conversations.tickets.store');
+    Route::post('/dashboard/conversations/{supportCode}/cobrowse/request', [AgentConversationController::class, 'requestCobrowse'])
+        ->name('dashboard.conversations.cobrowse.request');
+    Route::post('/dashboard/conversations/{supportCode}/cobrowse/end', [AgentConversationController::class, 'endCobrowse'])
+        ->name('dashboard.conversations.cobrowse.end');
     Route::post('/logout', [SessionController::class, 'destroy'])->name('logout');
 });

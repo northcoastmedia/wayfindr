@@ -79,8 +79,8 @@ can also retrieve the visitor-visible message timeline, and the embedded widget
 renders that timeline with live Reverb updates when configured and a manual
 refresh fallback when realtime is unavailable. The Laravel app serves the
 classic widget script from `/widget.js`. Cobrowsing is beginning with explicit
-visitor consent, lightweight connection telemetry, passive page-state
-reporting, sanitized DOM snapshots, bounded mutation stream diagnostics, and
-an inert agent-side replay preview with live Reverb update notices. Agents can
-turn a conversation into a basic ticket; deeper ticket workflow, assignment, and
-production hardening are still ahead.
+agent requests, visitor consent, lightweight connection telemetry, passive
+page-state reporting, sanitized DOM snapshots, bounded mutation stream
+diagnostics, and an inert agent-side replay preview with live Reverb update
+notices. Agents can turn a conversation into a basic ticket; deeper ticket
+workflow, assignment, and production hardening are still ahead.

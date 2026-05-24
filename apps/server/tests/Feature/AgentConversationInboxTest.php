@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\CobrowseStateUpdated;
 use App\Models\Account;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
@@ -9,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 
 uses(RefreshDatabase::class);
 
@@ -432,7 +434,149 @@ test('agent can see cobrowse consent state on a conversation', function (?array 
         'Revoked',
         'Visitor revoked cobrowse consent.',
     ],
+    'ended' => [
+        ['status' => 'ended', 'consented_at' => now()->subMinutes(2), 'ended_at' => now()->subMinute()],
+        'Ended',
+        'Cobrowse session ended.',
+    ],
 ]);
+
+test('agent can request cobrowse consent for their account conversation', function (): void {
+    Event::fake([CobrowseStateUpdated::class]);
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REQUEST1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-REQUEST1')
+        ->post('/dashboard/conversations/WF-REQUEST1/cobrowse/request')
+        ->assertRedirect('/dashboard/conversations/WF-REQUEST1')
+        ->assertSessionHas('status', 'Cobrowse requested.');
+
+    $this->assertDatabaseHas('cobrowse_sessions', [
+        'conversation_id' => $conversation->id,
+        'site_id' => $site->id,
+        'visitor_id' => $visitor->id,
+        'requested_by_id' => $agent->id,
+        'status' => 'requested',
+        'consented_at' => null,
+        'ended_at' => null,
+    ]);
+
+    Event::assertDispatched(
+        CobrowseStateUpdated::class,
+        fn (CobrowseStateUpdated $event): bool => $event->cobrowseSession->conversation_id === $conversation->id
+            && $event->kind === 'consent_requested'
+    );
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-REQUEST1')
+        ->assertOk()
+        ->assertSee('Pending consent')
+        ->assertSee('Waiting for visitor consent before cobrowsing can start.')
+        ->assertSee('Cancel request');
+});
+
+test('agent cobrowse request is idempotent while a session is active', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REQUEST2',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'requested_by_id' => $agent->id,
+        'status' => 'requested',
+        'consented_at' => null,
+        'ended_at' => null,
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-REQUEST2')
+        ->post('/dashboard/conversations/WF-REQUEST2/cobrowse/request')
+        ->assertRedirect('/dashboard/conversations/WF-REQUEST2')
+        ->assertSessionHas('status', 'Cobrowse request already active.');
+
+    $this->assertDatabaseCount('cobrowse_sessions', 1);
+});
+
+test('agent can end an active cobrowse session', function (): void {
+    Event::fake([CobrowseStateUpdated::class]);
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-END1',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'requested_by_id' => $agent->id,
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'page_state' => [
+                'page_url' => 'https://docs.example.test/install',
+                'title' => 'Install Guide',
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-END1')
+        ->post('/dashboard/conversations/WF-END1/cobrowse/end')
+        ->assertRedirect('/dashboard/conversations/WF-END1')
+        ->assertSessionHas('status', 'Cobrowse session ended.');
+
+    expect($session->fresh())
+        ->status->toBe('ended')
+        ->ended_at->not->toBeNull()
+        ->metadata->toMatchArray([
+            'ended_by_id' => $agent->id,
+            'ended_by_type' => 'agent',
+        ]);
+
+    Event::assertDispatched(
+        CobrowseStateUpdated::class,
+        fn (CobrowseStateUpdated $event): bool => $event->cobrowseSession->id === $session->id
+            && $event->kind === 'ended'
+    );
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-END1')
+        ->assertOk()
+        ->assertSee('Ended')
+        ->assertSee('Cobrowse session ended.')
+        ->assertSee('Request cobrowse');
+});
+
+test('agent cannot request cobrowse for another account conversation', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherVisitor = Visitor::factory()->for($otherSite)->create();
+
+    Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+        'support_code' => 'WF-REQUEST3',
+    ]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-REQUEST3/cobrowse/request')
+        ->assertNotFound();
+
+    $this->assertDatabaseCount('cobrowse_sessions', 0);
+});
 
 test('agent can see cobrowse telemetry on a conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
