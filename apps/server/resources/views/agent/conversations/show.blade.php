@@ -113,6 +113,7 @@
                                     <th scope="col">Priority</th>
                                     <th scope="col">Assignee</th>
                                     <th scope="col">Created</th>
+                                    <th scope="col">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -123,6 +124,14 @@
                                         <td>{{ ucfirst($ticket->priority) }}</td>
                                         <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
                                         <td>{{ $ticket->created_at->diffForHumans() }}</td>
+                                        <td>
+                                            <form method="POST" action="{{ route($ticket->status === 'closed' ? 'dashboard.tickets.reopen' : 'dashboard.tickets.close', $ticket) }}">
+                                                @csrf
+                                                <button class="button secondary" type="submit">
+                                                    {{ $ticket->status === 'closed' ? 'Reopen ticket' : 'Close ticket' }}
+                                                </button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>

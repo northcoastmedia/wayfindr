@@ -804,6 +804,116 @@ test('creating a ticket from a conversation is idempotent', function (): void {
     $this->assertDatabaseCount('tickets', 1);
 });
 
+test('agent can close a linked ticket from their account conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKETCLOSE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+            'closed_at' => null,
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-TICKETCLOSE')
+        ->assertOk()
+        ->assertSee('Escalated checkout issue')
+        ->assertSee('Close ticket');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-TICKETCLOSE')
+        ->post("/dashboard/tickets/{$ticket->id}/close")
+        ->assertRedirect('/dashboard/conversations/WF-TICKETCLOSE')
+        ->assertSessionHas('status', 'Ticket closed.');
+
+    expect($ticket->fresh())
+        ->status->toBe('closed')
+        ->closed_at->not->toBeNull();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertDontSee('Escalated checkout issue');
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-TICKETCLOSE')
+        ->assertOk()
+        ->assertSee('Closed')
+        ->assertSee('Reopen ticket');
+});
+
+test('agent can reopen a linked ticket from their account conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKETOPEN',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'closed',
+            'closed_at' => now()->subMinute(),
+        ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-TICKETOPEN')
+        ->post("/dashboard/tickets/{$ticket->id}/reopen")
+        ->assertRedirect('/dashboard/conversations/WF-TICKETOPEN')
+        ->assertSessionHas('status', 'Ticket reopened.');
+
+    expect($ticket->fresh())
+        ->status->toBe('open')
+        ->closed_at->toBeNull();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Escalated checkout issue');
+});
+
+test('agent cannot close another account ticket', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherTicket = Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'status' => 'open',
+            'closed_at' => null,
+        ]);
+
+    $this->actingAs($agent)
+        ->post("/dashboard/tickets/{$otherTicket->id}/close")
+        ->assertNotFound();
+
+    expect($otherTicket->fresh())
+        ->status->toBe('open')
+        ->closed_at->toBeNull();
+});
+
 test('agent cannot create a ticket for another account conversation', function (): void {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();
