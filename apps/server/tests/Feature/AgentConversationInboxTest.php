@@ -55,6 +55,7 @@ test('dashboard lists open conversations for the agent account', function (): vo
         ->assertSee('Conversations')
         ->assertSee('Checkout trouble')
         ->assertSee('Acme Docs')
+        ->assertSee('/dashboard/sites/'.$site->id, false)
         ->assertSee('anon-acme')
         ->assertSee('WF-ACME123')
         ->assertDontSee($closedConversation->subject)

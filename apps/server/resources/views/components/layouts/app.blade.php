@@ -140,6 +140,12 @@
             font-size: 0.9rem;
         }
 
+        .field-help {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
         .check-row {
             display: flex;
             align-items: center;
@@ -315,6 +321,25 @@
 
         .notice-copy p + p {
             margin-top: 8px;
+        }
+
+        .notice-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 16px;
+            color: var(--muted);
+        }
+
+        .notice-list p {
+            margin: 0;
+        }
+
+        code {
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            padding: 1px 4px;
         }
 
         .cobrowse-preview-frame {

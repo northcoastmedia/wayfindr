@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
+use App\Http\Controllers\AgentSiteController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Widget\WidgetScriptController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,10 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
+    Route::get('/dashboard/sites/{site}', [AgentSiteController::class, 'show'])
+        ->name('dashboard.sites.show');
+    Route::put('/dashboard/sites/{site}', [AgentSiteController::class, 'update'])
+        ->name('dashboard.sites.update');
     Route::get('/dashboard/conversations/{supportCode}', [AgentConversationController::class, 'show'])
         ->name('dashboard.conversations.show');
     Route::post('/dashboard/conversations/{supportCode}/messages', [AgentConversationController::class, 'storeMessage'])
