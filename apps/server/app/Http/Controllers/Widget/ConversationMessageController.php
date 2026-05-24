@@ -80,6 +80,8 @@ class ConversationMessageController extends Controller
         ]);
 
         $conversation->forceFill([
+            'status' => 'open',
+            'closed_at' => null,
             'last_message_at' => $message->created_at,
         ])->save();
 
@@ -89,6 +91,7 @@ class ConversationMessageController extends Controller
             'data' => [
                 'conversation' => [
                     'support_code' => $conversation->support_code,
+                    'status' => $conversation->status,
                 ],
                 'message' => [
                     'type' => $message->type,

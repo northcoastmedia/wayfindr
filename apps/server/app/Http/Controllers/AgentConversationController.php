@@ -69,6 +69,8 @@ class AgentConversationController extends Controller
         ]);
 
         $conversation->forceFill([
+            'status' => 'open',
+            'closed_at' => null,
             'last_message_at' => $message->created_at,
         ])->save();
 
@@ -77,6 +79,36 @@ class AgentConversationController extends Controller
         return redirect()
             ->route('dashboard.conversations.show', $conversation->support_code)
             ->with('status', 'Reply sent.');
+    }
+
+    public function close(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode);
+
+        $conversation->forceFill([
+            'status' => 'closed',
+            'closed_at' => now(),
+        ])->save();
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Conversation closed.');
+    }
+
+    public function reopen(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode);
+
+        $conversation->forceFill([
+            'status' => 'open',
+            'closed_at' => null,
+        ])->save();
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Conversation reopened.');
     }
 
     public function storeTicket(Request $request, string $supportCode): RedirectResponse
