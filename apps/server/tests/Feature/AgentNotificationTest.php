@@ -4,9 +4,11 @@ use App\Models\Account;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
+use App\Notifications\TicketAssigned;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -179,6 +181,44 @@ test('agent replies do not create needs reply notifications', function (): void 
     expect($agent->notifications)->toHaveCount(0);
 });
 
+test('assigning a ticket notifies the new assignee', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $assigningAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'assignee_id' => null,
+            'subject' => 'Escalated checkout issue',
+            'priority' => 'high',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($assigningAgent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->put("/dashboard/tickets/{$ticket->id}/assignee", [
+            'assignee_id' => $assignedAgent->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}");
+
+    expect($assignedAgent->fresh()->unreadNotifications)->toHaveCount(1)
+        ->and($assigningAgent->fresh()->unreadNotifications)->toHaveCount(0);
+
+    $notification = $assignedAgent->fresh()->unreadNotifications()->firstOrFail();
+
+    expect($notification->data)->toMatchArray([
+        'kind' => 'ticket_assigned',
+        'ticket_id' => $ticket->id,
+        'subject' => 'Escalated checkout issue',
+        'priority' => 'high',
+        'site_name' => 'Acme Docs',
+        'assigned_by_name' => 'Ada Agent',
+        'url' => "/dashboard/tickets/{$ticket->id}",
+    ]);
+});
+
 test('dashboard shows unread conversation alerts', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -209,6 +249,35 @@ test('dashboard shows unread conversation alerts', function (): void {
         ->assertSee('Install help')
         ->assertSee('WF-DASH1')
         ->assertSee('I am stuck on the install step.');
+});
+
+test('dashboard shows unread ticket assignment alerts', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $assigningAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($assignedAgent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'priority' => 'high',
+            'status' => 'open',
+        ]);
+
+    $assignedAgent->notify(new TicketAssigned($ticket, $assigningAgent));
+
+    $this->actingAs($assignedAgent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Alerts')
+        ->assertSee('1 unread')
+        ->assertSee('Escalated checkout issue')
+        ->assertSee('Ticket assigned')
+        ->assertSee('Ada Agent assigned this ticket to you.')
+        ->assertSee('High priority')
+        ->assertSee("/dashboard/tickets/{$ticket->id}", false);
 });
 
 test('dashboard exposes calm alert controls and empty state', function (): void {
@@ -370,6 +439,32 @@ test('opening a conversation marks its unread alerts as read', function (): void
 
     expect($agent->fresh()->unreadNotifications)->toHaveCount(0)
         ->and($agent->fresh()->readNotifications)->toHaveCount(1);
+});
+
+test('opening an assigned ticket marks its unread assignment alerts as read', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $assigningAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($assignedAgent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $assignedAgent->notify(new TicketAssigned($ticket, $assigningAgent));
+
+    expect($assignedAgent->unreadNotifications)->toHaveCount(1);
+
+    $this->actingAs($assignedAgent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk();
+
+    expect($assignedAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($assignedAgent->fresh()->readNotifications)->toHaveCount(1);
 });
 
 test('replying to a conversation marks its unread alerts as read', function (): void {
