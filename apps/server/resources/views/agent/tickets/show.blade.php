@@ -131,6 +131,41 @@
                     <p>{{ $ticket->description ?: 'No description recorded.' }}</p>
                 </div>
             </section>
+
+            <section class="section" aria-labelledby="ticket-notes-heading">
+                <div class="section-header">
+                    <h2 id="ticket-notes-heading">Internal notes</h2>
+                    <span class="lede">{{ $ticket->auditEvents->count() }} total</span>
+                </div>
+
+                <div class="message-list">
+                    @forelse ($ticket->auditEvents as $note)
+                        <article class="message-card agent-message">
+                            <div class="message-meta">
+                                <strong>{{ $note->actor?->name ?? 'Unknown agent' }}</strong>
+                                <span>{{ $note->occurred_at->diffForHumans() }}</span>
+                            </div>
+                            <p>{{ data_get($note->metadata, 'body') }}</p>
+                        </article>
+                    @empty
+                        <div class="empty-state">No internal notes yet.</div>
+                    @endforelse
+                </div>
+
+                <form class="section-form" method="POST" action="{{ route('dashboard.tickets.notes.store', $ticket) }}">
+                    @csrf
+
+                    <div class="field">
+                        <label for="body">Add internal note</label>
+                        <textarea id="body" name="body" rows="4" placeholder="Document follow-up, escalation context, or handoff details.">{{ old('body') }}</textarea>
+                        @error('body')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <button class="button" type="submit">Add note</button>
+                </form>
+            </section>
         </main>
     </div>
 </x-layouts.app>

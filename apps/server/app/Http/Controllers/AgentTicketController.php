@@ -21,8 +21,43 @@ class AgentTicketController extends Controller
             'account' => $agent->account()->firstOrFail(),
             'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
             'agent' => $agent,
-            'ticket' => $ticket->load(['assignee', 'conversation', 'requester', 'site']),
+            'ticket' => $ticket->load([
+                'assignee',
+                'conversation',
+                'requester',
+                'site',
+                'auditEvents' => fn ($query) => $query
+                    ->where('action', 'ticket.note_added')
+                    ->with('actor')
+                    ->latest('occurred_at')
+                    ->latest('id'),
+            ]),
         ]);
+    }
+
+    public function storeNote(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $ticket->auditEvents()->create([
+            'account_id' => $ticket->account_id,
+            'site_id' => $ticket->site_id,
+            'actor_type' => User::class,
+            'actor_id' => $agent->id,
+            'action' => 'ticket.note_added',
+            'metadata' => [
+                'body' => $validated['body'],
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        return $this->redirectAfterUpdate($ticket, 'Ticket note added.');
     }
 
     public function close(Request $request, Ticket $ticket): RedirectResponse
