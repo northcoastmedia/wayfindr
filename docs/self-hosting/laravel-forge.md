@@ -205,6 +205,11 @@ When `--password` is omitted, the command generates and prints the first
 agent password. When `--site-public-key` is omitted, it generates and prints the
 public widget key for the site.
 
+After signing in as the agent, open the site from the dashboard. The site
+settings page includes a copy-ready widget install snippet generated from the
+site public key, `APP_URL`, and any public Reverb settings available to the
+application.
+
 The command refuses to run when bootstrap records already exist. Use `--force`
 only when you intentionally want to create or update the supplied account,
 agent, and site records:
@@ -296,7 +301,8 @@ If the WebSocket host differs from `APP_URL`, make sure that hostname has TLS
 before testing from an external smoke site.
 
 The widget needs the public Reverb connection settings plus `pusher-js` on the
-host page:
+host page. The dashboard-generated site install snippet includes these values
+automatically when Reverb is configured. Manually, the shape looks like this:
 
 ```html
 <script src="https://js.pusher.com/8.3.0/pusher.min.js"></script>

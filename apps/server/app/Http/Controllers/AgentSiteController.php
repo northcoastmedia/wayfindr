@@ -19,6 +19,7 @@ class AgentSiteController extends Controller
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'maskSelectors' => $this->maskSelectors($site),
             'site' => $site,
+            'widgetInstallSnippet' => $this->widgetInstallSnippet($site),
         ]);
     }
 
@@ -68,5 +69,80 @@ class AgentSiteController extends Controller
         $selectors = array_map(fn (string $selector): string => mb_substr($selector, 0, 255), $selectors);
 
         return array_values(array_unique($selectors));
+    }
+
+    private function widgetInstallSnippet(Site $site): string
+    {
+        $baseUrl = $this->widgetBaseUrl();
+        $attributes = [
+            'src' => "{$baseUrl}/widget.js",
+            'data-wayfindr-api-base-url' => $baseUrl,
+            'data-wayfindr-site-key' => $site->public_key,
+        ];
+
+        $reverb = $this->publicReverbConfig();
+        $lines = [];
+
+        if ($reverb !== null) {
+            $lines[] = '<script src="https://js.pusher.com/8.3.0/pusher.min.js"></script>';
+            $attributes = [
+                ...$attributes,
+                'data-wayfindr-reverb-app-key' => $reverb['app_key'],
+                'data-wayfindr-reverb-host' => $reverb['host'],
+                'data-wayfindr-reverb-port' => $reverb['port'],
+                'data-wayfindr-reverb-scheme' => $reverb['scheme'],
+            ];
+        }
+
+        $lines[] = '<script';
+
+        foreach ($attributes as $name => $value) {
+            $lines[] = sprintf('  %s="%s"', $name, $this->attribute($value));
+        }
+
+        $lines[] = '></script>';
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function widgetBaseUrl(): string
+    {
+        return rtrim((string) config('app.url', url('/')), '/');
+    }
+
+    /**
+     * @return array{app_key: string, host: string, port: string, scheme: string}|null
+     */
+    private function publicReverbConfig(): ?array
+    {
+        if ((string) config('broadcasting.default') !== 'reverb') {
+            return null;
+        }
+
+        $appKey = config('broadcasting.connections.reverb.key');
+        $host = config('broadcasting.connections.reverb.options.host');
+        $port = config('broadcasting.connections.reverb.options.port');
+        $scheme = config('broadcasting.connections.reverb.options.scheme');
+
+        if (! $this->hasConfigValue($appKey) || ! $this->hasConfigValue($host) || ! $this->hasConfigValue($port) || ! $this->hasConfigValue($scheme)) {
+            return null;
+        }
+
+        return [
+            'app_key' => (string) $appKey,
+            'host' => (string) $host,
+            'port' => (string) $port,
+            'scheme' => (string) $scheme,
+        ];
+    }
+
+    private function hasConfigValue(mixed $value): bool
+    {
+        return is_string($value) ? trim($value) !== '' : $value !== null;
+    }
+
+    private function attribute(mixed $value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
     }
 }

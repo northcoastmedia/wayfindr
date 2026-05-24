@@ -41,6 +41,11 @@ Classic script tags can also use data attributes:
 ></script>
 ```
 
+For installed Wayfindr servers, the agent dashboard shows a copy-ready snippet
+on each site's settings page. Use that generated snippet when possible so the
+site public key, API base URL, and public Reverb settings stay aligned with the
+running installation.
+
 For local development inside this monorepo, use
 `../../packages/widget-js/src/wayfindr-widget.js` from the plain HTML example.
 
