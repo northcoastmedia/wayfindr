@@ -7,6 +7,66 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+test('agent can create a new site for their account', function (): void {
+    config()->set('app.url', 'https://support.example.test');
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Add site')
+        ->assertSee('/dashboard/sites/new', false);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/sites/new')
+        ->assertOk()
+        ->assertSee('Add site')
+        ->assertSee('Site name')
+        ->assertSee('Domain');
+
+    $response = $this->actingAs($agent)
+        ->from('/dashboard/sites/new')
+        ->post('/dashboard/sites', [
+            'name' => 'Wayfindr Public Site',
+            'domain' => 'https://wayfindr.cc/',
+        ])
+        ->assertRedirect();
+
+    $site = Site::query()
+        ->where('account_id', $account->id)
+        ->where('name', 'Wayfindr Public Site')
+        ->firstOrFail();
+
+    expect($site->domain)->toBe('wayfindr.cc')
+        ->and($site->public_key)->toStartWith('site_')
+        ->and($site->settings)->toBe(['mask_selectors' => []]);
+
+    $response->assertRedirect("/dashboard/sites/{$site->id}");
+
+    $this->actingAs($agent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Site created. Copy the install snippet to finish connecting it.')
+        ->assertSee('Wayfindr Public Site')
+        ->assertSee('wayfindr.cc')
+        ->assertSee("data-wayfindr-site-key=&quot;{$site->public_key}&quot;", false);
+});
+
+test('site creation requires an agent account', function (): void {
+    $agent = User::factory()->create(['account_id' => null]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/sites', [
+            'name' => 'Detached Site',
+            'domain' => 'example.test',
+        ])
+        ->assertForbidden();
+
+    expect(Site::query()->count())->toBe(0);
+});
+
 test('agent can view their account site privacy settings', function (): void {
     config()->set('app.url', 'http://localhost');
     config()->set('broadcasting.default', 'null');

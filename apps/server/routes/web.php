@@ -20,6 +20,10 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
+    Route::get('/dashboard/sites/new', [AgentSiteController::class, 'create'])
+        ->name('dashboard.sites.create');
+    Route::post('/dashboard/sites', [AgentSiteController::class, 'store'])
+        ->name('dashboard.sites.store');
     Route::get('/dashboard/sites/{site}', [AgentSiteController::class, 'show'])
         ->name('dashboard.sites.show');
     Route::put('/dashboard/sites/{site}', [AgentSiteController::class, 'update'])

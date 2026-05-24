@@ -224,6 +224,18 @@
             font-size: 1rem;
         }
 
+        .section-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .section-actions .lede {
+            margin-top: 0;
+        }
+
         .table-wrap {
             overflow-x: auto;
         }
@@ -441,6 +453,10 @@
             .section-header {
                 align-items: flex-start;
                 flex-direction: column;
+            }
+
+            .section-actions {
+                justify-content: flex-start;
             }
 
             .meta-grid {

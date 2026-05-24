@@ -38,7 +38,10 @@
             <section class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>
-                    <span class="lede">{{ $sites->count() }} active</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $sites->count() }} active</span>
+                        <a class="button secondary" href="{{ route('dashboard.sites.create') }}">Add site</a>
+                    </div>
                 </div>
 
                 @if ($sites->isEmpty())
