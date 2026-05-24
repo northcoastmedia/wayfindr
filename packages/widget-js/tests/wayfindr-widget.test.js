@@ -545,6 +545,54 @@ test('creates a masked cobrowse snapshot from the document', () => {
   assert(snapshot.nodeCount > 0);
 });
 
+test('infers and masks sensitive cobrowse snapshot fields before export', () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Account</title></head><body>',
+    '<main>',
+    '  <h1>Account settings</h1>',
+    '  <p>Public account help stays visible.</p>',
+    '  <div id="billing-card-number">4111 1111 1111 1111</div>',
+    '  <span data-field="username">adam@example.com</span>',
+    '  <div aria-label="API token">sk_live_secret_token</div>',
+    '</main>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/account',
+  });
+
+  const snapshot = Wayfindr.createCobrowseSnapshot(dom.window.document, {
+    location: dom.window.location,
+  });
+
+  assert.match(snapshot.html, /Public account help stays visible/);
+  assert.match(snapshot.html, /\[masked\]/);
+  assert.equal(snapshot.html.includes('4111 1111 1111 1111'), false);
+  assert.equal(snapshot.html.includes('adam@example.com'), false);
+  assert.equal(snapshot.html.includes('sk_live_secret_token'), false);
+  assert.equal(snapshot.text.includes('4111 1111 1111 1111'), false);
+  assert.equal(snapshot.text.includes('adam@example.com'), false);
+  assert.equal(snapshot.text.includes('sk_live_secret_token'), false);
+});
+
+test('allows hosts to mark inferred cobrowse false positives as shareable', () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Support</title></head><body>',
+    '<main>',
+    '  <p data-wayfindr-allow id="public-email-policy">Email support@example.com for help.</p>',
+    '</main>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/support',
+  });
+
+  const snapshot = Wayfindr.createCobrowseSnapshot(dom.window.document, {
+    location: dom.window.location,
+  });
+
+  assert.match(snapshot.html, /Email support@example.com for help/);
+  assert.equal(snapshot.maskedCount, 0);
+});
+
 test('creates sanitized cobrowse mutation batches from mutation records', () => {
   const dom = new JSDOM([
     '<!doctype html><html><head><title>Checkout</title></head><body>',
@@ -610,6 +658,47 @@ test('creates sanitized cobrowse mutation batches from mutation records', () => 
   assert.match(batch.mutations[3].html, /Fresh public hint/);
   assert.equal(JSON.stringify(batch).includes('4242 4242 4242 4242'), false);
   assert.equal(JSON.stringify(batch).includes('Widget chrome'), false);
+});
+
+test('infers and masks sensitive cobrowse mutation content before export', () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Account</title></head><body>',
+    '<main>',
+    '  <span data-field="username">old@example.com</span>',
+    '</main>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/account',
+  });
+  const doc = dom.window.document;
+  const username = doc.querySelector('[data-field="username"]');
+  const added = doc.createElement('div');
+
+  username.textContent = 'adam@example.com';
+  added.setAttribute('id', 'billing-card-number');
+  added.textContent = '4111 1111 1111 1111';
+
+  const batch = Wayfindr.createCobrowseMutationBatch([
+    {
+      type: 'characterData',
+      target: username.firstChild,
+    },
+    {
+      type: 'childList',
+      target: doc.querySelector('main'),
+      addedNodes: [added],
+      removedNodes: [],
+    },
+  ], {
+    document: doc,
+    location: dom.window.location,
+  });
+
+  assert.equal(batch.mutations.length, 2);
+  assert.equal(batch.mutations[0].text, '[masked]');
+  assert.match(batch.mutations[1].html, /\[masked\]/);
+  assert.equal(JSON.stringify(batch).includes('adam@example.com'), false);
+  assert.equal(JSON.stringify(batch).includes('4111 1111 1111 1111'), false);
 });
 
 test('prepares private conversation subscriptions for realtime adapters', () => {

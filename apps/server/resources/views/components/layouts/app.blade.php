@@ -304,6 +304,19 @@
             margin: 0;
         }
 
+        .notice-copy {
+            padding: 20px;
+            color: var(--muted);
+        }
+
+        .notice-copy p {
+            margin: 0;
+        }
+
+        .notice-copy p + p {
+            margin-top: 8px;
+        }
+
         .cobrowse-preview-frame {
             background: var(--surface-muted);
             border-top: 1px solid var(--border);

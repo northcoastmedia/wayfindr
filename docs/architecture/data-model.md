@@ -14,6 +14,9 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 - `cobrowse_sessions`: consent-based cobrowsing attempts tied to a conversation, site, and visitor. Early connection telemetry is kept in `metadata.telemetry`, the latest passive page state is kept in `metadata.page_state`, the latest sanitized DOM snapshot is kept in `metadata.snapshot`, and a bounded recent mutation buffer is kept in `metadata.mutations`, while the transport shape is still changing.
 - `audit_events`: append-style records for important user, visitor, or system actions.
 
+See [../privacy/data-inventory.md](../privacy/data-inventory.md) for the
+operator-facing data inventory and retention posture.
+
 ## Design Notes
 
 - Status fields are strings instead of database enums so early product states can change without database-type churn.

@@ -200,6 +200,18 @@ test('dashboard shows realtime disabled when broadcasting is not using reverb', 
         ->assertSee('log');
 });
 
+test('dashboard reminds operators to respect retained visitor data', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Data responsibility')
+        ->assertSee('Retaining visitor-supplied data may create privacy, security, and legal obligations.')
+        ->assertSee('Keep only what you need, set a retention period you can justify, and make sure your privacy notice matches how this Wayfindr installation is used.');
+});
+
 test('agent can view their account conversation timeline', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

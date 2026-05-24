@@ -84,8 +84,11 @@ when authorizing the channel.
 `reportCobrowsePageState`, `reportCobrowseSnapshot`, and
 `reportCobrowseMutations` prepare the consent, measurement, initial snapshot,
 and bounded mutation path for shared page-state cobrowsing.
-`createCobrowseSnapshot` masks password fields, hidden fields, and configured
-mask selectors before snapshot data leaves the visitor browser.
+`createCobrowseSnapshot` masks password fields, hidden fields, configured mask
+selectors, and common sensitive-looking fields before snapshot data leaves the
+visitor browser. Host pages can mark sensitive regions with
+`data-wayfindr-mask` or `data-wayfindr-private`; `data-wayfindr-allow` should
+only be used for deliberate false positives.
 `createCobrowseMutationBatch` applies the same masking posture to text, safe
 attribute, added-node, and removed-node mutation records before they are sent.
 

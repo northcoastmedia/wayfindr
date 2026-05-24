@@ -42,6 +42,7 @@ docs/
   decisions/           Public product and engineering decisions
   development/         Contributor setup and workflows
   governance/          Public project governance
+  privacy/             Data responsibility, inventory, and cobrowse boundaries
   product/             Product principles, editions, roadmap
   self-hosting/        Installation and operations docs
 docker/                Local and self-hosting templates
@@ -69,6 +70,18 @@ This is a public open source repository. Product, architecture, security, licens
 Business strategy, pricing strategy, customer/prospect information, private infrastructure, revenue planning, and commercially sensitive notes must stay outside this repository.
 
 See [public-information-policy.md](docs/governance/public-information-policy.md).
+
+## Privacy and Data Responsibility
+
+Wayfindr should help operators collect less, protect what they keep, and make
+data retention choices deliberately. Self-hosters control their own
+installation, infrastructure, agents, logs, backups, and privacy notices, so
+they are responsible for operating Wayfindr in line with the laws and policies
+that apply to them.
+
+Start with [data-responsibility.md](docs/privacy/data-responsibility.md), the
+[data inventory](docs/privacy/data-inventory.md), and the
+[cobrowse data boundaries](docs/privacy/cobrowse-data-boundaries.md).
 
 ## Status
 

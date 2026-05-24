@@ -10,6 +10,11 @@ Redis, queues, scheduler, TLS, health checks, and deploy hooks. There is no
 hosting requirement or implied partnership here; Forge is simply the clearest
 path we are choosing to maintain first.
 
+Self-hosters control their own visitor data, logs, backups, retention windows,
+privacy notices, and deletion/export workflows. Review
+[data-responsibility.md](../privacy/data-responsibility.md) before using
+Wayfindr with real visitors.
+
 Use [laravel-forge.md](laravel-forge.md) for the current Forge deployment
 checklist, deploy script templates, environment values, queue worker, scheduler,
 and smoke test.
