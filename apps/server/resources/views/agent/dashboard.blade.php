@@ -48,12 +48,16 @@
                         @foreach ($unreadNotifications as $notification)
                             @php
                                 $notificationData = $notification->data;
+                                $messageCount = max(1, (int) data_get($notificationData, 'message_count', 1));
                             @endphp
                             <article class="message">
                                 <div class="message-meta">
                                     <strong>{{ data_get($notificationData, 'subject', 'Untitled conversation') }}</strong>
                                     <span>{{ $notification->created_at->diffForHumans() }}</span>
                                 </div>
+                                <p class="lede">
+                                    {{ $messageCount === 1 ? '1 new message' : $messageCount.' new messages' }}
+                                </p>
                                 <p class="message-body">{{ data_get($notificationData, 'message_preview') }}</p>
                                 <p class="lede">
                                     <a class="text-link" href="{{ data_get($notificationData, 'url') }}">

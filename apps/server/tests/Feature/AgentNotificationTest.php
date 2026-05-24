@@ -51,6 +51,55 @@ test('visitor messages notify the assigned agent', function (): void {
         ]);
 });
 
+test('assigned conversation alerts batch repeated visitor messages', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Acme Docs',
+        'public_key' => 'site_public_docs',
+    ]);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-BATCH1',
+        'subject' => 'Checkout trouble',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'The checkout button is stuck.',
+    ])->assertCreated();
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'Actually, now the whole cart is empty.',
+    ])->assertCreated();
+
+    expect($agent->fresh()->unreadNotifications)->toHaveCount(1);
+
+    $notification = $agent->fresh()->unreadNotifications()->firstOrFail();
+    $latestMessage = $conversation->messages()->latest('id')->firstOrFail();
+
+    expect($notification->data)->toMatchArray([
+        'conversation_id' => $conversation->id,
+        'latest_message_id' => $latestMessage->id,
+        'message_count' => 2,
+        'message_preview' => 'Actually, now the whole cart is empty.',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('1 unread')
+        ->assertSee('2 new messages')
+        ->assertSee('Actually, now the whole cart is empty.');
+});
+
 test('visitor messages notify all account agents when a conversation is unassigned', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $firstAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -74,6 +123,41 @@ test('visitor messages notify all account agents when a conversation is unassign
     expect($firstAgent->unreadNotifications)->toHaveCount(1)
         ->and($secondAgent->unreadNotifications)->toHaveCount(1)
         ->and($otherAccountAgent->unreadNotifications)->toHaveCount(0);
+});
+
+test('unassigned conversation alerts batch for each account agent', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $firstAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $secondAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-BATCH2',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    foreach (['Can someone help?', 'I am still blocked.'] as $body) {
+        $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+            'site_public_key' => 'site_public_docs',
+            'anonymous_id' => 'anon-docs',
+            'visitor_token' => $token,
+            'body' => $body,
+        ])->assertCreated();
+    }
+
+    expect($firstAgent->fresh()->unreadNotifications)->toHaveCount(1)
+        ->and($secondAgent->fresh()->unreadNotifications)->toHaveCount(1)
+        ->and($firstAgent->fresh()->unreadNotifications()->firstOrFail()->data)->toMatchArray([
+            'conversation_id' => $conversation->id,
+            'message_count' => 2,
+            'message_preview' => 'I am still blocked.',
+        ])
+        ->and($secondAgent->fresh()->unreadNotifications()->firstOrFail()->data)->toMatchArray([
+            'conversation_id' => $conversation->id,
+            'message_count' => 2,
+            'message_preview' => 'I am still blocked.',
+        ]);
 });
 
 test('agent replies do not create needs reply notifications', function (): void {
