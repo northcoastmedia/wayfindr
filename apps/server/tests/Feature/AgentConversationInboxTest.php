@@ -73,6 +73,37 @@ test('dashboard shows an empty conversation state', function (): void {
         ->assertSee('No active conversations yet.');
 });
 
+test('dashboard shows conversation assignment state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $assignedAgent->id,
+        'support_code' => 'WF-ASSIGNED',
+        'subject' => 'Assigned checkout trouble',
+        'status' => 'open',
+    ]);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-UNASSIGN',
+        'subject' => 'Unassigned checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Assigned')
+        ->assertSee('Assigned checkout trouble')
+        ->assertSee('Bea Builder')
+        ->assertSee('Unassigned checkout trouble')
+        ->assertSee('Unassigned');
+});
+
 test('dashboard lists open tickets for the agent account', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $otherAccount = Account::factory()->create(['name' => 'Other Support']);
@@ -338,6 +369,116 @@ test('agent reply reopens a closed conversation', function (): void {
     expect($conversation->status)->toBe('open')
         ->and($conversation->closed_at)->toBeNull()
         ->and($conversation->last_message_at)->not->toBeNull();
+});
+
+test('agent can claim an unassigned conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-CLAIM1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CLAIM1')
+        ->assertOk()
+        ->assertSee('Assigned to')
+        ->assertSee('Unassigned')
+        ->assertSee('Claim conversation');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-CLAIM1')
+        ->post('/dashboard/conversations/WF-CLAIM1/claim')
+        ->assertRedirect('/dashboard/conversations/WF-CLAIM1')
+        ->assertSessionHas('status', 'Conversation claimed.');
+
+    expect($conversation->fresh()->assigned_agent_id)->toBe($agent->id);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CLAIM1')
+        ->assertOk()
+        ->assertSee('Ada Agent')
+        ->assertSee('Release conversation');
+});
+
+test('assigned agent can release a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-RELEASE1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-RELEASE1')
+        ->post('/dashboard/conversations/WF-RELEASE1/release')
+        ->assertRedirect('/dashboard/conversations/WF-RELEASE1')
+        ->assertSessionHas('status', 'Conversation released.');
+
+    expect($conversation->fresh()->assigned_agent_id)->toBeNull();
+});
+
+test('agent cannot release another agents conversation assignment', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $assignedAgent->id,
+        'support_code' => 'WF-RELEASE2',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-RELEASE2/release')
+        ->assertForbidden();
+
+    expect($conversation->fresh()->assigned_agent_id)->toBe($assignedAgent->id);
+});
+
+test('agent reply claims an unassigned conversation without stealing assigned conversations', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignedAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $unassignedConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-AUTOSIGN',
+        'subject' => 'Unassigned checkout trouble',
+        'status' => 'open',
+    ]);
+    $assignedConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $assignedAgent->id,
+        'support_code' => 'WF-NOSTEAL',
+        'subject' => 'Assigned checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-AUTOSIGN/messages', [
+            'body' => 'I can help with this.',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-AUTOSIGN');
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-NOSTEAL/messages', [
+            'body' => 'Adding a note without taking ownership.',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-NOSTEAL');
+
+    expect($unassignedConversation->fresh()->assigned_agent_id)->toBe($agent->id)
+        ->and($assignedConversation->fresh()->assigned_agent_id)->toBe($assignedAgent->id);
 });
 
 test('agent cannot close another account conversation', function (): void {

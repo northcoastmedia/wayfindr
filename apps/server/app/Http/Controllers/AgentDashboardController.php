@@ -22,7 +22,7 @@ class AgentDashboardController extends Controller
             ->orderBy('name')
             ->get();
         $conversations = Conversation::query()
-            ->with(['site', 'visitor'])
+            ->with(['assignedAgent', 'site', 'visitor'])
             ->where('status', 'open')
             ->whereHas('site', fn ($query) => $query->where('account_id', $account->id))
             ->orderByDesc('last_message_at')

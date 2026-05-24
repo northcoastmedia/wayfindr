@@ -39,6 +39,10 @@
                         <span class="meta-value">{{ $conversation->visitor->anonymous_id ?? 'Unknown visitor' }}</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Assigned to</span>
+                        <span class="meta-value">{{ $conversation->assignedAgent?->name ?? 'Unassigned' }}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Opened</span>
                         <span class="meta-value">{{ $conversation->created_at->diffForHumans() }}</span>
                     </div>
@@ -47,6 +51,20 @@
                         <span class="meta-value">{{ $conversation->last_message_at?->diffForHumans() ?? 'No messages yet' }}</span>
                     </div>
                 </div>
+
+                @if (! $conversation->assigned_agent_id)
+                    <form class="section-form" method="POST" action="{{ route('dashboard.conversations.claim', $conversation->support_code) }}">
+                        @csrf
+
+                        <button class="button" type="submit">Claim conversation</button>
+                    </form>
+                @elseif ($conversation->assigned_agent_id === $agent->id)
+                    <form class="section-form" method="POST" action="{{ route('dashboard.conversations.release', $conversation->support_code) }}">
+                        @csrf
+
+                        <button class="button secondary" type="submit">Release conversation</button>
+                    </form>
+                @endif
 
                 <form class="section-form" method="POST" action="{{ route($conversation->status === 'closed' ? 'dashboard.conversations.reopen' : 'dashboard.conversations.close', $conversation->support_code) }}">
                     @csrf
