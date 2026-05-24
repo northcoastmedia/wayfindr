@@ -87,6 +87,6 @@ make server-serve
 The current prototype supports agent login, public widget intake, visitor
 conversation creation, agent replies from the conversation inbox, and
 visitor-visible message retrieval through the public widget API. Live widget
-subscriptions can receive Reverb message broadcasts when Reverb is running, but
-visitor-side cobrowse request prompts, richer ticket workflows, and production
-hardening are still ahead.
+subscriptions can receive Reverb message broadcasts when Reverb is running, and
+the widget can show an explicit cobrowse consent prompt after an agent requests
+access. Richer ticket workflows and production hardening are still ahead.

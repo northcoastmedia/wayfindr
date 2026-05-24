@@ -256,6 +256,92 @@ test('visitor can revoke cobrowse consent for their conversation', function (): 
         ->ended_at->not->toBeNull();
 });
 
+test('visitor can read their cobrowse request status', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $agent = User::factory()->create(['name' => 'Ada Agent']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-STATUS',
+    ]);
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->for($agent, 'requestedBy')->create([
+        'status' => 'requested',
+        'consented_at' => null,
+        'ended_at' => null,
+    ]);
+
+    $response = $this->getJson('/api/conversations/WF-STATUS/cobrowse?'.http_build_query([
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => widgetVisitorToken($this, 'site_public_docs', 'anon-docs'),
+    ]));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-STATUS')
+        ->assertJsonPath('data.cobrowse.status', 'requested')
+        ->assertJsonPath('data.cobrowse.consent', 'requested')
+        ->assertJsonPath('data.cobrowse.requested_by.name', 'Ada Agent')
+        ->assertJsonPath('data.cobrowse.consented_at', null)
+        ->assertJsonPath('data.cobrowse.ended_at', null);
+});
+
+test('visitor cobrowse status is unavailable without a request', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-NOCOBROWSE',
+    ]);
+
+    $response = $this->getJson('/api/conversations/WF-NOCOBROWSE/cobrowse?'.http_build_query([
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => widgetVisitorToken($this, 'site_public_docs', 'anon-docs'),
+    ]));
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.conversation.support_code', 'WF-NOCOBROWSE')
+        ->assertJsonPath('data.cobrowse.status', 'unavailable')
+        ->assertJsonPath('data.cobrowse.consent', 'unavailable')
+        ->assertJsonPath('data.cobrowse.requested_by', null);
+});
+
+test('visitor cannot grant cobrowse without an active request', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-NOREQUEST',
+    ]);
+
+    $this->postJson('/api/conversations/WF-NOREQUEST/cobrowse-consent', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => widgetVisitorToken($this, 'site_public_docs', 'anon-docs'),
+        'granted' => true,
+    ])
+        ->assertNotFound()
+        ->assertJsonPath('message', 'Cobrowse session not active.');
+
+    $this->assertDatabaseCount('cobrowse_sessions', 0);
+});
+
+test('visitor cannot read cobrowse status for another visitors conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-other']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-PRIVATE',
+    ]);
+
+    $this->getJson('/api/conversations/WF-PRIVATE/cobrowse?'.http_build_query([
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-other',
+        'visitor_token' => widgetVisitorToken($this, 'site_public_docs', 'anon-other'),
+    ]))
+        ->assertNotFound()
+        ->assertJsonPath('message', 'Conversation not found.');
+});
+
 test('visitor can report cobrowse telemetry for their active session', function (): void {
     $site = Site::factory()->create(['public_key' => 'site_public_docs']);
     $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
