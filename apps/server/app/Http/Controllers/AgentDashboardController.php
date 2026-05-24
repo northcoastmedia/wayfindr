@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
+use App\Notifications\TicketAssigned;
 use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -80,7 +81,10 @@ class AgentDashboardController extends Controller
             ->orderByDesc('created_at')
             ->get();
         $unreadNotificationsQuery = $agent->unreadNotifications()
-            ->where('type', ConversationNeedsReply::class);
+            ->whereIn('type', [
+                ConversationNeedsReply::class,
+                TicketAssigned::class,
+            ]);
         $unreadNotificationCount = (clone $unreadNotificationsQuery)->count();
         $unreadNotifications = $unreadNotificationsQuery
             ->limit(5)

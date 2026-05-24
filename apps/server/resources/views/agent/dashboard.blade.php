@@ -56,23 +56,36 @@
                         @foreach ($unreadNotifications as $notification)
                             @php
                                 $notificationData = $notification->data;
+                                $notificationKind = data_get($notificationData, 'kind');
                                 $messageCount = max(1, (int) data_get($notificationData, 'message_count', 1));
                             @endphp
                             <article class="message">
                                 <div class="message-meta">
-                                    <strong>{{ data_get($notificationData, 'subject', 'Untitled conversation') }}</strong>
+                                    <strong>{{ data_get($notificationData, 'subject', $notificationKind === 'ticket_assigned' ? 'Untitled ticket' : 'Untitled conversation') }}</strong>
                                     <span>{{ $notification->created_at->diffForHumans() }}</span>
                                 </div>
-                                <p class="lede">
-                                    {{ $messageCount === 1 ? '1 new message' : $messageCount.' new messages' }}
-                                </p>
-                                <p class="message-body">{{ data_get($notificationData, 'message_preview') }}</p>
-                                <p class="lede">
-                                    <a class="text-link" href="{{ data_get($notificationData, 'url') }}">
-                                        {{ data_get($notificationData, 'support_code') }}
-                                    </a>
-                                    on {{ data_get($notificationData, 'site_name', 'Unknown site') }}
-                                </p>
+                                @if ($notificationKind === 'ticket_assigned')
+                                    <p class="lede">Ticket assigned</p>
+                                    <p class="message-body">{{ data_get($notificationData, 'assigned_by_name', 'Someone') }} assigned this ticket to you.</p>
+                                    <p class="lede">
+                                        <a class="text-link" href="{{ data_get($notificationData, 'url') }}">
+                                            Ticket #{{ data_get($notificationData, 'ticket_id') }}
+                                        </a>
+                                        on {{ data_get($notificationData, 'site_name', 'Unknown site') }}
+                                        · {{ ucfirst((string) data_get($notificationData, 'priority', 'normal')) }} priority
+                                    </p>
+                                @else
+                                    <p class="lede">
+                                        {{ $messageCount === 1 ? '1 new message' : $messageCount.' new messages' }}
+                                    </p>
+                                    <p class="message-body">{{ data_get($notificationData, 'message_preview') }}</p>
+                                    <p class="lede">
+                                        <a class="text-link" href="{{ data_get($notificationData, 'url') }}">
+                                            {{ data_get($notificationData, 'support_code') }}
+                                        </a>
+                                        on {{ data_get($notificationData, 'site_name', 'Unknown site') }}
+                                    </p>
+                                @endif
                                 <form method="POST" action="{{ route('dashboard.alerts.read', $notification) }}">
                                     @csrf
                                     <button class="button secondary" type="submit">Mark read</button>

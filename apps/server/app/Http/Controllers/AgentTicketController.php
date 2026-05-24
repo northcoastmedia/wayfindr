@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\TicketAssigned;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class AgentTicketController extends Controller
         $agent = $request->user();
 
         $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->markTicketAssignmentNotificationsRead($agent, $ticket);
 
         return view('agent.tickets.show', [
             'account' => $agent->account()->firstOrFail(),
@@ -130,11 +132,13 @@ class AgentTicketController extends Controller
         ]);
 
         $ticket->loadMissing('assignee');
+        $oldAssigneeId = $ticket->assignee_id;
         $oldAssigneeName = $ticket->assignee?->name;
         $newAssigneeId = $validated['assignee_id'] ?? null;
-        $newAssigneeName = $newAssigneeId
-            ? $agent->account->agents()->whereKey($newAssigneeId)->value('name')
+        $newAssignee = $newAssigneeId
+            ? $agent->account->agents()->whereKey($newAssigneeId)->first()
             : null;
+        $newAssigneeName = $newAssignee?->name;
 
         $ticket->forceFill([
             'assignee_id' => $newAssigneeId,
@@ -144,6 +148,10 @@ class AgentTicketController extends Controller
             'old_assignee_name' => $oldAssigneeName,
             'new_assignee_name' => $newAssigneeName,
         ]);
+
+        if ($newAssignee && $newAssignee->isNot($agent) && $newAssignee->id !== $oldAssigneeId) {
+            $newAssignee->notify(new TicketAssigned($ticket->fresh(), $agent));
+        }
 
         return $this->redirectAfterUpdate($ticket, 'Ticket assignee updated.');
     }
@@ -158,6 +166,16 @@ class AgentTicketController extends Controller
         return redirect()
             ->back(302, [], route('dashboard'))
             ->with('status', $status);
+    }
+
+    private function markTicketAssignmentNotificationsRead(User $agent, Ticket $ticket): void
+    {
+        $agent->unreadNotifications()
+            ->where('type', TicketAssigned::class)
+            ->get()
+            ->filter(fn ($notification): bool => (int) data_get($notification->data, 'ticket_id') === $ticket->id)
+            ->each
+            ->markAsRead();
     }
 
     /**

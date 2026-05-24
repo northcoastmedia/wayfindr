@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Notifications\ConversationNeedsReply;
+use App\Notifications\TicketAssigned;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -15,7 +16,7 @@ class AgentAlertController extends Controller
 
         abort_unless($notification->notifiable_type === $agent->getMorphClass(), 404);
         abort_unless((string) $notification->notifiable_id === (string) $agent->getKey(), 404);
-        abort_unless($notification->type === ConversationNeedsReply::class, 404);
+        abort_unless(in_array($notification->type, $this->supportAlertTypes(), true), 404);
 
         $notification->markAsRead();
 
@@ -26,11 +27,22 @@ class AgentAlertController extends Controller
     {
         $request->user()
             ->unreadNotifications()
-            ->where('type', ConversationNeedsReply::class)
+            ->whereIn('type', $this->supportAlertTypes())
             ->get()
             ->each
             ->markAsRead();
 
         return redirect()->route('dashboard');
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    private function supportAlertTypes(): array
+    {
+        return [
+            ConversationNeedsReply::class,
+            TicketAssigned::class,
+        ];
     }
 }
