@@ -51,7 +51,9 @@ The widget currently supports the first visitor loop:
 - send visitor messages,
 - render the visitor-visible conversation message timeline,
 - receive live agent replies over Reverb when configured,
-- grant or revoke cobrowse consent,
+- fetch the current cobrowse request status,
+- show explicit allow/decline controls only after support requests cobrowse,
+- grant, decline, or revoke cobrowse consent,
 - report lightweight cobrowse connection telemetry after consent,
 - report passive page state after consent,
 - report an initial sanitized DOM snapshot after consent,
@@ -72,12 +74,13 @@ const timeline = await client.fetchMessages(result.conversation.support_code);
 ```
 
 `sendFirstMessage` bootstraps the visitor session automatically when needed.
-Lower-level calls such as `startConversation`, `sendMessage`, and
-`fetchMessages` expect the visitor to have been bootstrapped first.
+Lower-level calls such as `startConversation`, `sendMessage`,
+`fetchMessages`, and `fetchCobrowseStatus` expect the visitor to have been
+bootstrapped first.
 `subscribeToConversation` prepares a private `conversations.{supportCode}`
 subscription for realtime adapters and uses Wayfindr's signed visitor session
 when authorizing the channel.
-`setCobrowseConsent`, `reportCobrowseTelemetry`,
+`fetchCobrowseStatus`, `setCobrowseConsent`, `reportCobrowseTelemetry`,
 `reportCobrowsePageState`, `reportCobrowseSnapshot`, and
 `reportCobrowseMutations` prepare the consent, measurement, initial snapshot,
 and bounded mutation path for shared page-state cobrowsing.

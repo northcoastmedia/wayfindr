@@ -24,6 +24,7 @@ Shared page state gives Wayfindr better defaults for:
 - Cobrowse is not positioned as full remote desktop streaming.
 - The first useful experience is passive co-viewing with agent guidance.
 - Agents can request or end cobrowse sessions, but the visitor still has to grant consent before page state leaves the browser.
+- The widget only shows cobrowse allow/decline controls after it sees an active agent request; visitors cannot create cobrowse sessions by granting consent on their own.
 - Initial snapshots are sanitized in the visitor browser and shown to agents as safe preview text plus an inert replay preview before richer observe mode exists.
 - Mutation batches are compact and capped so small self-hosted installs can observe change pressure while the agent preview applies the safe mutation types it understands.
 - Agents receive live Reverb notices when cobrowse page state, snapshots, or mutation batches arrive, then refresh the inert preview when they are ready.

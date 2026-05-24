@@ -6,6 +6,7 @@ use App\Http\Controllers\Widget\CobrowseConsentController;
 use App\Http\Controllers\Widget\CobrowseMutationController;
 use App\Http\Controllers\Widget\CobrowsePageStateController;
 use App\Http\Controllers\Widget\CobrowseSnapshotController;
+use App\Http\Controllers\Widget\CobrowseStatusController;
 use App\Http\Controllers\Widget\CobrowseTelemetryController;
 use App\Http\Controllers\Widget\ConversationController;
 use App\Http\Controllers\Widget\ConversationMessageController;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 Route::post('/widget/bootstrap', BootstrapController::class)->name('widget.bootstrap');
 Route::post('/widget/broadcasting/auth', BroadcastAuthController::class)->name('widget.broadcasting.auth');
 Route::post('/conversations', [ConversationController::class, 'store'])->name('conversations.store');
+Route::get('/conversations/{supportCode}/cobrowse', CobrowseStatusController::class)
+    ->name('conversations.cobrowse.show');
 Route::post('/conversations/{supportCode}/cobrowse-consent', [CobrowseConsentController::class, 'store'])
     ->name('conversations.cobrowse-consent.store');
 Route::post('/conversations/{supportCode}/cobrowse-telemetry', [CobrowseTelemetryController::class, 'store'])
