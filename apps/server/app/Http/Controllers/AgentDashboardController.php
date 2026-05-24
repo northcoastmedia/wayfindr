@@ -17,7 +17,10 @@ class AgentDashboardController extends Controller
         abort_unless($agent->account_id, 403);
 
         $account = $agent->account()->firstOrFail();
-        $sites = $account->sites()->orderBy('name')->get();
+        $sites = $account->sites()
+            ->with('latestVisitor')
+            ->orderBy('name')
+            ->get();
         $conversations = Conversation::query()
             ->with(['site', 'visitor'])
             ->where('status', 'open')

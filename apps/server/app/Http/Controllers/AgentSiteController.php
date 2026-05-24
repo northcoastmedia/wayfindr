@@ -47,6 +47,7 @@ class AgentSiteController extends Controller
     public function show(Request $request, Site $site): View
     {
         $this->authorizeSite($request, $site);
+        $site->loadMissing('latestVisitor');
 
         return view('agent.sites.show', [
             'account' => $request->user()->account()->firstOrFail(),
