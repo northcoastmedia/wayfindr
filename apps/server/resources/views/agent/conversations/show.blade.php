@@ -147,12 +147,26 @@
                                         </td>
                                         <td>{{ $ticket->created_at->diffForHumans() }}</td>
                                         <td>
-                                            <form method="POST" action="{{ route($ticket->status === 'closed' ? 'dashboard.tickets.reopen' : 'dashboard.tickets.close', $ticket) }}">
-                                                @csrf
-                                                <button class="button secondary" type="submit">
-                                                    {{ $ticket->status === 'closed' ? 'Reopen ticket' : 'Close ticket' }}
-                                                </button>
-                                            </form>
+                                            @if ($ticket->status === 'open')
+                                                <form method="POST" action="{{ route('dashboard.tickets.pending', $ticket) }}">
+                                                    @csrf
+                                                    <button class="button secondary" type="submit">Mark pending</button>
+                                                </form>
+                                            @endif
+
+                                            @if (in_array($ticket->status, ['closed', 'pending'], true))
+                                                <form method="POST" action="{{ route('dashboard.tickets.reopen', $ticket) }}">
+                                                    @csrf
+                                                    <button class="button secondary" type="submit">Reopen ticket</button>
+                                                </form>
+                                            @endif
+
+                                            @if ($ticket->status !== 'closed')
+                                                <form method="POST" action="{{ route('dashboard.tickets.close', $ticket) }}">
+                                                    @csrf
+                                                    <button class="button secondary" type="submit">Close ticket</button>
+                                                </form>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach

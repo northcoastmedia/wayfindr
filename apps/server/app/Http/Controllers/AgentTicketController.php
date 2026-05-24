@@ -85,6 +85,22 @@ class AgentTicketController extends Controller
         return $this->redirectAfterUpdate($ticket, 'Ticket updated.');
     }
 
+    public function pending(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        $ticket->forceFill([
+            'status' => 'pending',
+            'closed_at' => null,
+        ])->save();
+
+        $this->recordActivity($ticket, $agent, 'ticket.pending');
+
+        return $this->redirectAfterUpdate($ticket, 'Ticket marked pending.');
+    }
+
     public function close(Request $request, Ticket $ticket): RedirectResponse
     {
         $agent = $request->user();
@@ -185,6 +201,7 @@ class AgentTicketController extends Controller
     {
         return [
             'ticket.updated',
+            'ticket.pending',
             'ticket.closed',
             'ticket.reopened',
             'ticket.assignee_updated',

@@ -219,11 +219,42 @@
                 <div class="section-header">
                     <h2 id="tickets-heading">Tickets</h2>
                     <div class="section-actions">
-                        <span class="lede">{{ $tickets->count() }} open</span>
+                        <span class="lede">{{ $tickets->count() }} {{ $ticketStatusSummary }}</span>
+                        @foreach ($ticketStatusFilters as $filterValue => $filterLabel)
+                            @php
+                                $statusParams = [];
+
+                                if ($filterValue !== 'open') {
+                                    $statusParams['ticket_status'] = $filterValue;
+                                }
+
+                                if ($ticketFilter !== 'all') {
+                                    $statusParams['ticket_filter'] = $ticketFilter;
+                                }
+                            @endphp
+                            <a
+                                class="button {{ $ticketStatus === $filterValue ? '' : 'secondary' }}"
+                                href="{{ route('dashboard', $statusParams) }}"
+                                @if ($ticketStatus === $filterValue) aria-current="page" @endif
+                            >
+                                {{ $filterLabel }}
+                            </a>
+                        @endforeach
                         @foreach ($ticketFilters as $filterValue => $filterLabel)
+                            @php
+                                $ownerParams = [];
+
+                                if ($ticketStatus !== 'open') {
+                                    $ownerParams['ticket_status'] = $ticketStatus;
+                                }
+
+                                if ($filterValue !== 'all') {
+                                    $ownerParams['ticket_filter'] = $filterValue;
+                                }
+                            @endphp
                             <a
                                 class="button {{ $ticketFilter === $filterValue ? '' : 'secondary' }}"
-                                href="{{ route('dashboard', $filterValue === 'all' ? [] : ['ticket_filter' => $filterValue]) }}"
+                                href="{{ route('dashboard', $ownerParams) }}"
                                 @if ($ticketFilter === $filterValue) aria-current="page" @endif
                             >
                                 {{ $filterLabel }}
@@ -233,7 +264,7 @@
                 </div>
 
                 @if ($tickets->isEmpty())
-                    <p class="empty">No open tickets yet.</p>
+                    <p class="empty">{{ $ticketEmptyMessage }}</p>
                 @else
                     <div class="table-wrap">
                         <table>
@@ -241,6 +272,7 @@
                                 <tr>
                                     <th scope="col">Subject</th>
                                     <th scope="col">Site</th>
+                                    <th scope="col">Status</th>
                                     <th scope="col">Priority</th>
                                     <th scope="col">Assignee</th>
                                     <th scope="col">Support Code</th>
@@ -256,6 +288,7 @@
                                             </a>
                                         </td>
                                         <td>{{ $ticket->site->name }}</td>
+                                        <td>{{ ucfirst($ticket->status) }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
                                         <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
                                         <td>{{ $ticket->conversation?->support_code ?? 'Not linked' }}</td>

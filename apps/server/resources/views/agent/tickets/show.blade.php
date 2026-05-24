@@ -114,12 +114,26 @@
                     <button class="button secondary" type="submit">Assign ticket</button>
                 </form>
 
-                <form class="section-form" method="POST" action="{{ route($ticket->status === 'closed' ? 'dashboard.tickets.reopen' : 'dashboard.tickets.close', $ticket) }}">
-                    @csrf
-                    <button class="button secondary" type="submit">
-                        {{ $ticket->status === 'closed' ? 'Reopen ticket' : 'Close ticket' }}
-                    </button>
-                </form>
+                @if ($ticket->status === 'open')
+                    <form class="section-form" method="POST" action="{{ route('dashboard.tickets.pending', $ticket) }}">
+                        @csrf
+                        <button class="button secondary" type="submit">Mark pending</button>
+                    </form>
+                @endif
+
+                @if (in_array($ticket->status, ['closed', 'pending'], true))
+                    <form class="section-form" method="POST" action="{{ route('dashboard.tickets.reopen', $ticket) }}">
+                        @csrf
+                        <button class="button secondary" type="submit">Reopen ticket</button>
+                    </form>
+                @endif
+
+                @if ($ticket->status !== 'closed')
+                    <form class="section-form" method="POST" action="{{ route('dashboard.tickets.close', $ticket) }}">
+                        @csrf
+                        <button class="button secondary" type="submit">Close ticket</button>
+                    </form>
+                @endif
             </section>
 
             <section class="section" aria-labelledby="ticket-details-heading">
@@ -218,6 +232,10 @@
                                 @switch($activity->action)
                                     @case('ticket.closed')
                                         Ticket closed
+                                        @break
+
+                                    @case('ticket.pending')
+                                        Ticket marked pending
                                         @break
 
                                     @case('ticket.reopened')

@@ -359,6 +359,80 @@ test('dashboard filters tickets by assignee state', function (): void {
         ->assertDontSee('Someone else is handling it');
 });
 
+test('dashboard filters tickets by status', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $otherSite = Site::factory()->for($otherAccount)->create(['name' => 'Other Docs']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Active checkout issue',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Waiting on customer',
+            'status' => 'pending',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Resolved billing question',
+            'status' => 'closed',
+        ]);
+
+    Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'subject' => 'Other account waiting',
+            'status' => 'pending',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('1 open')
+        ->assertSee('Active checkout issue')
+        ->assertDontSee('Waiting on customer')
+        ->assertDontSee('Resolved billing question');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_status=pending')
+        ->assertOk()
+        ->assertSee('1 pending')
+        ->assertSee('Waiting on customer')
+        ->assertDontSee('Active checkout issue')
+        ->assertDontSee('Resolved billing question')
+        ->assertDontSee('Other account waiting');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_status=closed')
+        ->assertOk()
+        ->assertSee('1 closed')
+        ->assertSee('Resolved billing question')
+        ->assertDontSee('Active checkout issue')
+        ->assertDontSee('Waiting on customer');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_status=all')
+        ->assertOk()
+        ->assertSee('3 total')
+        ->assertSee('Active checkout issue')
+        ->assertSee('Waiting on customer')
+        ->assertSee('Resolved billing question')
+        ->assertDontSee('Other account waiting');
+});
+
 test('dashboard exposes ticket queue filter links', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -367,8 +441,14 @@ test('dashboard exposes ticket queue filter links', function (): void {
         ->get('/dashboard')
         ->assertOk()
         ->assertSee('All open')
+        ->assertSee('Pending')
+        ->assertSee('Closed')
+        ->assertSee('All tickets')
         ->assertSee('Assigned to me')
         ->assertSee('Unassigned')
+        ->assertSee('/dashboard?ticket_status=pending', false)
+        ->assertSee('/dashboard?ticket_status=closed', false)
+        ->assertSee('/dashboard?ticket_status=all', false)
         ->assertSee('/dashboard?ticket_filter=assigned_to_me', false)
         ->assertSee('/dashboard?ticket_filter=unassigned', false);
 });
@@ -1147,6 +1227,55 @@ test('agent can close a ticket from its detail page', function (): void {
         ->assertOk()
         ->assertSee('Activity')
         ->assertSee('Ticket closed')
+        ->assertSee('Ada Agent');
+});
+
+test('agent can mark a ticket pending from its detail page', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-DETAILPEND',
+        'subject' => 'Checkout trouble',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Waiting on customer answer',
+            'status' => 'open',
+            'closed_at' => null,
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/pending")
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Ticket marked pending.');
+
+    expect($ticket->fresh())
+        ->status->toBe('pending')
+        ->closed_at->toBeNull();
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.pending',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Pending')
+        ->assertSee('Ticket marked pending')
         ->assertSee('Ada Agent');
 });
 

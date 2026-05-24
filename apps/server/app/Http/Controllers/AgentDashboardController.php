@@ -47,7 +47,7 @@ class AgentDashboardController extends Controller
             ? $conversationFilter
             : 'all';
         $ticketFilters = [
-            'all' => 'All open',
+            'all' => 'Any assignee',
             'assigned_to_me' => 'Assigned to me',
             'unassigned' => 'Unassigned',
         ];
@@ -55,6 +55,26 @@ class AgentDashboardController extends Controller
         $ticketFilter = is_string($ticketFilter) && array_key_exists($ticketFilter, $ticketFilters)
             ? $ticketFilter
             : 'all';
+        $ticketStatusFilters = [
+            'open' => 'All open',
+            'pending' => 'Pending',
+            'closed' => 'Closed',
+            'all' => 'All tickets',
+        ];
+        $ticketStatus = $request->query('ticket_status', 'open');
+        $ticketStatus = is_string($ticketStatus) && array_key_exists($ticketStatus, $ticketStatusFilters)
+            ? $ticketStatus
+            : 'open';
+        $ticketStatusSummary = match ($ticketStatus) {
+            'all' => 'total',
+            default => $ticketStatus,
+        };
+        $ticketEmptyMessage = match ($ticketStatus) {
+            'all' => 'No tickets yet.',
+            'pending' => 'No pending tickets yet.',
+            'closed' => 'No closed tickets yet.',
+            default => 'No open tickets yet.',
+        };
 
         $conversations = Conversation::query()
             ->with(['assignedAgent', 'latestMessage', 'site', 'visitor'])
@@ -74,7 +94,7 @@ class AgentDashboardController extends Controller
         $tickets = Ticket::query()
             ->with(['assignee', 'conversation', 'site'])
             ->where('account_id', $account->id)
-            ->where('status', 'open')
+            ->when($ticketStatus !== 'all', fn ($query) => $query->where('status', $ticketStatus))
             ->when($ticketFilter === 'assigned_to_me', fn ($query) => $query->where('assignee_id', $agent->id))
             ->when($ticketFilter === 'unassigned', fn ($query) => $query->whereNull('assignee_id'))
             ->orderByDesc('updated_at')
@@ -100,8 +120,12 @@ class AgentDashboardController extends Controller
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
+            'ticketEmptyMessage' => $ticketEmptyMessage,
             'ticketFilter' => $ticketFilter,
             'ticketFilters' => $ticketFilters,
+            'ticketStatus' => $ticketStatus,
+            'ticketStatusFilters' => $ticketStatusFilters,
+            'ticketStatusSummary' => $ticketStatusSummary,
             'tickets' => $tickets,
             'unreadNotificationCount' => $unreadNotificationCount,
             'unreadNotifications' => $unreadNotifications,
