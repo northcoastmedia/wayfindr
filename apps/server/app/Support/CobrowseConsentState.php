@@ -46,6 +46,11 @@ class CobrowseConsentState
                 'message' => 'Visitor revoked cobrowse consent.',
                 'status' => 'revoked',
             ],
+            'ended' => [
+                'label' => 'Ended',
+                'message' => 'Cobrowse session ended.',
+                'status' => 'ended',
+            ],
             default => [
                 'label' => 'Unavailable',
                 'message' => 'Visitor has not granted cobrowse consent.',
