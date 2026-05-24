@@ -122,14 +122,48 @@
                 </form>
             </section>
 
-            <section class="section" aria-labelledby="ticket-description-heading">
+            <section class="section" aria-labelledby="ticket-details-heading">
                 <div class="section-header">
-                    <h2 id="ticket-description-heading">Description</h2>
+                    <h2 id="ticket-details-heading">Ticket details</h2>
+                    <span class="lede">{{ ucfirst($ticket->priority) }}</span>
                 </div>
 
-                <div class="notice-copy">
-                    <p>{{ $ticket->description ?: 'No description recorded.' }}</p>
-                </div>
+                <form class="section-form" method="POST" action="{{ route('dashboard.tickets.update', $ticket) }}">
+                    @csrf
+                    @method('PUT')
+
+                    <div class="field">
+                        <label for="subject">Subject</label>
+                        <input id="subject" name="subject" type="text" value="{{ old('subject', $ticket->subject) }}">
+                        @error('subject')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="priority">Priority</label>
+                        <select id="priority" name="priority">
+                            @foreach (['low', 'normal', 'high', 'urgent'] as $priority)
+                                <option value="{{ $priority }}" @selected(old('priority', $ticket->priority) === $priority)>
+                                    {{ ucfirst($priority) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('priority')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="6">{{ old('description', $ticket->description) }}</textarea>
+                        @error('description')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <button class="button" type="submit">Save ticket</button>
+                </form>
             </section>
 
             <section class="section" aria-labelledby="ticket-notes-heading">
@@ -196,6 +230,18 @@
 
                                     @case('ticket.assignee_updated')
                                         Assignee changed from {{ data_get($activity->metadata, 'old_assignee_name') ?? 'Unassigned' }} to {{ data_get($activity->metadata, 'new_assignee_name') ?? 'Unassigned' }}
+                                        @break
+
+                                    @case('ticket.updated')
+                                        @foreach (data_get($activity->metadata, 'changes', []) as $field => $change)
+                                            @if ($field === 'description')
+                                                <span>Description updated</span>@if (! $loop->last)<br>@endif
+                                            @elseif ($field === 'priority')
+                                                <span>Priority changed from {{ ucfirst(data_get($change, 'old')) }} to {{ ucfirst(data_get($change, 'new')) }}</span>@if (! $loop->last)<br>@endif
+                                            @else
+                                                <span>{{ ucfirst($field) }} changed from {{ data_get($change, 'old') }} to {{ data_get($change, 'new') }}</span>@if (! $loop->last)<br>@endif
+                                            @endif
+                                        @endforeach
                                         @break
 
                                     @default

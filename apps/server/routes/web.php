@@ -50,6 +50,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.conversations.tickets.store');
     Route::get('/dashboard/tickets/{ticket}', [AgentTicketController::class, 'show'])
         ->name('dashboard.tickets.show');
+    Route::put('/dashboard/tickets/{ticket}', [AgentTicketController::class, 'update'])
+        ->name('dashboard.tickets.update');
     Route::post('/dashboard/tickets/{ticket}/notes', [AgentTicketController::class, 'storeNote'])
         ->name('dashboard.tickets.notes.store');
     Route::post('/dashboard/tickets/{ticket}/close', [AgentTicketController::class, 'close'])
