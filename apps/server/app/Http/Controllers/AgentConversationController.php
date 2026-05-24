@@ -20,7 +20,7 @@ class AgentConversationController extends Controller
         $agent = $request->user();
 
         $conversation = $this->conversationForAgent($agent, $supportCode)
-            ->load(['site', 'visitor']);
+            ->load(['assignedAgent', 'site', 'visitor']);
 
         $messages = $conversation->messages()
             ->with('sender')
@@ -69,6 +69,7 @@ class AgentConversationController extends Controller
         ]);
 
         $conversation->forceFill([
+            'assigned_agent_id' => $conversation->assigned_agent_id ?: $agent->id,
             'status' => 'open',
             'closed_at' => null,
             'last_message_at' => $message->created_at,
@@ -109,6 +110,38 @@ class AgentConversationController extends Controller
         return redirect()
             ->route('dashboard.conversations.show', $conversation->support_code)
             ->with('status', 'Conversation reopened.');
+    }
+
+    public function claim(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode);
+
+        abort_if($conversation->assigned_agent_id && $conversation->assigned_agent_id !== $agent->id, 403);
+
+        $conversation->forceFill([
+            'assigned_agent_id' => $agent->id,
+        ])->save();
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Conversation claimed.');
+    }
+
+    public function release(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode);
+
+        abort_unless($conversation->assigned_agent_id === $agent->id, 403);
+
+        $conversation->forceFill([
+            'assigned_agent_id' => null,
+        ])->save();
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Conversation released.');
     }
 
     public function storeTicket(Request $request, string $supportCode): RedirectResponse
