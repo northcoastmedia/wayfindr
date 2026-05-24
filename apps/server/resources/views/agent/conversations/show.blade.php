@@ -57,6 +57,16 @@
 
                 <p class="empty">{{ $cobrowseConsent['message'] }}</p>
 
+                @if ($realtime)
+                    <div class="live-update" data-cobrowse-update-panel data-state="idle">
+                        <div>
+                            <strong>Cobrowse updates</strong>
+                            <p class="lede" data-cobrowse-update-status>Waiting for live cobrowse updates.</p>
+                        </div>
+                        <button class="button secondary" type="button" data-cobrowse-refresh hidden>Refresh preview</button>
+                    </div>
+                @endif
+
                 @if ($cobrowseConsent['page_state'])
                     <div class="section-header">
                         <strong>Visitor page</strong>
@@ -272,4 +282,125 @@
             </section>
         </main>
     </div>
+
+    @if ($realtime)
+        <script>
+            (function () {
+                var config = @json($realtime);
+                var panel = document.querySelector('[data-cobrowse-update-panel]');
+                var status = document.querySelector('[data-cobrowse-update-status]');
+                var refresh = document.querySelector('[data-cobrowse-refresh]');
+                var csrf = document.querySelector('meta[name="csrf-token"]');
+
+                if (!config || !panel || !status || !window.WebSocket) {
+                    if (status) {
+                        status.textContent = 'Live cobrowse updates are unavailable in this browser.';
+                    }
+
+                    return;
+                }
+
+                if (refresh) {
+                    refresh.addEventListener('click', function () {
+                        window.location.reload();
+                    });
+                }
+
+                function setStatus(message, state) {
+                    status.textContent = message;
+                    panel.dataset.state = state || 'idle';
+                }
+
+                function parsePayload(payload) {
+                    if (typeof payload === 'string') {
+                        return JSON.parse(payload);
+                    }
+
+                    return payload || {};
+                }
+
+                function subscribe(socket, auth) {
+                    socket.send(JSON.stringify({
+                        event: 'pusher:subscribe',
+                        data: {
+                            auth: auth,
+                            channel: config.channelName
+                        }
+                    }));
+                }
+
+                function authorize(socket, socketId) {
+                    var body = new URLSearchParams();
+
+                    body.set('socket_id', socketId);
+                    body.set('channel_name', config.channelName);
+
+                    fetch(config.authEndpoint, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-CSRF-TOKEN': csrf ? csrf.getAttribute('content') : ''
+                        },
+                        body: body.toString()
+                    })
+                        .then(function (response) {
+                            if (!response.ok) {
+                                throw new Error('Broadcast authorization failed.');
+                            }
+
+                            return response.json();
+                        })
+                        .then(function (data) {
+                            subscribe(socket, data.auth);
+                            setStatus('Listening for live cobrowse updates.', 'listening');
+                        })
+                        .catch(function () {
+                            setStatus('Live cobrowse updates could not connect.', 'warning');
+                        });
+                }
+
+                var socketScheme = config.scheme === 'https' ? 'wss' : 'ws';
+                var socketUrl = socketScheme + '://' + config.host + ':' + config.port + '/app/' + encodeURIComponent(config.appKey) + '?protocol=7&client=wayfindr-agent&version=0.0.0&flash=false';
+                var socket = new WebSocket(socketUrl);
+
+                socket.addEventListener('message', function (message) {
+                    var event;
+
+                    try {
+                        event = JSON.parse(message.data);
+                    } catch (error) {
+                        return;
+                    }
+
+                    if (event.event === 'pusher:connection_established') {
+                        authorize(socket, parsePayload(event.data).socket_id);
+
+                        return;
+                    }
+
+                    if (event.event === config.eventName) {
+                        setStatus('New cobrowse update available. Refresh the preview when you are ready.', 'available');
+
+                        if (refresh) {
+                            refresh.hidden = false;
+                        }
+                    }
+                });
+
+                socket.addEventListener('close', function () {
+                    if (panel.dataset.state !== 'available') {
+                        setStatus('Live cobrowse updates disconnected.', 'warning');
+                    }
+                });
+
+                socket.addEventListener('error', function () {
+                    if (panel.dataset.state !== 'available') {
+                        setStatus('Live cobrowse updates could not connect.', 'warning');
+                    }
+                });
+            })();
+        </script>
+    @endif
 </x-layouts.app>

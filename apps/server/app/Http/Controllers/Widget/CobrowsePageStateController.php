@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Widget;
 
+use App\Events\CobrowseStateUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
@@ -73,6 +74,8 @@ class CobrowsePageStateController extends Controller
         $cobrowseSession->forceFill([
             'metadata' => $metadata,
         ])->save();
+
+        event(new CobrowseStateUpdated($cobrowseSession, 'page_state'));
 
         return response()->json([
             'data' => [

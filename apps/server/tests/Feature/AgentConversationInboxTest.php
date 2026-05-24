@@ -177,6 +177,43 @@ test('agent can view their account conversation timeline', function (): void {
         ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
 });
 
+test('agent conversation page exposes live cobrowse update readiness when reverb is configured', function (): void {
+    config()->set('broadcasting.default', 'reverb');
+    config()->set('broadcasting.connections.reverb.key', 'reverb-key');
+    config()->set('broadcasting.connections.reverb.secret', 'reverb-secret');
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    config()->set('broadcasting.connections.reverb.options.host', 'wayfindr.test');
+    config()->set('broadcasting.connections.reverb.options.port', 443);
+    config()->set('broadcasting.connections.reverb.options.scheme', 'https');
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-LIVECOBROWSE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-LIVECOBROWSE')
+        ->assertOk()
+        ->assertSee('Cobrowse updates')
+        ->assertSee('Waiting for live cobrowse updates.')
+        ->assertSee('data-cobrowse-update-status', false)
+        ->assertSee('conversation.cobrowse.updated')
+        ->assertSee('private-conversations.WF-LIVECOBROWSE')
+        ->assertSee('"appKey":"reverb-key"', false)
+        ->assertSee('"host":"wayfindr.test"', false);
+});
+
 test('agent can see cobrowse consent state on a conversation', function (?array $sessionAttributes, string $label, string $message): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

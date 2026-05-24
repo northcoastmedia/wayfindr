@@ -32,6 +32,7 @@ class AgentConversationController extends Controller
             'cobrowseConsent' => $cobrowseConsentState->forConversation($conversation),
             'conversation' => $conversation,
             'messages' => $messages,
+            'realtime' => $this->realtimeConfig($conversation),
         ]);
     }
 
@@ -79,5 +80,39 @@ class AgentConversationController extends Controller
             ->where('support_code', $supportCode)
             ->whereHas('site', fn ($query) => $query->where('account_id', $agent->account_id))
             ->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function realtimeConfig(Conversation $conversation): ?array
+    {
+        if ((string) config('broadcasting.default') !== 'reverb') {
+            return null;
+        }
+
+        $key = config('broadcasting.connections.reverb.key');
+        $host = config('broadcasting.connections.reverb.options.host');
+        $port = config('broadcasting.connections.reverb.options.port');
+        $scheme = config('broadcasting.connections.reverb.options.scheme');
+
+        if (! $this->hasConfigValue($key) || ! $this->hasConfigValue($host) || ! $this->hasConfigValue($port) || ! $this->hasConfigValue($scheme)) {
+            return null;
+        }
+
+        return [
+            'appKey' => (string) $key,
+            'authEndpoint' => url('/broadcasting/auth'),
+            'channelName' => 'private-conversations.'.$conversation->support_code,
+            'eventName' => 'conversation.cobrowse.updated',
+            'host' => (string) $host,
+            'port' => (int) $port,
+            'scheme' => (string) $scheme,
+        ];
+    }
+
+    private function hasConfigValue(mixed $value): bool
+    {
+        return is_string($value) ? trim($value) !== '' : $value !== null;
     }
 }
