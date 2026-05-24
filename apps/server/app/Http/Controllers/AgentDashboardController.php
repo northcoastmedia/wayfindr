@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Models\Ticket;
 use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -24,6 +25,13 @@ class AgentDashboardController extends Controller
             ->orderByDesc('last_message_at')
             ->orderByDesc('created_at')
             ->get();
+        $tickets = Ticket::query()
+            ->with(['conversation', 'site'])
+            ->where('account_id', $account->id)
+            ->where('status', 'open')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('created_at')
+            ->get();
 
         return view('agent.dashboard', [
             'account' => $account,
@@ -31,6 +39,7 @@ class AgentDashboardController extends Controller
             'conversations' => $conversations,
             'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
+            'tickets' => $tickets,
         ]);
     }
 }

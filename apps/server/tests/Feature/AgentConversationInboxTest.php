@@ -5,6 +5,7 @@ use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,6 +68,63 @@ test('dashboard shows an empty conversation state', function (): void {
         ->get('/dashboard')
         ->assertOk()
         ->assertSee('No active conversations yet.');
+});
+
+test('dashboard lists open tickets for the agent account', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKETDB',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+        'last_message_at' => now()->subMinute(),
+    ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'priority' => 'high',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Closed account issue',
+            'status' => 'closed',
+        ]);
+
+    $otherSite = Site::factory()->for($otherAccount)->create(['name' => 'Other Docs']);
+    Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'subject' => 'Other account issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Tickets')
+        ->assertSee('1 open')
+        ->assertSee('Escalated checkout issue')
+        ->assertSee('Acme Docs')
+        ->assertSee('High')
+        ->assertSee('WF-TICKETDB')
+        ->assertDontSee('Closed account issue')
+        ->assertDontSee('Other account issue')
+        ->assertDontSee('Other Docs');
 });
 
 test('dashboard shows ready realtime status when reverb is configured', function (): void {
@@ -175,6 +233,124 @@ test('agent can view their account conversation timeline', function (): void {
         ->assertSee('Send reply')
         ->assertSee('name="body"', false)
         ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
+});
+
+test('agent can create a ticket from their account conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKET1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'The checkout button is stuck.',
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'I can help with that.',
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-TICKET1')
+        ->post('/dashboard/conversations/WF-TICKET1/tickets', [
+            'priority' => 'high',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-TICKET1')
+        ->assertSessionHas('status', 'Ticket created.');
+
+    $this->assertDatabaseHas('tickets', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'conversation_id' => $conversation->id,
+        'requester_id' => $visitor->id,
+        'assignee_id' => $agent->id,
+        'status' => 'open',
+        'priority' => 'high',
+        'subject' => 'Checkout trouble',
+    ]);
+
+    $ticket = Ticket::query()->sole();
+
+    expect($ticket->description)
+        ->toContain('Visitor: The checkout button is stuck.')
+        ->toContain('Ada Agent: I can help with that.');
+
+    expect($ticket->metadata)->toMatchArray([
+        'source' => 'conversation',
+        'support_code' => 'WF-TICKET1',
+    ]);
+
+    expect($conversation->fresh()->assigned_agent_id)->toBe($agent->id);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-TICKET1')
+        ->assertOk()
+        ->assertSee('Ticket created.')
+        ->assertSee('Ticket')
+        ->assertSee('Checkout trouble')
+        ->assertSee('High')
+        ->assertSee('Open');
+});
+
+test('creating a ticket from a conversation is idempotent', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $site = Site::factory()->for($account)->create();
+    $visitor = Visitor::factory()->for($site)->create();
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKET2',
+        'subject' => 'Existing handoff',
+    ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Existing handoff',
+        ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-TICKET2')
+        ->post('/dashboard/conversations/WF-TICKET2/tickets', [
+            'priority' => 'urgent',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-TICKET2')
+        ->assertSessionHas('status', 'Ticket already exists.');
+
+    $this->assertDatabaseCount('tickets', 1);
+});
+
+test('agent cannot create a ticket for another account conversation', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherVisitor = Visitor::factory()->for($otherSite)->create();
+
+    Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+        'support_code' => 'WF-TICKET3',
+    ]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-TICKET3/tickets', [
+            'priority' => 'high',
+        ])
+        ->assertNotFound();
+
+    $this->assertDatabaseCount('tickets', 0);
 });
 
 test('agent conversation page exposes live cobrowse update readiness when reverb is configured', function (): void {

@@ -25,6 +25,10 @@ class AgentConversationController extends Controller
             ->orderBy('created_at')
             ->orderBy('id')
             ->get();
+        $tickets = $conversation->tickets()
+            ->with('assignee')
+            ->latest()
+            ->get();
 
         return view('agent.conversations.show', [
             'account' => $agent->account()->firstOrFail(),
@@ -33,6 +37,7 @@ class AgentConversationController extends Controller
             'conversation' => $conversation,
             'messages' => $messages,
             'realtime' => $this->realtimeConfig($conversation),
+            'tickets' => $tickets,
         ]);
     }
 
@@ -72,6 +77,48 @@ class AgentConversationController extends Controller
             ->with('status', 'Reply sent.');
     }
 
+    public function storeTicket(Request $request, string $supportCode): RedirectResponse
+    {
+        $agent = $request->user();
+        $conversation = $this->conversationForAgent($agent, $supportCode)
+            ->load(['site', 'visitor']);
+
+        $validated = $request->validate([
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+        ]);
+
+        if ($conversation->tickets()->exists()) {
+            return redirect()
+                ->route('dashboard.conversations.show', $conversation->support_code)
+                ->with('status', 'Ticket already exists.');
+        }
+
+        $conversation->tickets()->create([
+            'account_id' => $conversation->site->account_id,
+            'site_id' => $conversation->site_id,
+            'requester_id' => $conversation->visitor_id,
+            'assignee_id' => $agent->id,
+            'status' => 'open',
+            'priority' => $validated['priority'] ?? 'normal',
+            'subject' => $conversation->subject ?: 'Conversation '.$conversation->support_code,
+            'description' => $this->ticketDescription($conversation),
+            'metadata' => [
+                'source' => 'conversation',
+                'support_code' => $conversation->support_code,
+            ],
+        ]);
+
+        if (! $conversation->assigned_agent_id) {
+            $conversation->forceFill([
+                'assigned_agent_id' => $agent->id,
+            ])->save();
+        }
+
+        return redirect()
+            ->route('dashboard.conversations.show', $conversation->support_code)
+            ->with('status', 'Ticket created.');
+    }
+
     private function conversationForAgent(User $agent, string $supportCode): Conversation
     {
         abort_unless($agent->account_id, 403);
@@ -80,6 +127,37 @@ class AgentConversationController extends Controller
             ->where('support_code', $supportCode)
             ->whereHas('site', fn ($query) => $query->where('account_id', $agent->account_id))
             ->firstOrFail();
+    }
+
+    private function ticketDescription(Conversation $conversation): string
+    {
+        $messages = $conversation->messages()
+            ->with('sender')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(20)
+            ->get()
+            ->map(function ($message): ?string {
+                $body = trim((string) $message->body);
+
+                if ($body === '') {
+                    return null;
+                }
+
+                $senderName = $message->sender_type === User::class
+                    ? ($message->sender?->name ?? 'Agent')
+                    : 'Visitor';
+
+                return $senderName.': '.$body;
+            })
+            ->filter()
+            ->implode(PHP_EOL.PHP_EOL);
+
+        if ($messages === '') {
+            return 'Created from conversation '.$conversation->support_code.'.';
+        }
+
+        return $messages;
     }
 
     /**

@@ -24,7 +24,7 @@ See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
 4. Visitor and agent can chat.
 5. Agent can request cobrowsing consent.
 6. After consent, the widget reports sanitized page state, an initial DOM snapshot, and bounded mutation batches so the agent viewer can render an inert replay preview and receive live update notices.
-7. The conversation can become a ticket.
+7. The agent can turn the conversation into a durable ticket.
 
 ## Architecture Biases
 

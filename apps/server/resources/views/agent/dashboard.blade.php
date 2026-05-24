@@ -86,6 +86,50 @@
                 <p class="empty realtime-note">{{ $realtimeHealth['message'] }}</p>
             </section>
 
+            <section class="section" aria-labelledby="tickets-heading">
+                <div class="section-header">
+                    <h2 id="tickets-heading">Tickets</h2>
+                    <span class="lede">{{ $tickets->count() }} open</span>
+                </div>
+
+                @if ($tickets->isEmpty())
+                    <p class="empty">No open tickets yet.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Subject</th>
+                                    <th scope="col">Site</th>
+                                    <th scope="col">Priority</th>
+                                    <th scope="col">Support Code</th>
+                                    <th scope="col">Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($tickets as $ticket)
+                                    <tr>
+                                        <td>
+                                            @if ($ticket->conversation)
+                                                <a class="text-link" href="{{ route('dashboard.conversations.show', $ticket->conversation->support_code) }}">
+                                                    {{ $ticket->subject }}
+                                                </a>
+                                            @else
+                                                {{ $ticket->subject }}
+                                            @endif
+                                        </td>
+                                        <td>{{ $ticket->site->name }}</td>
+                                        <td>{{ ucfirst($ticket->priority) }}</td>
+                                        <td>{{ $ticket->conversation?->support_code ?? 'Not linked' }}</td>
+                                        <td>{{ $ticket->updated_at->diffForHumans() }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </section>
+
             <section class="section" aria-labelledby="conversations-heading">
                 <div class="section-header">
                     <h2 id="conversations-heading">Conversations</h2>
