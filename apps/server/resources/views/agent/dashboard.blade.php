@@ -185,6 +185,7 @@
                                     <th scope="col">Site</th>
                                     <th scope="col">Visitor</th>
                                     <th scope="col">Assigned</th>
+                                    <th scope="col">Attention</th>
                                     <th scope="col">Support Code</th>
                                     <th scope="col">Last Activity</th>
                                 </tr>
@@ -200,6 +201,7 @@
                                         <td>{{ $conversation->site->name }}</td>
                                         <td>{{ $conversation->visitor->anonymous_id ?? 'Unknown visitor' }}</td>
                                         <td>{{ $conversation->assignedAgent?->name ?? 'Unassigned' }}</td>
+                                        <td>{{ $conversation->attentionLabel() }}</td>
                                         <td>{{ $conversation->support_code }}</td>
                                         <td>{{ $conversation->last_message_at?->diffForHumans() ?? $conversation->created_at->diffForHumans() }}</td>
                                     </tr>

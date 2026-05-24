@@ -20,7 +20,7 @@ class AgentConversationController extends Controller
         $agent = $request->user();
 
         $conversation = $this->conversationForAgent($agent, $supportCode)
-            ->load(['assignedAgent', 'site', 'visitor']);
+            ->load(['assignedAgent', 'latestMessage', 'site', 'visitor']);
 
         $messages = $conversation->messages()
             ->with('sender')
