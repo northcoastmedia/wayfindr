@@ -175,7 +175,18 @@
             <section class="section" aria-labelledby="tickets-heading">
                 <div class="section-header">
                     <h2 id="tickets-heading">Tickets</h2>
-                    <span class="lede">{{ $tickets->count() }} open</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $tickets->count() }} open</span>
+                        @foreach ($ticketFilters as $filterValue => $filterLabel)
+                            <a
+                                class="button {{ $ticketFilter === $filterValue ? '' : 'secondary' }}"
+                                href="{{ route('dashboard', $filterValue === 'all' ? [] : ['ticket_filter' => $filterValue]) }}"
+                                @if ($ticketFilter === $filterValue) aria-current="page" @endif
+                            >
+                                {{ $filterLabel }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
 
                 @if ($tickets->isEmpty())
@@ -188,6 +199,7 @@
                                     <th scope="col">Subject</th>
                                     <th scope="col">Site</th>
                                     <th scope="col">Priority</th>
+                                    <th scope="col">Assignee</th>
                                     <th scope="col">Support Code</th>
                                     <th scope="col">Updated</th>
                                 </tr>
@@ -206,6 +218,7 @@
                                         </td>
                                         <td>{{ $ticket->site->name }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
+                                        <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
                                         <td>{{ $ticket->conversation?->support_code ?? 'Not linked' }}</td>
                                         <td>{{ $ticket->updated_at->diffForHumans() }}</td>
                                     </tr>

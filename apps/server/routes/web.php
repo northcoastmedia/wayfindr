@@ -52,6 +52,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.tickets.close');
     Route::post('/dashboard/tickets/{ticket}/reopen', [AgentTicketController::class, 'reopen'])
         ->name('dashboard.tickets.reopen');
+    Route::put('/dashboard/tickets/{ticket}/assignee', [AgentTicketController::class, 'updateAssignee'])
+        ->name('dashboard.tickets.assignee.update');
     Route::post('/dashboard/conversations/{supportCode}/cobrowse/request', [AgentConversationController::class, 'requestCobrowse'])
         ->name('dashboard.conversations.cobrowse.request');
     Route::post('/dashboard/conversations/{supportCode}/cobrowse/end', [AgentConversationController::class, 'endCobrowse'])
