@@ -1,8 +1,10 @@
 <?php
 
 use App\Broadcasting\ConversationChannel;
+use App\Events\CobrowseStateUpdated;
 use App\Events\ConversationMessageCreated;
 use App\Models\Account;
+use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
@@ -60,6 +62,67 @@ test('conversation message broadcasts use a private conversation channel and saf
         ]);
 });
 
+test('cobrowse state updates use a private conversation channel and safe payload', function (): void {
+    $account = Account::factory()->create();
+    $site = Site::factory()->for($account)->create(['name' => 'Docs Site']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-COBROWSE-LIVE',
+        'status' => 'open',
+    ]);
+    $reportedAt = now()->toJSON();
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'metadata' => [
+            'page_state' => [
+                'page_url' => 'https://docs.example.test/install',
+                'title' => 'Install Guide',
+                'reported_at' => $reportedAt,
+            ],
+            'snapshot' => [
+                'html' => '<main><p>Public copy.</p></main>',
+                'text' => 'Public copy.',
+                'reported_at' => $reportedAt,
+            ],
+            'mutations' => [
+                'recent_batches' => [
+                    ['mutations' => [['type' => 'text', 'text' => 'Fresh copy.']]],
+                ],
+            ],
+        ],
+    ]);
+
+    expect(class_exists(CobrowseStateUpdated::class))->toBeTrue();
+
+    $event = new CobrowseStateUpdated($session->load('conversation'), 'snapshot');
+    $channels = $event->broadcastOn();
+    $payload = $event->broadcastWith();
+
+    expect($event)
+        ->toBeInstanceOf(ShouldBroadcastNow::class)
+        ->and($event->broadcastAs())->toBe('conversation.cobrowse.updated')
+        ->and($channels)->toHaveCount(1)
+        ->and($channels[0])->toBeInstanceOf(PrivateChannel::class)
+        ->and($channels[0]->name)->toBe('private-conversations.WF-COBROWSE-LIVE')
+        ->and($payload)->toMatchArray([
+            'conversation' => [
+                'support_code' => 'WF-COBROWSE-LIVE',
+                'status' => 'open',
+            ],
+            'cobrowse' => [
+                'status' => 'granted',
+            ],
+            'update' => [
+                'kind' => 'snapshot',
+                'reported_at' => $reportedAt,
+            ],
+        ])
+        ->and($payload['summary']['title'])->toBe('Install Guide')
+        ->and($payload['summary']['page_url'])->toBe('https://docs.example.test/install')
+        ->and(json_encode($payload))->not->toContain('<main>')
+        ->and(json_encode($payload))->not->toContain('Fresh copy.');
+});
+
 test('agent replies dispatch conversation message broadcasts', function (): void {
     Event::fake([ConversationMessageCreated::class]);
 
@@ -85,6 +148,78 @@ test('agent replies dispatch conversation message broadcasts', function (): void
             && $event->message->body === 'I can help with that.',
     );
 });
+
+test('visitor cobrowse updates dispatch cobrowse state broadcasts', function (string $endpoint, array $payload, string $kind): void {
+    Event::fake([CobrowseStateUpdated::class]);
+
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-COBROWSE',
+    ]);
+    $session = CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+    ]);
+    $token = app(VisitorSessionToken::class)->issue($site, $visitor);
+
+    $this->postJson("/api/conversations/WF-COBROWSE/{$endpoint}", array_merge([
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+    ], $payload))->assertOk();
+
+    Event::assertDispatched(
+        CobrowseStateUpdated::class,
+        fn (CobrowseStateUpdated $event): bool => $event->cobrowseSession->id === $session->id
+            && $event->kind === $kind,
+    );
+})->with([
+    'page state' => [
+        'cobrowse-page-state',
+        [
+            'page_url' => 'https://docs.example.test/install',
+            'title' => 'Install Guide',
+            'viewport_width' => 1280,
+            'viewport_height' => 720,
+            'scroll_x' => 0,
+            'scroll_y' => 220,
+            'visibility_state' => 'visible',
+            'focused' => true,
+        ],
+        'page_state',
+    ],
+    'snapshot' => [
+        'cobrowse-snapshot',
+        [
+            'page_url' => 'https://docs.example.test/install',
+            'title' => 'Install Guide',
+            'html' => '<main><p>Public copy.</p></main>',
+            'text' => 'Public copy.',
+            'node_count' => 2,
+            'masked_count' => 0,
+        ],
+        'snapshot',
+    ],
+    'mutations' => [
+        'cobrowse-mutations',
+        [
+            'page_url' => 'https://docs.example.test/install',
+            'sequence' => 1,
+            'dropped_count' => 0,
+            'skipped_count' => 0,
+            'mutations' => [
+                [
+                    'type' => 'text',
+                    'path' => 'body:nth-of-type(1) > main:nth-of-type(1) > p:nth-of-type(1)',
+                    'text' => 'Fresh copy.',
+                ],
+            ],
+        ],
+        'mutations',
+    ],
+]);
 
 test('visitor messages dispatch conversation message broadcasts', function (): void {
     Event::fake([ConversationMessageCreated::class]);

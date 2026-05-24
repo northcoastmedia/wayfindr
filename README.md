@@ -81,5 +81,5 @@ refresh fallback when realtime is unavailable. The Laravel app serves the
 classic widget script from `/widget.js`. Cobrowsing is beginning with explicit
 visitor consent, lightweight connection telemetry, passive page-state
 reporting, sanitized DOM snapshots, bounded mutation stream diagnostics, and
-an inert agent-side replay preview; ticket workflows and production hardening
-are still ahead.
+an inert agent-side replay preview with live Reverb update notices; ticket
+workflows and production hardening are still ahead.

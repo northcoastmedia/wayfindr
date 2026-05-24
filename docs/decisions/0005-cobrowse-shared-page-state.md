@@ -25,6 +25,7 @@ Shared page state gives Wayfindr better defaults for:
 - The first useful experience is passive co-viewing with agent guidance.
 - Initial snapshots are sanitized in the visitor browser and shown to agents as safe preview text plus an inert replay preview before richer observe mode exists.
 - Mutation batches are compact and capped so small self-hosted installs can observe change pressure while the agent preview applies the safe mutation types it understands.
+- Agents receive live Reverb notices when cobrowse page state, snapshots, or mutation batches arrive, then refresh the inert preview when they are ready.
 - Transport telemetry is first-class so hosts can see latency, payload size, reconnects, and dropped updates before tuning infrastructure.
 - Reverb can carry early cobrowse events while traffic is modest.
 - A separate cobrowse relay may be introduced later for high-throughput, ephemeral streams without moving auth, consent, audit, or account ownership out of Laravel.

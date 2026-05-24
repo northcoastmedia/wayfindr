@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? config('app.name', 'Wayfindr') }}</title>
     <style>
         :root {
@@ -313,6 +314,31 @@
             border: 1px solid var(--border);
             border-radius: 6px;
             background: #ffffff;
+        }
+
+        .live-update {
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 20px;
+        }
+
+        .live-update strong {
+            display: block;
+        }
+
+        .live-update .lede {
+            margin-top: 2px;
+        }
+
+        .live-update[data-state="available"] {
+            background: var(--surface-muted);
+        }
+
+        [hidden] {
+            display: none !important;
         }
 
         .message-list {
