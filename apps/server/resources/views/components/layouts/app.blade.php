@@ -342,6 +342,25 @@
             padding: 1px 4px;
         }
 
+        .code-block {
+            margin: 0;
+            overflow-x: auto;
+            padding: 18px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--surface-muted);
+            color: var(--text);
+            font-size: 0.88rem;
+            line-height: 1.55;
+            white-space: pre;
+        }
+
+        .code-block code {
+            display: block;
+            padding: 0;
+            border: 0;
+            background: transparent;
+        }
+
         .cobrowse-preview-frame {
             background: var(--surface-muted);
             border-top: 1px solid var(--border);

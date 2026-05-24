@@ -41,7 +41,9 @@ See [testing.md](testing.md) for the current testing posture.
 The server runs at [http://localhost:8000](http://localhost:8000). A lightweight health check is available at [http://localhost:8000/up](http://localhost:8000/up).
 
 The local bootstrap credentials above are `agent@example.com` / `password`, and
-the widget public key is `site_demo_public_key`.
+the widget public key is `site_demo_public_key`. After signing in, open the
+site from the dashboard to copy the generated widget install snippet for local
+or external smoke pages.
 
 ## Reverb Broadcasts
 

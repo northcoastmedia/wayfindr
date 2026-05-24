@@ -61,6 +61,19 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="install-snippet-heading">
+                <div class="section-header">
+                    <h2 id="install-snippet-heading">Install snippet</h2>
+                    <span class="lede">Copy-ready widget script</span>
+                </div>
+
+                <div class="notice-copy">
+                    <p>Paste this before the closing <code>&lt;/body&gt;</code> tag on the site where Wayfindr should appear.</p>
+                </div>
+
+                <pre class="code-block"><code>{{ $widgetInstallSnippet }}</code></pre>
+            </section>
+
             <section class="section" aria-labelledby="privacy-settings-heading">
                 <div class="section-header">
                     <h2 id="privacy-settings-heading">Mask selectors</h2>
