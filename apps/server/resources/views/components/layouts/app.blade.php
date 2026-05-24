@@ -443,6 +443,10 @@
             white-space: pre-wrap;
         }
 
+        .message .button {
+            margin-top: 12px;
+        }
+
         @media (max-width: 640px) {
             .topbar-inner {
                 align-items: flex-start;

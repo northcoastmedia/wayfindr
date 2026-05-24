@@ -38,11 +38,19 @@
             <section class="section" aria-labelledby="alerts-heading">
                 <div class="section-header">
                     <h2 id="alerts-heading">Alerts</h2>
-                    <span class="lede">{{ $unreadNotificationCount }} unread</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $unreadNotificationCount }} unread</span>
+                        @if ($unreadNotificationCount > 0)
+                            <form method="POST" action="{{ route('dashboard.alerts.read-all') }}">
+                                @csrf
+                                <button class="button secondary" type="submit">Mark all read</button>
+                            </form>
+                        @endif
+                    </div>
                 </div>
 
                 @if ($unreadNotifications->isEmpty())
-                    <p class="empty">No unread alerts.</p>
+                    <p class="empty">You’re caught up.</p>
                 @else
                     <div class="message-list">
                         @foreach ($unreadNotifications as $notification)
@@ -65,6 +73,10 @@
                                     </a>
                                     on {{ data_get($notificationData, 'site_name', 'Unknown site') }}
                                 </p>
+                                <form method="POST" action="{{ route('dashboard.alerts.read', $notification) }}">
+                                    @csrf
+                                    <button class="button secondary" type="submit">Mark read</button>
+                                </form>
                             </article>
                         @endforeach
                     </div>

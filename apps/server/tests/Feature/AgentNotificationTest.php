@@ -211,6 +211,139 @@ test('dashboard shows unread conversation alerts', function (): void {
         ->assertSee('I am stuck on the install step.');
 });
 
+test('dashboard exposes calm alert controls and empty state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Acme Docs',
+        'public_key' => 'site_public_docs',
+    ]);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-CONTROL1',
+        'subject' => 'Install help',
+    ]);
+    $message = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'I am stuck on the install step.',
+    ]);
+    $agent->notify(new ConversationNeedsReply($message));
+    $notification = $agent->unreadNotifications()->firstOrFail();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Mark all read')
+        ->assertSee('Mark read')
+        ->assertSee("/dashboard/alerts/{$notification->id}/read", false)
+        ->assertSee('/dashboard/alerts/read', false)
+        ->assertDontSee('You’re caught up.');
+
+    $notification->markAsRead();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('You’re caught up.');
+});
+
+test('agent can mark one alert as read', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+
+    $firstConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-ONE1',
+        'subject' => 'First issue',
+    ]);
+    $secondConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-ONE2',
+        'subject' => 'Second issue',
+    ]);
+
+    $firstMessage = ConversationMessage::factory()->for($firstConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'First thing is stuck.',
+    ]);
+    $secondMessage = ConversationMessage::factory()->for($secondConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Second thing is stuck.',
+    ]);
+
+    $agent->notify(new ConversationNeedsReply($firstMessage));
+    $agent->notify(new ConversationNeedsReply($secondMessage));
+    $firstNotification = $agent->unreadNotifications()
+        ->get()
+        ->firstOrFail(fn ($notification): bool => data_get($notification->data, 'support_code') === 'WF-ONE1');
+    $secondNotification = $agent->unreadNotifications()
+        ->get()
+        ->firstOrFail(fn ($notification): bool => data_get($notification->data, 'support_code') === 'WF-ONE2');
+
+    $this->actingAs($agent)
+        ->post("/dashboard/alerts/{$firstNotification->id}/read")
+        ->assertRedirect('/dashboard');
+
+    expect($firstNotification->fresh()->read())->toBeTrue()
+        ->and($secondNotification->fresh()->unread())->toBeTrue();
+});
+
+test('agent can mark all conversation alerts as read', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-ALL1',
+    ]);
+    $message = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Could someone help?',
+    ]);
+
+    $agent->notify(new ConversationNeedsReply($message));
+    $agent->notify(new ConversationNeedsReply($message));
+    $otherAgent->notify(new ConversationNeedsReply($message));
+
+    $this->actingAs($agent)
+        ->post('/dashboard/alerts/read')
+        ->assertRedirect('/dashboard');
+
+    expect($agent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($agent->fresh()->readNotifications)->toHaveCount(2)
+        ->and($otherAgent->fresh()->unreadNotifications)->toHaveCount(1);
+});
+
+test('agent cannot mark another agent alert as read', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BOUNDARY1',
+    ]);
+    $message = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'This alert belongs to Bea.',
+    ]);
+    $otherAgent->notify(new ConversationNeedsReply($message));
+    $notification = $otherAgent->unreadNotifications()->firstOrFail();
+
+    $this->actingAs($agent)
+        ->post("/dashboard/alerts/{$notification->id}/read")
+        ->assertNotFound();
+
+    expect($notification->fresh()->unread())->toBeTrue();
+});
+
 test('opening a conversation marks its unread alerts as read', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
