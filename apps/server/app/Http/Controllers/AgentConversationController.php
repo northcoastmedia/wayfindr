@@ -37,6 +37,7 @@ class AgentConversationController extends Controller
 
         return view('agent.conversations.show', [
             'account' => $agent->account()->firstOrFail(),
+            'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
             'agent' => $agent,
             'cobrowseConsent' => $cobrowseConsentState->forConversation($conversation),
             'conversation' => $conversation,

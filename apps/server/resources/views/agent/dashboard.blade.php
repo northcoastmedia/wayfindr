@@ -188,6 +188,7 @@
                                     <th scope="col">Subject</th>
                                     <th scope="col">Site</th>
                                     <th scope="col">Priority</th>
+                                    <th scope="col">Assignee</th>
                                     <th scope="col">Support Code</th>
                                     <th scope="col">Updated</th>
                                 </tr>
@@ -206,6 +207,7 @@
                                         </td>
                                         <td>{{ $ticket->site->name }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
+                                        <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
                                         <td>{{ $ticket->conversation?->support_code ?? 'Not linked' }}</td>
                                         <td>{{ $ticket->updated_at->diffForHumans() }}</td>
                                     </tr>

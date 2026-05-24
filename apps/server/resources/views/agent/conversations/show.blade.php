@@ -122,7 +122,25 @@
                                         <td>{{ $ticket->subject }}</td>
                                         <td>{{ ucfirst($ticket->status) }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
-                                        <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
+                                        <td>
+                                            <form method="POST" action="{{ route('dashboard.tickets.assignee.update', $ticket) }}">
+                                                @csrf
+                                                @method('PUT')
+                                                <label class="sr-only" for="ticket_{{ $ticket->id }}_assignee">Assign ticket</label>
+                                                <select id="ticket_{{ $ticket->id }}_assignee" name="assignee_id">
+                                                    <option value="">Unassigned</option>
+                                                    @foreach ($accountAgents as $accountAgent)
+                                                        <option value="{{ $accountAgent->id }}" @selected((int) $ticket->assignee_id === $accountAgent->id)>
+                                                            {{ $accountAgent->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <button class="button secondary" type="submit">Assign ticket</button>
+                                            </form>
+                                            @error('assignee_id')
+                                                <p class="field-error">{{ $message }}</p>
+                                            @enderror
+                                        </td>
                                         <td>{{ $ticket->created_at->diffForHumans() }}</td>
                                         <td>
                                             <form method="POST" action="{{ route($ticket->status === 'closed' ? 'dashboard.tickets.reopen' : 'dashboard.tickets.close', $ticket) }}">

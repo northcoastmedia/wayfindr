@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AgentTicketController extends Controller
 {
@@ -31,6 +32,27 @@ class AgentTicketController extends Controller
         ])->save();
 
         return $this->redirectAfterUpdate($ticket, 'Ticket reopened.');
+    }
+
+    public function updateAssignee(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        $validated = $request->validate([
+            'assignee_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('account_id', $agent->account_id),
+            ],
+        ]);
+
+        $ticket->forceFill([
+            'assignee_id' => $validated['assignee_id'] ?? null,
+        ])->save();
+
+        return $this->redirectAfterUpdate($ticket, 'Ticket assignee updated.');
     }
 
     private function abortUnlessAgentTicket(User $agent, Ticket $ticket): void

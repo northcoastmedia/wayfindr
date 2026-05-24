@@ -892,6 +892,106 @@ test('agent can reopen a linked ticket from their account conversation', functio
         ->assertSee('Escalated checkout issue');
 });
 
+test('agent can reassign a linked ticket to another account agent', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignee = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-ASSIGNT1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-ASSIGNT1')
+        ->assertOk()
+        ->assertSee('Assign ticket')
+        ->assertSee('Ada Agent')
+        ->assertSee('Bea Builder');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-ASSIGNT1')
+        ->put("/dashboard/tickets/{$ticket->id}/assignee", [
+            'assignee_id' => $assignee->id,
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-ASSIGNT1')
+        ->assertSessionHas('status', 'Ticket assignee updated.');
+
+    expect($ticket->fresh()->assignee_id)->toBe($assignee->id);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Assignee')
+        ->assertSee('Bea Builder');
+});
+
+test('agent can clear a linked ticket assignee', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-UNASSIGNT',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-UNASSIGNT')
+        ->put("/dashboard/tickets/{$ticket->id}/assignee", [
+            'assignee_id' => '',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-UNASSIGNT')
+        ->assertSessionHas('status', 'Ticket assignee updated.');
+
+    expect($ticket->fresh()->assignee_id)->toBeNull();
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-UNASSIGNT')
+        ->assertOk()
+        ->assertSee('Unassigned');
+});
+
+test('agent cannot assign a ticket to another account agent', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherAgent = User::factory()->for($otherAccount)->create();
+    $site = Site::factory()->for($account)->create();
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->from('/dashboard')
+        ->put("/dashboard/tickets/{$ticket->id}/assignee", [
+            'assignee_id' => $otherAgent->id,
+        ])
+        ->assertSessionHasErrors('assignee_id');
+
+    expect($ticket->fresh()->assignee_id)->toBe($agent->id);
+});
+
 test('agent cannot close another account ticket', function (): void {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();

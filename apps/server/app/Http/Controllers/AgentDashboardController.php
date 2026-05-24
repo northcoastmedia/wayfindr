@@ -51,7 +51,7 @@ class AgentDashboardController extends Controller
             ->orderByDesc('created_at')
             ->get();
         $tickets = Ticket::query()
-            ->with(['conversation', 'site'])
+            ->with(['assignee', 'conversation', 'site'])
             ->where('account_id', $account->id)
             ->where('status', 'open')
             ->orderByDesc('updated_at')
