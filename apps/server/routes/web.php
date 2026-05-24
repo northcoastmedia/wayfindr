@@ -4,6 +4,7 @@ use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\AgentSiteController;
+use App\Http\Controllers\AgentTicketController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Widget\WidgetScriptController;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +48,10 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.conversations.messages.store');
     Route::post('/dashboard/conversations/{supportCode}/tickets', [AgentConversationController::class, 'storeTicket'])
         ->name('dashboard.conversations.tickets.store');
+    Route::post('/dashboard/tickets/{ticket}/close', [AgentTicketController::class, 'close'])
+        ->name('dashboard.tickets.close');
+    Route::post('/dashboard/tickets/{ticket}/reopen', [AgentTicketController::class, 'reopen'])
+        ->name('dashboard.tickets.reopen');
     Route::post('/dashboard/conversations/{supportCode}/cobrowse/request', [AgentConversationController::class, 'requestCobrowse'])
         ->name('dashboard.conversations.cobrowse.request');
     Route::post('/dashboard/conversations/{supportCode}/cobrowse/end', [AgentConversationController::class, 'endCobrowse'])
