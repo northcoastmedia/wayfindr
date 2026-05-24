@@ -171,7 +171,18 @@
             <section class="section" aria-labelledby="conversations-heading">
                 <div class="section-header">
                     <h2 id="conversations-heading">Conversations</h2>
-                    <span class="lede">{{ $conversations->count() }} open</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $conversations->count() }} open</span>
+                        @foreach ($conversationFilters as $filterValue => $filterLabel)
+                            <a
+                                class="button {{ $conversationFilter === $filterValue ? '' : 'secondary' }}"
+                                href="{{ route('dashboard', $filterValue === 'all' ? [] : ['conversation_filter' => $filterValue]) }}"
+                                @if ($conversationFilter === $filterValue) aria-current="page" @endif
+                            >
+                                {{ $filterLabel }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
 
                 @if ($conversations->isEmpty())
