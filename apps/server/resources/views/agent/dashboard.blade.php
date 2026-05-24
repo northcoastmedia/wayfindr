@@ -56,7 +56,11 @@
                             <tbody>
                                 @foreach ($sites as $site)
                                     <tr>
-                                        <td>{{ $site->name }}</td>
+                                        <td>
+                                            <a class="text-link" href="{{ route('dashboard.sites.show', $site) }}">
+                                                {{ $site->name }}
+                                            </a>
+                                        </td>
                                         <td>{{ $site->domain ?? 'Not set' }}</td>
                                         <td>{{ $site->public_key }}</td>
                                     </tr>

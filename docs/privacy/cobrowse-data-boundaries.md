@@ -58,6 +58,10 @@ Host applications can use `data-wayfindr-mask` or `data-wayfindr-private` for
 known sensitive areas. They can use `data-wayfindr-allow` only for deliberate
 false positives where the surrounding content is safe to share.
 
+Operators can also add site-level mask selectors in the Wayfindr dashboard.
+Those selectors are public widget configuration, so they should contain only
+CSS selectors and never private notes or secrets.
+
 ## AI Boundary
 
 AI can eventually help suggest masking selectors or flag risky page structures,
