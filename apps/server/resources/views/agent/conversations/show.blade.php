@@ -49,6 +49,58 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="tickets-heading">
+                <div class="section-header">
+                    <h2 id="tickets-heading">Ticket</h2>
+                    <span class="lede">{{ $tickets->isEmpty() ? 'Not created' : $tickets->count().' linked' }}</span>
+                </div>
+
+                @if ($tickets->isEmpty())
+                    <form class="section-form" method="POST" action="{{ route('dashboard.conversations.tickets.store', $conversation->support_code) }}">
+                        @csrf
+
+                        <div class="field">
+                            <label for="priority">Priority</label>
+                            <select id="priority" name="priority">
+                                @foreach (['low' => 'Low', 'normal' => 'Normal', 'high' => 'High', 'urgent' => 'Urgent'] as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('priority', 'normal') === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('priority')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <button class="button" type="submit">Create ticket</button>
+                    </form>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Subject</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Priority</th>
+                                    <th scope="col">Assignee</th>
+                                    <th scope="col">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($tickets as $ticket)
+                                    <tr>
+                                        <td>{{ $ticket->subject }}</td>
+                                        <td>{{ ucfirst($ticket->status) }}</td>
+                                        <td>{{ ucfirst($ticket->priority) }}</td>
+                                        <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
+                                        <td>{{ $ticket->created_at->diffForHumans() }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </section>
+
             <section class="section" aria-labelledby="cobrowse-heading">
                 <div class="section-header">
                     <h2 id="cobrowse-heading">Cobrowse</h2>

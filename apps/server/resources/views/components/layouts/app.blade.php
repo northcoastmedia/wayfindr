@@ -37,6 +37,7 @@
 
         button,
         input,
+        select,
         textarea {
             font: inherit;
         }
@@ -111,6 +112,7 @@
         }
 
         .field input,
+        .field select,
         .field textarea {
             width: 100%;
             border: 1px solid var(--border);
@@ -126,6 +128,7 @@
         }
 
         .field input:focus,
+        .field select:focus,
         .field textarea:focus {
             outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
             border-color: var(--accent);
