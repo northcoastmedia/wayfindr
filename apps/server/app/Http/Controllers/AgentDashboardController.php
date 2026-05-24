@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\ConversationNeedsReply;
 use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -56,6 +57,12 @@ class AgentDashboardController extends Controller
             ->orderByDesc('updated_at')
             ->orderByDesc('created_at')
             ->get();
+        $unreadNotificationsQuery = $agent->unreadNotifications()
+            ->where('type', ConversationNeedsReply::class);
+        $unreadNotificationCount = (clone $unreadNotificationsQuery)->count();
+        $unreadNotifications = $unreadNotificationsQuery
+            ->limit(5)
+            ->get();
 
         return view('agent.dashboard', [
             'account' => $account,
@@ -67,6 +74,8 @@ class AgentDashboardController extends Controller
             'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
             'tickets' => $tickets,
+            'unreadNotificationCount' => $unreadNotificationCount,
+            'unreadNotifications' => $unreadNotifications,
         ]);
     }
 }

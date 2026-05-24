@@ -35,6 +35,38 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="alerts-heading">
+                <div class="section-header">
+                    <h2 id="alerts-heading">Alerts</h2>
+                    <span class="lede">{{ $unreadNotificationCount }} unread</span>
+                </div>
+
+                @if ($unreadNotifications->isEmpty())
+                    <p class="empty">No unread alerts.</p>
+                @else
+                    <div class="message-list">
+                        @foreach ($unreadNotifications as $notification)
+                            @php
+                                $notificationData = $notification->data;
+                            @endphp
+                            <article class="message">
+                                <div class="message-meta">
+                                    <strong>{{ data_get($notificationData, 'subject', 'Untitled conversation') }}</strong>
+                                    <span>{{ $notification->created_at->diffForHumans() }}</span>
+                                </div>
+                                <p class="message-body">{{ data_get($notificationData, 'message_preview') }}</p>
+                                <p class="lede">
+                                    <a class="text-link" href="{{ data_get($notificationData, 'url') }}">
+                                        {{ data_get($notificationData, 'support_code') }}
+                                    </a>
+                                    on {{ data_get($notificationData, 'site_name', 'Unknown site') }}
+                                </p>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+
             <section class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>
