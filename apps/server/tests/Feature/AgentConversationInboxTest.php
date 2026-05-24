@@ -309,6 +309,69 @@ test('dashboard lists open tickets for the agent account', function (): void {
         ->assertDontSee('Other Docs');
 });
 
+test('dashboard filters tickets by assignee state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Mine to resolve',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Ready for an owner',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($otherAgent, 'assignee')
+        ->create([
+            'subject' => 'Someone else is handling it',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_filter=assigned_to_me')
+        ->assertOk()
+        ->assertSee('Assigned to me')
+        ->assertSee('Mine to resolve')
+        ->assertDontSee('Ready for an owner')
+        ->assertDontSee('Someone else is handling it');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_filter=unassigned')
+        ->assertOk()
+        ->assertSee('Unassigned')
+        ->assertSee('Ready for an owner')
+        ->assertDontSee('Mine to resolve')
+        ->assertDontSee('Someone else is handling it');
+});
+
+test('dashboard exposes ticket queue filter links', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('All open')
+        ->assertSee('Assigned to me')
+        ->assertSee('Unassigned')
+        ->assertSee('/dashboard?ticket_filter=assigned_to_me', false)
+        ->assertSee('/dashboard?ticket_filter=unassigned', false);
+});
+
 test('dashboard shows ready realtime status when reverb is configured', function (): void {
     config()->set('broadcasting.default', 'reverb');
     config()->set('broadcasting.connections.reverb.key', 'reverb-key');

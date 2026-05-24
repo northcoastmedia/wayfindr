@@ -175,7 +175,18 @@
             <section class="section" aria-labelledby="tickets-heading">
                 <div class="section-header">
                     <h2 id="tickets-heading">Tickets</h2>
-                    <span class="lede">{{ $tickets->count() }} open</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $tickets->count() }} open</span>
+                        @foreach ($ticketFilters as $filterValue => $filterLabel)
+                            <a
+                                class="button {{ $ticketFilter === $filterValue ? '' : 'secondary' }}"
+                                href="{{ route('dashboard', $filterValue === 'all' ? [] : ['ticket_filter' => $filterValue]) }}"
+                                @if ($ticketFilter === $filterValue) aria-current="page" @endif
+                            >
+                                {{ $filterLabel }}
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
 
                 @if ($tickets->isEmpty())
