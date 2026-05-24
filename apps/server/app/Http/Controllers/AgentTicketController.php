@@ -4,32 +4,88 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class AgentTicketController extends Controller
 {
+    public function show(Request $request, Ticket $ticket): View
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        return view('agent.tickets.show', [
+            'account' => $agent->account()->firstOrFail(),
+            'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
+            'agent' => $agent,
+            'ticketActivity' => $ticket->auditEvents()
+                ->with('actor')
+                ->whereIn('action', $this->visibleActivityActions())
+                ->latest('occurred_at')
+                ->latest('id')
+                ->get(),
+            'ticket' => $ticket->load([
+                'assignee',
+                'conversation',
+                'requester',
+                'site',
+                'auditEvents' => fn ($query) => $query
+                    ->where('action', 'ticket.note_added')
+                    ->with('actor')
+                    ->latest('occurred_at')
+                    ->latest('id'),
+            ]),
+        ]);
+    }
+
+    public function storeNote(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $this->recordActivity($ticket, $agent, 'ticket.note_added', [
+            'body' => $validated['body'],
+        ]);
+
+        return $this->redirectAfterUpdate($ticket, 'Ticket note added.');
+    }
+
     public function close(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->abortUnlessAgentTicket($request->user(), $ticket);
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
 
         $ticket->forceFill([
             'status' => 'closed',
             'closed_at' => now(),
         ])->save();
 
+        $this->recordActivity($ticket, $agent, 'ticket.closed');
+
         return $this->redirectAfterUpdate($ticket, 'Ticket closed.');
     }
 
     public function reopen(Request $request, Ticket $ticket): RedirectResponse
     {
-        $this->abortUnlessAgentTicket($request->user(), $ticket);
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
 
         $ticket->forceFill([
             'status' => 'open',
             'closed_at' => null,
         ])->save();
+
+        $this->recordActivity($ticket, $agent, 'ticket.reopened');
 
         return $this->redirectAfterUpdate($ticket, 'Ticket reopened.');
     }
@@ -48,9 +104,21 @@ class AgentTicketController extends Controller
             ],
         ]);
 
+        $ticket->loadMissing('assignee');
+        $oldAssigneeName = $ticket->assignee?->name;
+        $newAssigneeId = $validated['assignee_id'] ?? null;
+        $newAssigneeName = $newAssigneeId
+            ? $agent->account->agents()->whereKey($newAssigneeId)->value('name')
+            : null;
+
         $ticket->forceFill([
-            'assignee_id' => $validated['assignee_id'] ?? null,
+            'assignee_id' => $newAssigneeId,
         ])->save();
+
+        $this->recordActivity($ticket, $agent, 'ticket.assignee_updated', [
+            'old_assignee_name' => $oldAssigneeName,
+            'new_assignee_name' => $newAssigneeName,
+        ]);
 
         return $this->redirectAfterUpdate($ticket, 'Ticket assignee updated.');
     }
@@ -62,16 +130,34 @@ class AgentTicketController extends Controller
 
     private function redirectAfterUpdate(Ticket $ticket, string $status): RedirectResponse
     {
-        $ticket->loadMissing('conversation');
-
-        if ($ticket->conversation) {
-            return redirect()
-                ->route('dashboard.conversations.show', $ticket->conversation->support_code)
-                ->with('status', $status);
-        }
-
         return redirect()
-            ->route('dashboard')
+            ->back(302, [], route('dashboard'))
             ->with('status', $status);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function visibleActivityActions(): array
+    {
+        return [
+            'ticket.closed',
+            'ticket.reopened',
+            'ticket.assignee_updated',
+            'ticket.note_added',
+        ];
+    }
+
+    private function recordActivity(Ticket $ticket, User $agent, string $action, array $metadata = []): void
+    {
+        $ticket->auditEvents()->create([
+            'account_id' => $ticket->account_id,
+            'site_id' => $ticket->site_id,
+            'actor_type' => User::class,
+            'actor_id' => $agent->id,
+            'action' => $action,
+            'metadata' => $metadata,
+            'occurred_at' => now(),
+        ]);
     }
 }

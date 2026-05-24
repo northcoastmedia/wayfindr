@@ -238,13 +238,9 @@
                                 @foreach ($tickets as $ticket)
                                     <tr>
                                         <td>
-                                            @if ($ticket->conversation)
-                                                <a class="text-link" href="{{ route('dashboard.conversations.show', $ticket->conversation->support_code) }}">
-                                                    {{ $ticket->subject }}
-                                                </a>
-                                            @else
+                                            <a class="text-link" href="{{ route('dashboard.tickets.show', $ticket) }}">
                                                 {{ $ticket->subject }}
-                                            @endif
+                                            </a>
                                         </td>
                                         <td>{{ $ticket->site->name }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>

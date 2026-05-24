@@ -266,7 +266,7 @@ test('dashboard lists open tickets for the agent account', function (): void {
         'last_message_at' => now()->subMinute(),
     ]);
 
-    Ticket::factory()
+    $ticket = Ticket::factory()
         ->for($account)
         ->for($site)
         ->for($conversation)
@@ -301,6 +301,7 @@ test('dashboard lists open tickets for the agent account', function (): void {
         ->assertSee('Tickets')
         ->assertSee('1 open')
         ->assertSee('Escalated checkout issue')
+        ->assertSee("/dashboard/tickets/{$ticket->id}", false)
         ->assertSee('Acme Docs')
         ->assertSee('High')
         ->assertSee('WF-TICKETDB')
@@ -898,8 +899,159 @@ test('agent can create a ticket from their account conversation', function (): v
         ->assertSee('Ticket created.')
         ->assertSee('Ticket')
         ->assertSee('Checkout trouble')
+        ->assertSee("/dashboard/tickets/{$ticket->id}", false)
         ->assertSee('High')
         ->assertSee('Open');
+});
+
+test('agent can view a durable ticket record for their account', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignee = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TICKETSHOW',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'The checkout button is still stuck.',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($assignee, 'assignee')
+        ->create([
+            'description' => 'The visitor cannot finish checkout after entering shipping details.',
+            'priority' => 'high',
+            'status' => 'open',
+            'subject' => 'Escalated checkout issue',
+        ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Back to dashboard')
+        ->assertSee('Escalated checkout issue')
+        ->assertSee('Open')
+        ->assertSee('High')
+        ->assertSee('Acme Docs')
+        ->assertSee('anon-acme')
+        ->assertSee('WF-TICKETSHOW')
+        ->assertSee('Checkout trouble')
+        ->assertSee('The visitor cannot finish checkout after entering shipping details.')
+        ->assertSee('Bea Builder')
+        ->assertSee('Assign ticket')
+        ->assertSee('Close ticket')
+        ->assertSee('/dashboard/conversations/WF-TICKETSHOW', false);
+});
+
+test('agent can add an internal note to a ticket record', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/notes", [
+            'body' => 'Customer wants an update before noon.',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Ticket note added.');
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.note_added',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Internal notes')
+        ->assertSee('Ada Agent')
+        ->assertSee('Customer wants an update before noon.');
+});
+
+test('agent can close a ticket from its detail page', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-DETAILCLOSE',
+        'subject' => 'Checkout trouble',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+            'closed_at' => null,
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/close")
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Ticket closed.');
+
+    expect($ticket->fresh())
+        ->status->toBe('closed')
+        ->closed_at->not->toBeNull();
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.closed',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Ticket closed')
+        ->assertSee('Ada Agent');
+});
+
+test('agent cannot view another account ticket record', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherTicket = Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create();
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$otherTicket->id}")
+        ->assertNotFound();
 });
 
 test('creating a ticket from a conversation is idempotent', function (): void {
@@ -1015,6 +1167,23 @@ test('agent can reopen a linked ticket from their account conversation', functio
         ->status->toBe('open')
         ->closed_at->toBeNull();
 
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.reopened',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Ticket reopened')
+        ->assertSee('Escalated checkout issue');
+
     $this->actingAs($agent)
         ->get('/dashboard')
         ->assertOk()
@@ -1059,6 +1228,22 @@ test('agent can reassign a linked ticket to another account agent', function ():
         ->assertSessionHas('status', 'Ticket assignee updated.');
 
     expect($ticket->fresh()->assignee_id)->toBe($assignee->id);
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.assignee_updated',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Activity')
+        ->assertSee('Assignee changed from Ada Agent to Bea Builder');
 
     $this->actingAs($agent)
         ->get('/dashboard')
