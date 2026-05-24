@@ -119,7 +119,11 @@
                             <tbody>
                                 @foreach ($tickets as $ticket)
                                     <tr>
-                                        <td>{{ $ticket->subject }}</td>
+                                        <td>
+                                            <a class="text-link" href="{{ route('dashboard.tickets.show', $ticket) }}">
+                                                {{ $ticket->subject }}
+                                            </a>
+                                        </td>
                                         <td>{{ ucfirst($ticket->status) }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
                                         <td>

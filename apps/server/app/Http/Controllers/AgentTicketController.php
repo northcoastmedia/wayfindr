@@ -4,12 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class AgentTicketController extends Controller
 {
+    public function show(Request $request, Ticket $ticket): View
+    {
+        $agent = $request->user();
+
+        $this->abortUnlessAgentTicket($agent, $ticket);
+
+        return view('agent.tickets.show', [
+            'account' => $agent->account()->firstOrFail(),
+            'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
+            'agent' => $agent,
+            'ticket' => $ticket->load(['assignee', 'conversation', 'requester', 'site']),
+        ]);
+    }
+
     public function close(Request $request, Ticket $ticket): RedirectResponse
     {
         $this->abortUnlessAgentTicket($request->user(), $ticket);
@@ -62,16 +77,8 @@ class AgentTicketController extends Controller
 
     private function redirectAfterUpdate(Ticket $ticket, string $status): RedirectResponse
     {
-        $ticket->loadMissing('conversation');
-
-        if ($ticket->conversation) {
-            return redirect()
-                ->route('dashboard.conversations.show', $ticket->conversation->support_code)
-                ->with('status', $status);
-        }
-
         return redirect()
-            ->route('dashboard')
+            ->back(302, [], route('dashboard'))
             ->with('status', $status);
     }
 }

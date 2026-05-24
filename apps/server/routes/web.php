@@ -48,6 +48,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.conversations.messages.store');
     Route::post('/dashboard/conversations/{supportCode}/tickets', [AgentConversationController::class, 'storeTicket'])
         ->name('dashboard.conversations.tickets.store');
+    Route::get('/dashboard/tickets/{ticket}', [AgentTicketController::class, 'show'])
+        ->name('dashboard.tickets.show');
     Route::post('/dashboard/tickets/{ticket}/close', [AgentTicketController::class, 'close'])
         ->name('dashboard.tickets.close');
     Route::post('/dashboard/tickets/{ticket}/reopen', [AgentTicketController::class, 'reopen'])
