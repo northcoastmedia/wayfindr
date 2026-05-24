@@ -208,7 +208,8 @@ public widget key for the site.
 After signing in as the agent, open the site from the dashboard. The site
 settings page includes a copy-ready widget install snippet generated from the
 site public key, `APP_URL`, and any public Reverb settings available to the
-application.
+application. Use the dashboard's `Add site` action when you need separate
+public keys for staging, production, or public dogfood sites.
 
 The command refuses to run when bootstrap records already exist. Use `--force`
 only when you intentionally want to create or update the supplied account,

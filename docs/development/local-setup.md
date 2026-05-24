@@ -43,7 +43,9 @@ The server runs at [http://localhost:8000](http://localhost:8000). A lightweight
 The local bootstrap credentials above are `agent@example.com` / `password`, and
 the widget public key is `site_demo_public_key`. After signing in, open the
 site from the dashboard to copy the generated widget install snippet for local
-or external smoke pages.
+or external smoke pages. Use the dashboard's `Add site` action to create
+additional install targets for staging sites, static smoke pages, or dogfood
+environments.
 
 ## Reverb Broadcasts
 

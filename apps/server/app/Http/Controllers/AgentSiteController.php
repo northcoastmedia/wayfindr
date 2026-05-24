@@ -2,13 +2,48 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\Site;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AgentSiteController extends Controller
 {
+    public function create(Request $request): View
+    {
+        $account = $this->account($request);
+
+        return view('agent.sites.create', [
+            'account' => $account,
+            'agent' => $request->user(),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $account = $this->account($request);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'domain' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $site = $account->sites()->create([
+            'name' => trim($validated['name']),
+            'domain' => $this->normalizeDomain($validated['domain'] ?? null),
+            'public_key' => $this->publicKey(),
+            'settings' => [
+                'mask_selectors' => [],
+            ],
+        ]);
+
+        return redirect()
+            ->route('dashboard.sites.show', $site)
+            ->with('status', 'Site created. Copy the install snippet to finish connecting it.');
+    }
+
     public function show(Request $request, Site $site): View
     {
         $this->authorizeSite($request, $site);
@@ -43,9 +78,16 @@ class AgentSiteController extends Controller
 
     private function authorizeSite(Request $request, Site $site): void
     {
-        $accountId = $request->user()->account_id;
+        $accountId = $request->user()?->account_id;
 
         abort_unless($accountId && (int) $site->account_id === (int) $accountId, 404);
+    }
+
+    private function account(Request $request): Account
+    {
+        abort_unless($request->user()?->account_id, 403);
+
+        return $request->user()->account()->firstOrFail();
     }
 
     /**
@@ -69,6 +111,34 @@ class AgentSiteController extends Controller
         $selectors = array_map(fn (string $selector): string => mb_substr($selector, 0, 255), $selectors);
 
         return array_values(array_unique($selectors));
+    }
+
+    private function normalizeDomain(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        $url = preg_match('/^https?:\/\//i', $value) === 1 ? $value : "https://{$value}";
+        $host = parse_url($url, PHP_URL_HOST);
+        $port = parse_url($url, PHP_URL_PORT);
+
+        if (! is_string($host) || $host === '') {
+            return mb_strtolower($value);
+        }
+
+        return mb_strtolower($host.($port ? ":{$port}" : ''));
+    }
+
+    private function publicKey(): string
+    {
+        do {
+            $key = 'site_'.Str::lower(Str::random(32));
+        } while (Site::query()->where('public_key', $key)->exists());
+
+        return $key;
     }
 
     private function widgetInstallSnippet(Site $site): string
