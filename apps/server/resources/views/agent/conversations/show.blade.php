@@ -47,6 +47,14 @@
                         <span class="meta-value">{{ $conversation->last_message_at?->diffForHumans() ?? 'No messages yet' }}</span>
                     </div>
                 </div>
+
+                <form class="section-form" method="POST" action="{{ route($conversation->status === 'closed' ? 'dashboard.conversations.reopen' : 'dashboard.conversations.close', $conversation->support_code) }}">
+                    @csrf
+
+                    <button class="button {{ $conversation->status === 'closed' ? '' : 'secondary' }}" type="submit">
+                        {{ $conversation->status === 'closed' ? 'Reopen conversation' : 'Close conversation' }}
+                    </button>
+                </form>
             </section>
 
             <section class="section" aria-labelledby="tickets-heading">

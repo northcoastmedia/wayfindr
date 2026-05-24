@@ -186,6 +186,33 @@ test('visitor can add a message to their conversation', function (): void {
         ->and($conversation->refresh()->last_message_at)->not->toBeNull();
 });
 
+test('visitor message reopens a closed conversation', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REOPEN2',
+        'status' => 'closed',
+        'closed_at' => now()->subMinute(),
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'I am still stuck.',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.conversation.support_code', 'WF-REOPEN2')
+        ->assertJsonPath('data.conversation.status', 'open');
+
+    $conversation->refresh();
+
+    expect($conversation->status)->toBe('open')
+        ->and($conversation->closed_at)->toBeNull()
+        ->and($conversation->last_message_at)->not->toBeNull();
+});
+
 test('visitor can grant cobrowse consent for their conversation', function (): void {
     $site = Site::factory()->create(['public_key' => 'site_public_docs']);
     $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);

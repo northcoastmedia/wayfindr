@@ -250,6 +250,113 @@ test('agent can view their account conversation timeline', function (): void {
         ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
 });
 
+test('agent can close an open conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CLOSE1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+        'closed_at' => null,
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CLOSE1')
+        ->assertOk()
+        ->assertSee('Close conversation');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-CLOSE1')
+        ->post('/dashboard/conversations/WF-CLOSE1/close')
+        ->assertRedirect('/dashboard/conversations/WF-CLOSE1')
+        ->assertSessionHas('status', 'Conversation closed.');
+
+    $conversation->refresh();
+
+    expect($conversation->status)->toBe('closed')
+        ->and($conversation->closed_at)->not->toBeNull();
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertDontSee('Checkout trouble');
+});
+
+test('agent can reopen a closed conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REOPEN1',
+        'subject' => 'Checkout trouble',
+        'status' => 'closed',
+        'closed_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-REOPEN1')
+        ->assertOk()
+        ->assertSee('Reopen conversation');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-REOPEN1')
+        ->post('/dashboard/conversations/WF-REOPEN1/reopen')
+        ->assertRedirect('/dashboard/conversations/WF-REOPEN1')
+        ->assertSessionHas('status', 'Conversation reopened.');
+
+    $conversation->refresh();
+
+    expect($conversation->status)->toBe('open')
+        ->and($conversation->closed_at)->toBeNull();
+});
+
+test('agent reply reopens a closed conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REPLYOP',
+        'subject' => 'Checkout trouble',
+        'status' => 'closed',
+        'closed_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-REPLYOP')
+        ->post('/dashboard/conversations/WF-REPLYOP/messages', [
+            'body' => 'I can keep helping here.',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-REPLYOP')
+        ->assertSessionHas('status', 'Reply sent.');
+
+    $conversation->refresh();
+
+    expect($conversation->status)->toBe('open')
+        ->and($conversation->closed_at)->toBeNull()
+        ->and($conversation->last_message_at)->not->toBeNull();
+});
+
+test('agent cannot close another account conversation', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherVisitor = Visitor::factory()->for($otherSite)->create();
+
+    Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+        'support_code' => 'WF-OTHERCL',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-OTHERCL/close')
+        ->assertNotFound();
+});
+
 test('agent can create a ticket from their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

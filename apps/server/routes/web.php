@@ -30,6 +30,10 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.sites.update');
     Route::get('/dashboard/conversations/{supportCode}', [AgentConversationController::class, 'show'])
         ->name('dashboard.conversations.show');
+    Route::post('/dashboard/conversations/{supportCode}/close', [AgentConversationController::class, 'close'])
+        ->name('dashboard.conversations.close');
+    Route::post('/dashboard/conversations/{supportCode}/reopen', [AgentConversationController::class, 'reopen'])
+        ->name('dashboard.conversations.reopen');
     Route::post('/dashboard/conversations/{supportCode}/messages', [AgentConversationController::class, 'storeMessage'])
         ->name('dashboard.conversations.messages.store');
     Route::post('/dashboard/conversations/{supportCode}/tickets', [AgentConversationController::class, 'storeTicket'])
