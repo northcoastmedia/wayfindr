@@ -43,6 +43,10 @@
                         <span class="meta-value">{{ $conversation->assignedAgent?->name ?? 'Unassigned' }}</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Attention</span>
+                        <span class="meta-value">{{ $conversation->attentionLabel() }}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Opened</span>
                         <span class="meta-value">{{ $conversation->created_at->diffForHumans() }}</span>
                     </div>

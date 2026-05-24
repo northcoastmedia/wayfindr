@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 #[Fillable([
@@ -53,6 +54,33 @@ class Conversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ConversationMessage::class);
+    }
+
+    public function latestMessage(): HasOne
+    {
+        return $this->hasOne(ConversationMessage::class)->latestOfMany();
+    }
+
+    public function attentionState(): string
+    {
+        $latestMessage = $this->relationLoaded('latestMessage')
+            ? $this->latestMessage
+            : $this->messages()
+                ->latest('created_at')
+                ->latest('id')
+                ->first();
+
+        return $latestMessage?->sender_type === User::class
+            ? 'waiting_on_visitor'
+            : 'needs_reply';
+    }
+
+    public function attentionLabel(): string
+    {
+        return match ($this->attentionState()) {
+            'waiting_on_visitor' => 'Waiting on visitor',
+            default => 'Needs reply',
+        };
     }
 
     public function tickets(): HasMany

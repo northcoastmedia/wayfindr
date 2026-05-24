@@ -104,6 +104,53 @@ test('dashboard shows conversation assignment state', function (): void {
         ->assertSee('Unassigned');
 });
 
+test('dashboard shows conversation attention state from the latest message', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    $needsReplyConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-NEEDS1',
+        'subject' => 'Visitor latest',
+        'status' => 'open',
+        'last_message_at' => now()->subMinutes(2),
+    ]);
+    ConversationMessage::factory()->for($needsReplyConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'I still need help.',
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    $waitingConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-WAITING',
+        'subject' => 'Agent latest',
+        'status' => 'open',
+        'last_message_at' => now()->subMinute(),
+    ]);
+    ConversationMessage::factory()->for($waitingConversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'Can you try again?',
+        'created_at' => now()->subMinute(),
+    ]);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-FRESH',
+        'subject' => 'Fresh conversation',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Attention')
+        ->assertSeeInOrder(['Visitor latest', 'Needs reply'])
+        ->assertSeeInOrder(['Agent latest', 'Waiting on visitor'])
+        ->assertSeeInOrder(['Fresh conversation', 'Needs reply']);
+});
+
 test('dashboard lists open tickets for the agent account', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $otherAccount = Account::factory()->create(['name' => 'Other Support']);
@@ -479,6 +526,66 @@ test('agent reply claims an unassigned conversation without stealing assigned co
 
     expect($unassignedConversation->fresh()->assigned_agent_id)->toBe($agent->id)
         ->and($assignedConversation->fresh()->assigned_agent_id)->toBe($assignedAgent->id);
+});
+
+test('message direction changes the conversation attention state', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Acme Docs',
+        'public_key' => 'site_public_docs',
+    ]);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-ATTEND1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+        'last_message_at' => now()->subMinute(),
+    ]);
+
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'I am stuck.',
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-ATTEND1')
+        ->assertOk()
+        ->assertSee('Attention')
+        ->assertSee('Needs reply');
+
+    $this->actingAs($agent)
+        ->post('/dashboard/conversations/WF-ATTEND1/messages', [
+            'body' => 'Can you try that again?',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-ATTEND1');
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-ATTEND1')
+        ->assertOk()
+        ->assertSee('Waiting on visitor');
+
+    $token = $this->postJson('/api/widget/bootstrap', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-acme',
+        'page_url' => 'https://docs.example.test/install',
+    ])
+        ->assertSuccessful()
+        ->json('data.visitor.token');
+
+    $this->postJson('/api/conversations/WF-ATTEND1/messages', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-acme',
+        'visitor_token' => $token,
+        'body' => 'Still seeing the same issue.',
+    ])->assertCreated();
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-ATTEND1')
+        ->assertOk()
+        ->assertSee('Needs reply');
 });
 
 test('agent cannot close another account conversation', function (): void {
