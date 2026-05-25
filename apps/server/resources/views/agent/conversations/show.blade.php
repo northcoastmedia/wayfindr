@@ -79,6 +79,72 @@
                 </form>
             </section>
 
+            <section class="section" aria-labelledby="visitor-context-heading">
+                <div class="section-header">
+                    <h2 id="visitor-context-heading">Visitor context</h2>
+                    <span class="lede">Existing widget context</span>
+                </div>
+
+                <div class="meta-grid">
+                    <div class="meta-item">
+                        <span class="meta-label">Visitor</span>
+                        <span class="meta-value">{{ $visitorContext['anonymous_id'] }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Last seen</span>
+                        <span class="meta-value">{{ $visitorContext['last_seen_at']?->diffForHumans() ?? 'Not reported' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Latest page</span>
+                        <span class="meta-value">{{ $visitorContext['last_page_url'] ?? 'Not reported' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Started on</span>
+                        <span class="meta-value">{{ $visitorContext['started_page_url'] ?? 'Not reported' }}</span>
+                    </div>
+                </div>
+
+                <div class="notice-copy">
+                    <p>Use this context to orient support, not to collect extra visitor data.</p>
+                </div>
+
+                <div class="section-header">
+                    <strong>Prior conversations</strong>
+                    <span class="lede">{{ $priorConversations->count() }} previous</span>
+                </div>
+
+                @if ($priorConversations->isEmpty())
+                    <p class="empty">No prior conversations for this visitor on this site.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Subject</th>
+                                    <th scope="col">Support code</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Last activity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($priorConversations as $priorConversation)
+                                    <tr>
+                                        <td>
+                                            <a class="text-link" href="{{ route('dashboard.conversations.show', $priorConversation->support_code) }}">
+                                                {{ $priorConversation->subject ?? 'Untitled conversation' }}
+                                            </a>
+                                        </td>
+                                        <td>{{ $priorConversation->support_code }}</td>
+                                        <td>{{ ucfirst($priorConversation->status) }}</td>
+                                        <td>{{ $priorConversation->last_message_at?->diffForHumans() ?? $priorConversation->created_at->diffForHumans() }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </section>
+
             <section class="section" aria-labelledby="tickets-heading">
                 <div class="section-header">
                     <h2 id="tickets-heading">Ticket</h2>

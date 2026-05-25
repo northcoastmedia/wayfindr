@@ -13,6 +13,7 @@ use App\Support\CobrowseConsentState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -45,8 +46,10 @@ class AgentConversationController extends Controller
             'cobrowseConsent' => $cobrowseConsentState->forConversation($conversation),
             'conversation' => $conversation,
             'messages' => $messages,
+            'priorConversations' => $this->priorConversations($conversation),
             'realtime' => $this->realtimeConfig($conversation),
             'tickets' => $tickets,
+            'visitorContext' => $this->visitorContext($conversation),
         ]);
     }
 
@@ -275,6 +278,50 @@ class AgentConversationController extends Controller
         return $supportAgents->isNotEmpty()
             ? $supportAgents
             : $site->account->agents()->orderBy('name')->get();
+    }
+
+    /**
+     * @return array{anonymous_id: string, last_seen_at: Carbon|null, last_page_url: string|null, started_page_url: string|null}
+     */
+    private function visitorContext(Conversation $conversation): array
+    {
+        $visitor = $conversation->visitor;
+        $visitorMetadata = $visitor?->metadata ?? [];
+        $conversationMetadata = $conversation->metadata ?? [];
+
+        return [
+            'anonymous_id' => $visitor?->anonymous_id ?? 'Unknown visitor',
+            'last_seen_at' => $visitor?->last_seen_at,
+            'last_page_url' => $this->contextString($visitorMetadata['last_page_url'] ?? null),
+            'started_page_url' => $this->contextString($conversationMetadata['started_page_url'] ?? null),
+        ];
+    }
+
+    /**
+     * @return Collection<int, Conversation>
+     */
+    private function priorConversations(Conversation $conversation): Collection
+    {
+        return Conversation::query()
+            ->where('site_id', $conversation->site_id)
+            ->where('visitor_id', $conversation->visitor_id)
+            ->whereKeyNot($conversation->id)
+            ->latest('last_message_at')
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(5)
+            ->get();
+    }
+
+    private function contextString(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : mb_substr($value, 0, 2048);
     }
 
     private function activeCobrowseSession(Conversation $conversation): ?CobrowseSession
