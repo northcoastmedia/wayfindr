@@ -1257,6 +1257,16 @@ test('agent can create a ticket from their account conversation', function (): v
 
     expect($ticket->metadata['visitor_context']['host_context'])->not->toHaveKey('password');
 
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.created',
+    ]);
+
     expect($conversation->fresh()->assigned_agent_id)->toBe($agent->id);
 
     $this->actingAs($agent)
@@ -1309,6 +1319,18 @@ test('agent can view a durable ticket record for their account', function (): vo
                 ],
             ],
         ]);
+    $ticket->auditEvents()->create([
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'action' => 'ticket.created',
+        'metadata' => [
+            'source' => 'conversation',
+            'support_code' => 'WF-TICKETSHOW',
+        ],
+        'occurred_at' => now()->subMinute(),
+    ]);
 
     $this->actingAs($agent)
         ->get("/dashboard/tickets/{$ticket->id}")
@@ -1321,6 +1343,8 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('anon-acme')
         ->assertSee('WF-TICKETSHOW')
         ->assertSee('Checkout trouble')
+        ->assertSee('View linked conversation')
+        ->assertSee('Ticket created from conversation WF-TICKETSHOW')
         ->assertSee('Visitor context')
         ->assertSee('Latest page')
         ->assertSee('https://docs.example.test/checkout')

@@ -173,7 +173,7 @@ class AgentConversationController extends Controller
                 ->with('status', 'Ticket already exists.');
         }
 
-        $conversation->tickets()->create([
+        $ticket = $conversation->tickets()->create([
             'account_id' => $conversation->site->account_id,
             'site_id' => $conversation->site_id,
             'requester_id' => $conversation->visitor_id,
@@ -187,6 +187,19 @@ class AgentConversationController extends Controller
                 'support_code' => $conversation->support_code,
                 'visitor_context' => $this->ticketVisitorContext($conversation, $visitorContextSanitizer),
             ],
+        ]);
+
+        $ticket->auditEvents()->create([
+            'account_id' => $ticket->account_id,
+            'site_id' => $ticket->site_id,
+            'actor_type' => User::class,
+            'actor_id' => $agent->id,
+            'action' => 'ticket.created',
+            'metadata' => [
+                'source' => 'conversation',
+                'support_code' => $conversation->support_code,
+            ],
+            'occurred_at' => now(),
         ]);
 
         if (! $conversation->assigned_agent_id) {

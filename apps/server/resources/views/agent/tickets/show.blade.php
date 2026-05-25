@@ -82,6 +82,11 @@
 
                     <div class="notice-copy">
                         <p>{{ $ticket->conversation->subject ?? 'Untitled conversation' }}</p>
+                        <p>
+                            <a class="button secondary" href="{{ route('dashboard.conversations.show', $ticket->conversation->support_code) }}">
+                                View linked conversation
+                            </a>
+                        </p>
                     </div>
                 </section>
             @endif
@@ -278,6 +283,14 @@
                             </div>
                             <p>
                                 @switch($activity->action)
+                                    @case('ticket.created')
+                                        @if (data_get($activity->metadata, 'source') === 'conversation' && data_get($activity->metadata, 'support_code'))
+                                            <span>Ticket created from conversation {{ data_get($activity->metadata, 'support_code') }}</span>
+                                        @else
+                                            <span>Ticket created</span>
+                                        @endif
+                                        @break
+
                                     @case('ticket.closed')
                                         Ticket closed
                                         @break
