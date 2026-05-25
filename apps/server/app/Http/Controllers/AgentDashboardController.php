@@ -10,6 +10,8 @@ use App\Notifications\TicketAssigned;
 use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Collection;
 
 class AgentDashboardController extends Controller
 {
@@ -21,6 +23,7 @@ class AgentDashboardController extends Controller
 
         $account = $agent->account()->firstOrFail();
         $sites = $account->sites()
+            ->visibleToAgent($agent)
             ->with('latestVisitor')
             ->orderBy('name')
             ->get();
@@ -28,9 +31,10 @@ class AgentDashboardController extends Controller
             ->withCount([
                 'assignedConversations as open_assigned_conversations_count' => fn ($query) => $query
                     ->where('status', 'open')
-                    ->whereHas('site', fn ($query) => $query->where('account_id', $account->id)),
+                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent)),
                 'assignedTickets as open_assigned_tickets_count' => fn ($query) => $query
                     ->where('account_id', $account->id)
+                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
                     ->where('status', 'open'),
             ])
             ->orderBy('name')
@@ -79,7 +83,7 @@ class AgentDashboardController extends Controller
         $conversations = Conversation::query()
             ->with(['assignedAgent', 'latestMessage', 'site', 'visitor'])
             ->where('status', 'open')
-            ->whereHas('site', fn ($query) => $query->where('account_id', $account->id))
+            ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
             ->when($conversationFilter === 'needs_reply', function ($query): void {
                 $query->where(function ($query): void {
                     $query->whereDoesntHave('messages')
@@ -94,6 +98,7 @@ class AgentDashboardController extends Controller
         $tickets = Ticket::query()
             ->with(['assignee', 'conversation.latestMessage', 'site'])
             ->where('account_id', $account->id)
+            ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
             ->when($ticketStatus !== 'all', fn ($query) => $query->where('status', $ticketStatus))
             ->when($ticketFilter === 'assigned_to_me', fn ($query) => $query->where('assignee_id', $agent->id))
             ->when($ticketFilter === 'unassigned', fn ($query) => $query->whereNull('assignee_id'))
@@ -106,15 +111,9 @@ class AgentDashboardController extends Controller
                 -$ticket->created_at->getTimestamp(),
             ])
             ->values();
-        $unreadNotificationsQuery = $agent->unreadNotifications()
-            ->whereIn('type', [
-                ConversationNeedsReply::class,
-                TicketAssigned::class,
-            ]);
-        $unreadNotificationCount = (clone $unreadNotificationsQuery)->count();
-        $unreadNotifications = $unreadNotificationsQuery
-            ->limit(5)
-            ->get();
+        $visibleUnreadNotifications = $this->visibleUnreadNotifications($agent);
+        $unreadNotificationCount = $visibleUnreadNotifications->count();
+        $unreadNotifications = $visibleUnreadNotifications->take(5);
 
         return view('agent.dashboard', [
             'account' => $account,
@@ -136,5 +135,43 @@ class AgentDashboardController extends Controller
             'unreadNotificationCount' => $unreadNotificationCount,
             'unreadNotifications' => $unreadNotifications,
         ]);
+    }
+
+    private function visibleUnreadNotifications(User $agent): Collection
+    {
+        return $agent->unreadNotifications()
+            ->whereIn('type', [
+                ConversationNeedsReply::class,
+                TicketAssigned::class,
+            ])
+            ->latest()
+            ->get()
+            ->filter(fn (DatabaseNotification $notification): bool => $this->notificationVisibleToAgent($agent, $notification))
+            ->values();
+    }
+
+    private function notificationVisibleToAgent(User $agent, DatabaseNotification $notification): bool
+    {
+        if ($notification->type === TicketAssigned::class) {
+            $ticketId = (int) data_get($notification->data, 'ticket_id');
+
+            return $ticketId > 0
+                && Ticket::query()
+                    ->whereKey($ticketId)
+                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
+                    ->exists();
+        }
+
+        if ($notification->type === ConversationNeedsReply::class) {
+            $conversationId = (int) data_get($notification->data, 'conversation_id');
+
+            return $conversationId > 0
+                && Conversation::query()
+                    ->whereKey($conversationId)
+                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
+                    ->exists();
+        }
+
+        return false;
     }
 }

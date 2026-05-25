@@ -16,6 +16,7 @@ This roadmap is directional and should not include private business strategy.
 ## Phase 1: Internal MVP
 
 - Agent authentication.
+- Site-scoped agent access.
 - Shared inbox.
 - Visitor list.
 - Basic conversations.
@@ -30,7 +31,8 @@ This roadmap is directional and should not include private business strategy.
 ## Phase 2: Real Support Beta
 
 - Better ticket views.
-- Assignment and tags.
+- Account roles for owner, admin, and agent authority.
+- Assignment, tags, and site access management.
 - Canned replies.
 - Conversation summaries and ticket suggestions.
 - Transcript retention controls.

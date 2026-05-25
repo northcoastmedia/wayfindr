@@ -24,8 +24,7 @@ class ConversationChannel
         }
 
         if ($participant instanceof User) {
-            return $participant->account_id !== null
-                && $conversation->site?->account_id === $participant->account_id;
+            return $conversation->site?->supportsAgent($participant) === true;
         }
 
         return $conversation->visitor_id === $participant->id;

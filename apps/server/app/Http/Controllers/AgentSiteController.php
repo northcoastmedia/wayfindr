@@ -39,6 +39,8 @@ class AgentSiteController extends Controller
             ],
         ]);
 
+        $site->supportAgents()->syncWithoutDetaching($request->user()->id);
+
         return redirect()
             ->route('dashboard.sites.show', $site)
             ->with('status', 'Site created. Copy the install snippet to finish connecting it.');
@@ -79,9 +81,9 @@ class AgentSiteController extends Controller
 
     private function authorizeSite(Request $request, Site $site): void
     {
-        $accountId = $request->user()?->account_id;
+        $agent = $request->user();
 
-        abort_unless($accountId && (int) $site->account_id === (int) $accountId, 404);
+        abort_unless($agent && $site->supportsAgent($agent), 404);
     }
 
     private function account(Request $request): Account

@@ -18,6 +18,7 @@ test('support domain tables are migrated', function (): void {
     foreach ([
         'accounts',
         'sites',
+        'site_user',
         'visitors',
         'conversations',
         'conversation_messages',
@@ -35,6 +36,7 @@ test('support session records share the expected relationships', function (): vo
     $account = Account::factory()->create();
     $agent = User::factory()->for($account)->create();
     $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach($agent);
     $visitor = Visitor::factory()->for($site)->create([
         'external_id' => 'customer-123',
         'email' => 'customer@example.com',
@@ -90,6 +92,8 @@ test('support session records share the expected relationships', function (): vo
 
     expect($account->sites->contains($site))->toBeTrue()
         ->and($account->agents->contains($agent))->toBeTrue()
+        ->and($site->supportAgents->contains($agent))->toBeTrue()
+        ->and($agent->supportedSites->contains($site))->toBeTrue()
         ->and($site->visitors->contains($visitor))->toBeTrue()
         ->and($visitor->conversations->contains($conversation))->toBeTrue()
         ->and($conversation->messages->contains($message))->toBeTrue()

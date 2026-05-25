@@ -6,12 +6,14 @@ use App\Events\CobrowseStateUpdated;
 use App\Events\ConversationMessageCreated;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
+use App\Models\Site;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
 use App\Support\CobrowseConsentState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class AgentConversationController extends Controller
@@ -37,7 +39,7 @@ class AgentConversationController extends Controller
 
         return view('agent.conversations.show', [
             'account' => $agent->account()->firstOrFail(),
-            'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
+            'accountAgents' => $this->supportAgentsForSite($conversation->site),
             'agent' => $agent,
             'cobrowseConsent' => $cobrowseConsentState->forConversation($conversation),
             'conversation' => $conversation,
@@ -256,8 +258,19 @@ class AgentConversationController extends Controller
 
         return Conversation::query()
             ->where('support_code', $supportCode)
-            ->whereHas('site', fn ($query) => $query->where('account_id', $agent->account_id))
+            ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
             ->firstOrFail();
+    }
+
+    private function supportAgentsForSite(Site $site): Collection
+    {
+        $supportAgents = $site->eligibleSupportAgents()
+            ->orderBy('name')
+            ->get();
+
+        return $supportAgents->isNotEmpty()
+            ? $supportAgents
+            : $site->account->agents()->orderBy('name')->get();
     }
 
     private function activeCobrowseSession(Conversation $conversation): ?CobrowseSession
