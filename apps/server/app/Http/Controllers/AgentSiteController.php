@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -52,7 +53,7 @@ class AgentSiteController extends Controller
 
     public function show(Request $request, Site $site): View
     {
-        $this->authorizeSite($request, $site);
+        $this->authorizeSiteAbility($request, 'view', $site, 404);
         $site->loadMissing('latestVisitor');
         $account = $request->user()->account()->firstOrFail();
         $accountAgents = $account->agents()
@@ -78,7 +79,7 @@ class AgentSiteController extends Controller
 
     public function update(Request $request, Site $site): RedirectResponse
     {
-        $this->authorizeSite($request, $site);
+        $this->authorizeSiteAbility($request, 'updatePrivacy', $site, 404);
 
         $validated = $request->validate([
             'mask_selectors' => ['nullable', 'string', 'max:4000'],
@@ -96,8 +97,8 @@ class AgentSiteController extends Controller
 
     public function updateSupportAgents(Request $request, Site $site): RedirectResponse
     {
-        $this->authorizeSite($request, $site);
-        abort_unless($request->user()?->isAdmin(), 403);
+        $this->authorizeSiteAbility($request, 'view', $site, 404);
+        $this->authorizeSiteAbility($request, 'manageAccess', $site);
 
         $accountAgentIds = $site->account()
             ->firstOrFail()
@@ -136,11 +137,11 @@ class AgentSiteController extends Controller
             ->with('status', 'Site access saved.');
     }
 
-    private function authorizeSite(Request $request, Site $site): void
+    private function authorizeSiteAbility(Request $request, string $ability, Site $site, int $status = 403): void
     {
         $agent = $request->user();
 
-        abort_unless($agent && $site->supportsAgent($agent), 404);
+        abort_unless($agent && Gate::forUser($agent)->allows($ability, $site), $status);
     }
 
     private function account(Request $request): Account

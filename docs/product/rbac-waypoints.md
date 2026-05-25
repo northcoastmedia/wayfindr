@@ -75,7 +75,7 @@ Owner and admin roles may eventually need elevated views across all sites, but t
 
 Until that explicit decision is made, owner/admin support queue access still follows site access. A management view may list sites and assignment metadata for admins, but it must not expose conversation bodies, ticket details, alerts, cobrowse state, or visitor page data unless the admin also has support access to that site.
 
-`manage_site_access` does not require existing site support access because admins may need to assign agents to sites they do not personally support. That surface should be tested as metadata-only, including cross-account denial, cross-site denial, self-assignment behavior, and attempts to assign agents outside the account.
+The first `manage_site_access` implementation requires owner/admin authority plus support access to the site, matching the current site settings screen. A later metadata-only account administration surface may allow admins to assign agents to sites they do not personally support, but that should be a separate product decision with tests for cross-account denial, cross-site denial, self-assignment behavior, and attempts to assign agents outside the account.
 
 Current pre-RBAC behavior lets any support agent with site access edit site privacy settings. The RBAC implementation should intentionally tighten privacy settings to owner/admin authority plus site access, with denial tests for plain agents before the behavior changes.
 
@@ -144,7 +144,7 @@ Every RBAC implementation slice should include tests for:
 1. Document the vocabulary, permissions, and role matrix.
 2. Introduce `users.account_role` as the starter role field.
 3. Add role helpers without changing behavior.
-4. Move one support surface at a time behind policies.
+4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`.
 5. Tighten site privacy settings behind owner/admin authority plus site access.
 6. Add role management UI only after policies exist.
 7. Add audit events for role and site-access changes.
