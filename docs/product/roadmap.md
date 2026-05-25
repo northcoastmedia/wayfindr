@@ -17,6 +17,7 @@ This roadmap is directional and should not include private business strategy.
 
 - Agent authentication.
 - Site-scoped agent access.
+- RBAC permission inventory and policy waypoints.
 - Shared inbox.
 - Visitor list.
 - Basic conversations.
@@ -31,8 +32,9 @@ This roadmap is directional and should not include private business strategy.
 ## Phase 2: Real Support Beta
 
 - Better ticket views.
-- Account roles for owner, admin, and agent authority.
 - Assignment, tags, and site access management.
+- Laravel policy-backed authorization.
+- Account roles for owner, admin, and agent authority.
 - Canned replies.
 - Conversation summaries and ticket suggestions.
 - Transcript retention controls.

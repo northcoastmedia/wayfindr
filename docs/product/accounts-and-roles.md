@@ -20,12 +20,12 @@ If a site has no assigned support agents yet, Wayfindr treats it as account-wide
 
 ## Future Account Roles
 
-Account roles are about authority, not queue membership. They are not implemented yet.
+Account roles are about authority, not queue membership. They are not implemented yet. The working RBAC map lives in [RBAC Waypoints](rbac-waypoints.md).
 
 The likely first roles are:
 
-- `owner`: can manage account-level settings, billing or hosted-plan details, agents, roles, sites, and all support queues.
-- `admin`: can manage agents, sites, privacy settings, and support operations, but may not own billing or account transfer controls.
+- `owner`: can manage account-level settings, billing or hosted-plan details, agents, roles, sites, and site access. Support queue visibility should still follow site access unless a future elevated-access decision explicitly changes that.
+- `admin`: can manage agents, sites, site access, privacy settings, and support operations for sites they can access, but may not own billing, account transfer controls, or role ownership.
 - `agent`: can work assigned support queues, reply to visitors, create and update tickets, request cobrowse consent, and manage their own alert workflow.
 
 Possible later roles:
@@ -36,7 +36,9 @@ Possible later roles:
 ## Guardrails
 
 - Site access should land before broad role management.
+- RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
+- Role management should start owner-only, with last-owner protection and audit events before admins can grant roles.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Cobrowse access should require both account membership and site access.
