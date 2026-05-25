@@ -49,6 +49,49 @@ test('widget bootstrap creates a site scoped visitor and returns safe config', f
     ]);
 });
 
+test('widget bootstrap stores safe host context and drops sensitive visitor fields', function (): void {
+    $site = Site::factory()->create([
+        'public_key' => 'site_public_docs',
+    ]);
+
+    $response = $this->postJson('/api/widget/bootstrap', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-browser-123',
+        'page_url' => 'https://docs.example.test/install',
+        'context' => [
+            'plan' => 'Team',
+            'docs_version' => '2026.05',
+            'support_region' => 'EU',
+            'username' => 'adam@example.test',
+            'password' => 'super-secret',
+            'credit_card' => '4111 1111 1111 1111',
+            'preferences' => ['nested' => 'nope'],
+            'long_note' => str_repeat('a', 220),
+        ],
+    ]);
+
+    $response->assertCreated();
+
+    $visitor = Visitor::query()
+        ->where('site_id', $site->id)
+        ->where('anonymous_id', 'anon-browser-123')
+        ->firstOrFail();
+
+    expect($visitor->metadata)->toMatchArray([
+        'last_page_url' => 'https://docs.example.test/install',
+        'context' => [
+            'plan' => 'Team',
+            'docs_version' => '2026.05',
+            'support_region' => 'EU',
+            'long_note' => str_repeat('a', 160),
+        ],
+    ])
+        ->and($visitor->metadata['context'])->not->toHaveKey('username')
+        ->and($visitor->metadata['context'])->not->toHaveKey('password')
+        ->and($visitor->metadata['context'])->not->toHaveKey('credit_card')
+        ->and($visitor->metadata['context'])->not->toHaveKey('preferences');
+});
+
 test('widget bootstrap rejects an unknown public key', function (): void {
     $this->postJson('/api/widget/bootstrap', [
         'site_public_key' => 'missing_key',
@@ -90,6 +133,46 @@ test('conversation creation uses the site scoped visitor', function (): void {
         'subject' => 'Need help installing',
         'status' => 'open',
     ]);
+});
+
+test('conversation creation can refresh safe host context for the visitor', function (): void {
+    $site = Site::factory()->create(['public_key' => 'site_public_docs']);
+    Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-docs',
+        'metadata' => [
+            'context' => [
+                'plan' => 'Starter',
+            ],
+        ],
+    ]);
+    $token = widgetVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson('/api/conversations', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'subject' => 'Need help installing',
+        'page_url' => 'https://docs.example.test/install',
+        'context' => [
+            'plan' => 'Team',
+            'account_id' => 'acct_123',
+            'session_token' => 'secret-session',
+        ],
+    ])->assertCreated();
+
+    $visitor = Visitor::query()
+        ->where('site_id', $site->id)
+        ->where('anonymous_id', 'anon-docs')
+        ->firstOrFail();
+
+    expect($visitor->metadata)->toMatchArray([
+        'last_page_url' => 'https://docs.example.test/install',
+        'context' => [
+            'plan' => 'Team',
+            'account_id' => 'acct_123',
+        ],
+    ])
+        ->and($visitor->metadata['context'])->not->toHaveKey('session_token');
 });
 
 test('conversation creation requires a visitor token', function (): void {

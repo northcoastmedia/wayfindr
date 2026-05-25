@@ -5,18 +5,20 @@ namespace App\Http\Controllers\Widget;
 use App\Http\Controllers\Controller;
 use App\Models\Site;
 use App\Models\Visitor;
+use App\Support\VisitorContextSanitizer;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BootstrapController extends Controller
 {
-    public function __invoke(Request $request, VisitorSessionToken $visitorSessionToken): JsonResponse
+    public function __invoke(Request $request, VisitorSessionToken $visitorSessionToken, VisitorContextSanitizer $visitorContextSanitizer): JsonResponse
     {
         $validated = $request->validate([
             'site_public_key' => ['required', 'string', 'max:255'],
             'anonymous_id' => ['required', 'string', 'max:255'],
             'page_url' => ['nullable', 'url', 'max:2048'],
+            'context' => ['nullable', 'array', 'max:50'],
         ]);
 
         $site = Site::query()
@@ -25,18 +27,20 @@ class BootstrapController extends Controller
 
         abort_unless($site, 404, 'Site not found.');
 
-        $visitor = Visitor::query()->updateOrCreate(
-            [
-                'site_id' => $site->id,
-                'anonymous_id' => $validated['anonymous_id'],
-            ],
-            [
-                'metadata' => [
-                    'last_page_url' => $validated['page_url'] ?? null,
-                ],
-                'last_seen_at' => now(),
-            ],
-        );
+        $visitor = Visitor::query()->firstOrNew([
+            'site_id' => $site->id,
+            'anonymous_id' => $validated['anonymous_id'],
+        ]);
+
+        $visitor->forceFill([
+            'metadata' => $visitorContextSanitizer->mergeMetadata(
+                $visitor->metadata,
+                $validated['page_url'] ?? null,
+                array_key_exists('context', $validated),
+                $validated['context'] ?? null,
+            ),
+            'last_seen_at' => now(),
+        ])->save();
 
         return response()->json([
             'data' => [

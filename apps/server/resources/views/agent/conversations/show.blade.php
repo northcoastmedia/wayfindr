@@ -109,6 +109,34 @@
                 </div>
 
                 <div class="section-header">
+                    <strong>Host context</strong>
+                    <span class="lede">{{ count($visitorContext['host_context']) }} fields</span>
+                </div>
+
+                @if ($visitorContext['host_context'] === [])
+                    <p class="empty">No host-provided context yet.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Field</th>
+                                    <th scope="col">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($visitorContext['host_context'] as $field => $value)
+                                    <tr>
+                                        <td>{{ $field }}</td>
+                                        <td>{{ $value }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                <div class="section-header">
                     <strong>Prior conversations</strong>
                     <span class="lede">{{ $priorConversations->count() }} previous</span>
                 </div>

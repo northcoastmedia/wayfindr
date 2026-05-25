@@ -821,6 +821,36 @@ test('agent can view safe visitor context on a conversation', function (): void 
         ->assertSee('Use this context to orient support, not to collect extra visitor data.');
 });
 
+test('agent can view safe host-provided visitor context', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-acme',
+        'metadata' => [
+            'context' => [
+                'plan' => 'Team',
+                'support_region' => 'EU',
+                'password' => 'super-secret',
+            ],
+        ],
+    ]);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-HOSTCTX',
+        'subject' => 'Billing confusion',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-HOSTCTX')
+        ->assertOk()
+        ->assertSee('Host context')
+        ->assertSee('plan')
+        ->assertSee('Team')
+        ->assertSee('support_region')
+        ->assertSee('EU')
+        ->assertDontSee('super-secret');
+});
+
 test('agent can view prior conversations for the same visitor and site', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

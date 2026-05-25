@@ -63,7 +63,10 @@ test('bootstraps the widget against the public intake API', async () => {
     },
   });
 
-  const result = await client.bootstrap('https://docs.example.test/install');
+  const result = await client.bootstrap('https://docs.example.test/install', {
+    plan: 'Team',
+    support_region: 'EU',
+  });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/widget/bootstrap');
@@ -71,6 +74,10 @@ test('bootstraps the widget against the public intake API', async () => {
     site_public_key: 'site_public_docs',
     anonymous_id: 'anon-browser-123',
     page_url: 'https://docs.example.test/install',
+    context: {
+      plan: 'Team',
+      support_region: 'EU',
+    },
   });
   assert.equal(result.site.public_key, 'site_public_docs');
   assert.equal(result.visitor.token, 'visitor-token-123');
@@ -125,10 +132,21 @@ test('starts a conversation and sends the first visitor message', async () => {
 
   const result = await client.sendFirstMessage('Can you help me?', {
     pageUrl: 'https://docs.example.test/install',
+    context: {
+      plan: 'Team',
+    },
   });
 
   assert.equal(calls.length, 3);
   assert.equal(calls[0].url, 'http://127.0.0.1:8000/api/widget/bootstrap');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    site_public_key: 'site_public_docs',
+    anonymous_id: 'anon-browser-123',
+    page_url: 'https://docs.example.test/install',
+    context: {
+      plan: 'Team',
+    },
+  });
   assert.equal(calls[1].url, 'http://127.0.0.1:8000/api/conversations');
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     site_public_key: 'site_public_docs',
@@ -136,6 +154,9 @@ test('starts a conversation and sends the first visitor message', async () => {
     visitor_token: 'visitor-token-123',
     subject: 'Can you help me?',
     page_url: 'https://docs.example.test/install',
+    context: {
+      plan: 'Team',
+    },
   });
   assert.equal(calls[2].url, 'http://127.0.0.1:8000/api/conversations/WF-TEST123/messages');
   assert.deepEqual(JSON.parse(calls[2].options.body), {
