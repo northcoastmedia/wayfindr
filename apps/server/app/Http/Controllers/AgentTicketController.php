@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
+use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,24 @@ use Illuminate\Validation\ValidationException;
 
 class AgentTicketController extends Controller
 {
-    public function show(Request $request, Ticket $ticket): View
+    public function show(Request $request, Ticket $ticket, VisitorContextSanitizer $visitorContextSanitizer): View
     {
         $agent = $request->user();
 
         $this->authorizeTicketAbility($agent, 'view', $ticket);
         $this->markTicketAssignmentNotificationsRead($agent, $ticket);
         $ticket->loadMissing('site');
+        $ticket->load([
+            'assignee',
+            'conversation',
+            'requester',
+            'site',
+            'auditEvents' => fn ($query) => $query
+                ->where('action', 'ticket.note_added')
+                ->with('actor')
+                ->latest('occurred_at')
+                ->latest('id'),
+        ]);
 
         return view('agent.tickets.show', [
             'account' => $agent->account()->firstOrFail(),
@@ -34,17 +46,8 @@ class AgentTicketController extends Controller
                 ->latest('occurred_at')
                 ->latest('id')
                 ->get(),
-            'ticket' => $ticket->load([
-                'assignee',
-                'conversation',
-                'requester',
-                'site',
-                'auditEvents' => fn ($query) => $query
-                    ->where('action', 'ticket.note_added')
-                    ->with('actor')
-                    ->latest('occurred_at')
-                    ->latest('id'),
-            ]),
+            'ticket' => $ticket,
+            'visitorContext' => $this->visitorContext($ticket, $visitorContextSanitizer),
         ]);
     }
 
@@ -215,6 +218,36 @@ class AgentTicketController extends Controller
             ->filter(fn ($notification): bool => (int) data_get($notification->data, 'ticket_id') === $ticket->id)
             ->each
             ->markAsRead();
+    }
+
+    /**
+     * @return array{last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
+     */
+    private function visitorContext(Ticket $ticket, VisitorContextSanitizer $visitorContextSanitizer): array
+    {
+        $metadata = $ticket->metadata ?? [];
+        $visitorContext = $metadata['visitor_context'] ?? [];
+
+        if (! is_array($visitorContext)) {
+            $visitorContext = [];
+        }
+
+        return [
+            'last_page_url' => $this->contextString($visitorContext['last_page_url'] ?? null),
+            'started_page_url' => $this->contextString($visitorContext['started_page_url'] ?? null),
+            'host_context' => $visitorContextSanitizer->sanitize($visitorContext['host_context'] ?? []),
+        ];
+    }
+
+    private function contextString(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : mb_substr($value, 0, 2048);
     }
 
     /**
