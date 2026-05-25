@@ -433,6 +433,156 @@ test('dashboard filters tickets by status', function (): void {
         ->assertDontSee('Other account waiting');
 });
 
+test('dashboard surfaces ticket attention signals', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    $needsReplyConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-NEEDSREPLY',
+        'status' => 'open',
+    ]);
+    ConversationMessage::factory()->for($needsReplyConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Can I get an update?',
+    ]);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($needsReplyConversation)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Visitor is waiting',
+            'status' => 'open',
+        ]);
+
+    $waitingConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-WAITING',
+        'status' => 'open',
+    ]);
+    ConversationMessage::factory()->for($waitingConversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'I sent the next step.',
+    ]);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($waitingConversation)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Customer has the next step',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Ready for an owner',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Waiting on customer answer',
+            'status' => 'pending',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Resolved billing question',
+            'status' => 'closed',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_status=all')
+        ->assertOk()
+        ->assertSee('Next step')
+        ->assertSee('Needs reply')
+        ->assertSee('Visitor replied last.')
+        ->assertSee('Waiting on customer')
+        ->assertSee('Agent replied last.')
+        ->assertSee('Needs owner')
+        ->assertSee('Assign this ticket to keep it moving.')
+        ->assertSee('Marked pending.')
+        ->assertSee('Resolved')
+        ->assertSee('Ticket is closed.');
+});
+
+test('dashboard prioritizes tickets that need agent attention', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    $waitingConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-WAITFIRST',
+        'status' => 'open',
+    ]);
+    ConversationMessage::factory()->for($waitingConversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'I already replied.',
+    ]);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($waitingConversation)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Agent already replied',
+            'status' => 'open',
+            'updated_at' => now(),
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Ready for an owner',
+            'status' => 'open',
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+    $needsReplyConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REPLYFIRST',
+        'status' => 'open',
+    ]);
+    ConversationMessage::factory()->for($needsReplyConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Can someone look at this?',
+    ]);
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($needsReplyConversation)
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Visitor response needed',
+            'status' => 'open',
+            'updated_at' => now()->subMinutes(10),
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSeeInOrder([
+            'Visitor response needed',
+            'Ready for an owner',
+            'Agent already replied',
+        ]);
+});
+
 test('dashboard exposes ticket queue filter links', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

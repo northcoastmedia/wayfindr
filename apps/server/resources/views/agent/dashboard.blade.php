@@ -275,6 +275,7 @@
                                     <th scope="col">Status</th>
                                     <th scope="col">Priority</th>
                                     <th scope="col">Assignee</th>
+                                    <th scope="col">Next step</th>
                                     <th scope="col">Support Code</th>
                                     <th scope="col">Updated</th>
                                 </tr>
@@ -291,6 +292,10 @@
                                         <td>{{ ucfirst($ticket->status) }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
                                         <td>{{ $ticket->assignee?->name ?? 'Unassigned' }}</td>
+                                        <td>
+                                            <strong>{{ $ticket->attentionLabel() }}</strong>
+                                            <div class="lede">{{ $ticket->attentionDescription() }}</div>
+                                        </td>
                                         <td>{{ $ticket->conversation?->support_code ?? 'Not linked' }}</td>
                                         <td>{{ $ticket->updated_at->diffForHumans() }}</td>
                                     </tr>
