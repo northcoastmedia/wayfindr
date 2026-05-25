@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Widget;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Site;
+use App\Support\VisitorContextSanitizer;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,7 @@ use Illuminate\Support\Str;
 
 class ConversationController extends Controller
 {
-    public function store(Request $request, VisitorSessionToken $visitorSessionToken): JsonResponse
+    public function store(Request $request, VisitorSessionToken $visitorSessionToken, VisitorContextSanitizer $visitorContextSanitizer): JsonResponse
     {
         $validated = $request->validate([
             'site_public_key' => ['required', 'string', 'max:255'],
@@ -20,6 +21,7 @@ class ConversationController extends Controller
             'visitor_token' => ['nullable', 'string', 'max:4096'],
             'subject' => ['nullable', 'string', 'max:255'],
             'page_url' => ['nullable', 'url', 'max:2048'],
+            'context' => ['nullable', 'array', 'max:50'],
         ]);
 
         $site = Site::query()
@@ -31,9 +33,12 @@ class ConversationController extends Controller
         $visitor = $visitorSessionToken->visitorFromRequest($request, $site, $validated['anonymous_id']);
 
         $visitor->forceFill([
-            'metadata' => [
-                'last_page_url' => $validated['page_url'] ?? null,
-            ],
+            'metadata' => $visitorContextSanitizer->mergeMetadata(
+                $visitor->metadata,
+                $validated['page_url'] ?? null,
+                array_key_exists('context', $validated),
+                $validated['context'] ?? null,
+            ),
             'last_seen_at' => now(),
         ])->save();
 

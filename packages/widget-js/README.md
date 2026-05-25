@@ -12,6 +12,10 @@ plain HTML sites:
   Wayfindr.init({
     apiBaseUrl: 'https://your-wayfindr-host.example',
     sitePublicKey: 'site_demo_public_key',
+    visitorContext: {
+      plan: 'Team',
+      support_region: 'EU',
+    },
     reverb: {
       appKey: 'your-public-reverb-app-key',
       host: 'your-wayfindr-host.example',
@@ -74,6 +78,10 @@ const client = Wayfindr.createClient({
 
 const result = await client.sendFirstMessage('Can you help me?', {
   pageUrl: window.location.href,
+  context: {
+    plan: 'Team',
+    support_region: 'EU',
+  },
 });
 
 const timeline = await client.fetchMessages(result.conversation.support_code);
@@ -83,6 +91,11 @@ const timeline = await client.fetchMessages(result.conversation.support_code);
 Lower-level calls such as `startConversation`, `sendMessage`,
 `fetchMessages`, and `fetchCobrowseStatus` expect the visitor to have been
 bootstrapped first.
+Host pages may pass a small `visitorContext` object to `Wayfindr.init`, or a
+`context` object to `bootstrap`, `startConversation`, or `sendFirstMessage`.
+Keep it operational and low-risk, such as plan, tier, product area, or support
+region. Wayfindr sanitizes this context server-side, drops obvious sensitive
+keys and non-scalar values, and truncates long values before agents can see it.
 `subscribeToConversation` prepares a private `conversations.{supportCode}`
 subscription for realtime adapters and uses Wayfindr's signed visitor session
 when authorizing the channel.

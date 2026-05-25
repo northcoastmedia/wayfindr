@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
 use App\Support\CobrowseConsentState;
+use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ use Illuminate\Validation\ValidationException;
 
 class AgentConversationController extends Controller
 {
-    public function show(Request $request, string $supportCode, CobrowseConsentState $cobrowseConsentState): View
+    public function show(Request $request, string $supportCode, CobrowseConsentState $cobrowseConsentState, VisitorContextSanitizer $visitorContextSanitizer): View
     {
         $agent = $request->user();
 
@@ -49,7 +50,7 @@ class AgentConversationController extends Controller
             'priorConversations' => $this->priorConversations($conversation),
             'realtime' => $this->realtimeConfig($conversation),
             'tickets' => $tickets,
-            'visitorContext' => $this->visitorContext($conversation),
+            'visitorContext' => $this->visitorContext($conversation, $visitorContextSanitizer),
         ]);
     }
 
@@ -281,9 +282,9 @@ class AgentConversationController extends Controller
     }
 
     /**
-     * @return array{anonymous_id: string, last_seen_at: Carbon|null, last_page_url: string|null, started_page_url: string|null}
+     * @return array{anonymous_id: string, last_seen_at: Carbon|null, last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
      */
-    private function visitorContext(Conversation $conversation): array
+    private function visitorContext(Conversation $conversation, VisitorContextSanitizer $visitorContextSanitizer): array
     {
         $visitor = $conversation->visitor;
         $visitorMetadata = $visitor?->metadata ?? [];
@@ -294,6 +295,7 @@ class AgentConversationController extends Controller
             'last_seen_at' => $visitor?->last_seen_at,
             'last_page_url' => $this->contextString($visitorMetadata['last_page_url'] ?? null),
             'started_page_url' => $this->contextString($conversationMetadata['started_page_url'] ?? null),
+            'host_context' => $visitorContextSanitizer->sanitize($visitorMetadata['context'] ?? []),
         ];
     }
 

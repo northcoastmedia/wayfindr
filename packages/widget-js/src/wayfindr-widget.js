@@ -143,12 +143,12 @@
     return {
       anonymousId: anonymousId,
       sitePublicKey: sitePublicKey,
-      bootstrap: function (pageUrl) {
-        return postJson(fetcher, apiBaseUrl + '/api/widget/bootstrap', {
+      bootstrap: function (pageUrl, context) {
+        return postJson(fetcher, apiBaseUrl + '/api/widget/bootstrap', withVisitorContext({
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
           page_url: pageUrl || null,
-        }).then(function (result) {
+        }, context)).then(function (result) {
           var token = result && result.visitor ? result.visitor.token : null;
 
           if (token) {
@@ -164,13 +164,13 @@
       startConversation: function (body, details) {
         details = details || {};
 
-        return postJson(fetcher, apiBaseUrl + '/api/conversations', {
+        return postJson(fetcher, apiBaseUrl + '/api/conversations', withVisitorContext({
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
           visitor_token: requireVisitorToken(visitorToken),
           subject: details.subject || summarize(body),
           page_url: details.pageUrl || null,
-        });
+        }, details.context));
       },
       sendMessage: function (supportCode, body) {
         return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages', {
@@ -286,7 +286,7 @@
         details = details || {};
 
         if (!visitorToken) {
-          await this.bootstrap(details.pageUrl || null);
+          await this.bootstrap(details.pageUrl || null, details.context);
         }
 
         var conversation = await this.startConversation(body, details);
@@ -386,6 +386,7 @@
     var messagePollTimer = null;
     var cobrowseStatusPollMs = typeof options.cobrowseStatusPollMs === 'number' ? Math.max(0, options.cobrowseStatusPollMs) : 5000;
     var cobrowseStatusTimer = null;
+    var visitorContext = options.visitorContext || null;
 
     function renderMessages(nextMessages) {
       messages = Array.isArray(nextMessages) ? nextMessages : messages;
@@ -778,7 +779,7 @@
 
       try {
         if (!bootstrapped) {
-          await client.bootstrap(location ? location.href : null);
+          await client.bootstrap(location ? location.href : null, visitorContext);
           bootstrapped = true;
         }
 
@@ -787,6 +788,7 @@
         } else {
           var result = await client.sendFirstMessage(body, {
             pageUrl: location ? location.href : null,
+            context: visitorContext,
           });
 
           supportCode = result.conversation.support_code;
@@ -1514,6 +1516,14 @@
 
   function summarize(body) {
     return String(body || '').replace(/\s+/g, ' ').trim().slice(0, 255) || null;
+  }
+
+  function withVisitorContext(payload, context) {
+    if (context && typeof context === 'object' && !Array.isArray(context)) {
+      payload.context = context;
+    }
+
+    return payload;
   }
 
   function randomToken() {
