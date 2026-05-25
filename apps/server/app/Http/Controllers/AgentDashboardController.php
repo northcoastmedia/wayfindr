@@ -92,14 +92,20 @@ class AgentDashboardController extends Controller
             ->orderByDesc('created_at')
             ->get();
         $tickets = Ticket::query()
-            ->with(['assignee', 'conversation', 'site'])
+            ->with(['assignee', 'conversation.latestMessage', 'site'])
             ->where('account_id', $account->id)
             ->when($ticketStatus !== 'all', fn ($query) => $query->where('status', $ticketStatus))
             ->when($ticketFilter === 'assigned_to_me', fn ($query) => $query->where('assignee_id', $agent->id))
             ->when($ticketFilter === 'unassigned', fn ($query) => $query->whereNull('assignee_id'))
             ->orderByDesc('updated_at')
             ->orderByDesc('created_at')
-            ->get();
+            ->get()
+            ->sortBy(fn (Ticket $ticket): array => [
+                $ticket->attentionSortRank(),
+                -$ticket->updated_at->getTimestamp(),
+                -$ticket->created_at->getTimestamp(),
+            ])
+            ->values();
         $unreadNotificationsQuery = $agent->unreadNotifications()
             ->whereIn('type', [
                 ConversationNeedsReply::class,
