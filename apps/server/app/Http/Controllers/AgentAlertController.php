@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Notifications\ConversationNeedsReply;
-use App\Notifications\TicketAssigned;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Gate;
 
 class AgentAlertController extends Controller
 {
@@ -14,9 +13,7 @@ class AgentAlertController extends Controller
     {
         $agent = $request->user();
 
-        abort_unless($notification->notifiable_type === $agent->getMorphClass(), 404);
-        abort_unless((string) $notification->notifiable_id === (string) $agent->getKey(), 404);
-        abort_unless(in_array($notification->type, $this->supportAlertTypes(), true), 404);
+        abort_unless(Gate::forUser($agent)->allows('markRead', $notification), 404);
 
         $notification->markAsRead();
 
@@ -25,24 +22,15 @@ class AgentAlertController extends Controller
 
     public function markAllRead(Request $request): RedirectResponse
     {
-        $request->user()
+        $agent = $request->user();
+
+        $agent
             ->unreadNotifications()
-            ->whereIn('type', $this->supportAlertTypes())
             ->get()
+            ->filter(fn (DatabaseNotification $notification): bool => Gate::forUser($agent)->allows('markRead', $notification))
             ->each
             ->markAsRead();
 
         return redirect()->route('dashboard');
-    }
-
-    /**
-     * @return list<class-string>
-     */
-    private function supportAlertTypes(): array
-    {
-        return [
-            ConversationNeedsReply::class,
-            TicketAssigned::class,
-        ];
     }
 }

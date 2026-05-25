@@ -1,0 +1,56 @@
+<?php
+
+namespace App\Policies;
+
+use App\Models\Conversation;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Notifications\ConversationNeedsReply;
+use App\Notifications\TicketAssigned;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Gate;
+
+class AlertPolicy
+{
+    public function view(User $user, DatabaseNotification $notification): bool
+    {
+        return $this->belongsTo($user, $notification)
+            && $this->supportAlertVisibleTo($user, $notification);
+    }
+
+    public function markRead(User $user, DatabaseNotification $notification): bool
+    {
+        return $this->view($user, $notification);
+    }
+
+    private function belongsTo(User $user, DatabaseNotification $notification): bool
+    {
+        return $notification->notifiable_type === $user->getMorphClass()
+            && (string) $notification->notifiable_id === (string) $user->getKey();
+    }
+
+    private function supportAlertVisibleTo(User $user, DatabaseNotification $notification): bool
+    {
+        if ($notification->type === ConversationNeedsReply::class) {
+            $conversationId = (int) data_get($notification->data, 'conversation_id');
+            $conversation = $conversationId > 0
+                ? Conversation::query()->with('site')->find($conversationId)
+                : null;
+
+            return $conversation
+                && Gate::forUser($user)->allows('view', $conversation);
+        }
+
+        if ($notification->type === TicketAssigned::class) {
+            $ticketId = (int) data_get($notification->data, 'ticket_id');
+            $ticket = $ticketId > 0
+                ? Ticket::query()->with('site')->find($ticketId)
+                : null;
+
+            return $ticket
+                && Gate::forUser($user)->allows('view', $ticket);
+        }
+
+        return false;
+    }
+}

@@ -413,6 +413,75 @@ test('agent cannot mark another agent alert as read', function (): void {
     expect($notification->fresh()->unread())->toBeTrue();
 });
 
+test('agent cannot mark a stale conversation alert read after losing site access', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $remainingAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-STALE1',
+    ]);
+    $message = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'This should no longer be visible.',
+    ]);
+    $agent->notify(new ConversationNeedsReply($message));
+    $notification = $agent->unreadNotifications()->firstOrFail();
+
+    $site->supportAgents()->sync([$remainingAgent->id]);
+
+    $this->actingAs($agent)
+        ->post("/dashboard/alerts/{$notification->id}/read")
+        ->assertNotFound();
+
+    expect($notification->fresh()->unread())->toBeTrue();
+});
+
+test('agent mark all read skips stale alerts after losing site access', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $remainingAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $visibleSite = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $hiddenSite = Site::factory()->for($account)->create(['public_key' => 'site_hidden_docs']);
+    $visibleVisitor = Visitor::factory()->for($visibleSite)->create(['anonymous_id' => 'anon-visible']);
+    $hiddenVisitor = Visitor::factory()->for($hiddenSite)->create(['anonymous_id' => 'anon-hidden']);
+    $visibleConversation = Conversation::factory()->for($visibleSite)->for($visibleVisitor)->create([
+        'support_code' => 'WF-VISIBLE1',
+    ]);
+    $hiddenConversation = Conversation::factory()->for($hiddenSite)->for($hiddenVisitor)->create([
+        'support_code' => 'WF-HIDDEN1',
+    ]);
+    $visibleMessage = ConversationMessage::factory()->for($visibleConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visibleVisitor->id,
+        'body' => 'This one is still visible.',
+    ]);
+    $hiddenMessage = ConversationMessage::factory()->for($hiddenConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $hiddenVisitor->id,
+        'body' => 'This one should stay unread.',
+    ]);
+    $agent->notify(new ConversationNeedsReply($visibleMessage));
+    $agent->notify(new ConversationNeedsReply($hiddenMessage));
+    $visibleNotification = $agent->unreadNotifications()
+        ->get()
+        ->firstOrFail(fn ($notification): bool => data_get($notification->data, 'support_code') === 'WF-VISIBLE1');
+    $hiddenNotification = $agent->unreadNotifications()
+        ->get()
+        ->firstOrFail(fn ($notification): bool => data_get($notification->data, 'support_code') === 'WF-HIDDEN1');
+
+    $hiddenSite->supportAgents()->sync([$remainingAgent->id]);
+
+    $this->actingAs($agent)
+        ->post('/dashboard/alerts/read')
+        ->assertRedirect('/dashboard');
+
+    expect($visibleNotification->fresh()->read())->toBeTrue()
+        ->and($hiddenNotification->fresh()->unread())->toBeTrue();
+});
+
 test('opening a conversation marks its unread alerts as read', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
