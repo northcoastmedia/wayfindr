@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\AccountRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['account_id', 'name', 'email', 'password'])]
+#[Fillable(['account_id', 'account_role', 'name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -29,6 +30,7 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'account_role' => AccountRole::class,
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
@@ -37,6 +39,26 @@ class User extends Authenticatable
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function hasAccountRole(AccountRole $role): bool
+    {
+        return $this->account_role === $role;
+    }
+
+    public function isOwner(): bool
+    {
+        return $this->hasAccountRole(AccountRole::Owner);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->isOwner() || $this->hasAccountRole(AccountRole::Admin);
+    }
+
+    public function isAgent(): bool
+    {
+        return $this->isAdmin() || $this->hasAccountRole(AccountRole::Agent);
     }
 
     public function assignedConversations(): HasMany

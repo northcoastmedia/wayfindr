@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -27,6 +28,7 @@ class DatabaseSeeder extends Seeder
             ['email' => 'agent@example.com'],
             [
                 'account_id' => $account->id,
+                'account_role' => AccountRole::Owner,
                 'name' => 'Demo Agent',
                 'password' => Hash::make('password'),
             ],

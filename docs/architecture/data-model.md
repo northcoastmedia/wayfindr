@@ -5,7 +5,7 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 ## Core Records
 
 - `accounts`: tenant boundary for a support team.
-- `users`: Laravel users; currently treated as support agents and attached to one account.
+- `users`: Laravel users attached to one account with a starter `account_role` of `owner`, `admin`, or `agent`.
 - `sites`: install targets owned by an account. Each site has a public key used by widgets and integrations.
 - `site_user`: support-agent access for sites. Empty site membership means account-wide fallback for early installs; explicit rows narrow the support queue to assigned agents.
 - `visitors`: anonymous or identified people seen on a site.

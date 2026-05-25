@@ -30,6 +30,7 @@ test('support domain tables are migrated', function (): void {
     }
 
     expect(Schema::hasColumn('users', 'account_id'))->toBeTrue();
+    expect(Schema::hasColumn('users', 'account_role'))->toBeTrue();
 });
 
 test('support session records share the expected relationships', function (): void {

@@ -17,7 +17,7 @@ Roles answer "what can this person do?" Site access answers "where can this pers
 
 - `Account`: tenant boundary for sites, agents, tickets, conversations, audit events, privacy settings, and future billing.
 - `User`: authenticated person.
-- `Membership`: the user's relationship to an account. This is where the account role should eventually live.
+- `Membership`: the user's relationship to an account. Wayfindr starts with `users.account_role` while users belong to one account; a dedicated membership model can replace it when multi-account users become necessary.
 - `Role`: named bundle of account authority.
 - `Permission`: specific action granted by a role.
 - `Site access`: support scope for conversations, tickets, alerts, realtime channels, and cobrowse sessions.
@@ -142,7 +142,7 @@ Every RBAC implementation slice should include tests for:
 ## Implementation Waypoints
 
 1. Document the vocabulary, permissions, and role matrix.
-2. Introduce a membership role field or membership model.
+2. Introduce `users.account_role` as the starter role field.
 3. Add role helpers without changing behavior.
 4. Move one support surface at a time behind policies.
 5. Tighten site privacy settings behind owner/admin authority plus site access.

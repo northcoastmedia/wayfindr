@@ -12,6 +12,8 @@ An account is the tenant boundary. Sites, agents, tickets, conversations, audit 
 
 An agent is a Laravel user attached to one account. Agents can sign in, view the agent dashboard, reply to conversations, request cobrowse consent, and work tickets when they have access to the relevant site.
 
+The starter RBAC implementation stores account authority on `users.account_role` while Wayfindr still supports one account per user. A dedicated membership model can replace this when multi-account users become a real product need.
+
 ### Site access
 
 Site access controls which agents support which sites. Conversations, tickets, alerts, ticket assignment options, and realtime conversation channels should respect site access.
