@@ -789,6 +789,89 @@ test('agent can view their account conversation timeline', function (): void {
         ->assertSeeInOrder(['First visitor message.', 'First agent note.']);
 });
 
+test('agent can view safe visitor context on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-acme',
+        'last_seen_at' => now()->subMinutes(7),
+        'metadata' => [
+            'last_page_url' => 'https://docs.example.test/billing',
+        ],
+    ]);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CONTEXT',
+        'subject' => 'Billing confusion',
+        'metadata' => [
+            'started_page_url' => 'https://docs.example.test/pricing',
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CONTEXT')
+        ->assertOk()
+        ->assertSee('Visitor context')
+        ->assertSee('Last seen')
+        ->assertSee('7 minutes ago')
+        ->assertSee('Latest page')
+        ->assertSee('https://docs.example.test/billing')
+        ->assertSee('Started on')
+        ->assertSee('https://docs.example.test/pricing')
+        ->assertSee('Use this context to orient support, not to collect extra visitor data.');
+});
+
+test('agent can view prior conversations for the same visitor and site', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $otherSite = Site::factory()->for($account)->create(['name' => 'Acme Store']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $otherVisitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-other']);
+    $otherSiteVisitor = Visitor::factory()->for($otherSite)->create(['anonymous_id' => 'anon-acme']);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-OLDONE',
+        'subject' => 'Earlier billing question',
+        'status' => 'closed',
+        'created_at' => now()->subDays(3),
+        'last_message_at' => now()->subDays(2),
+    ]);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-OLDER2',
+        'subject' => 'Second earlier question',
+        'status' => 'open',
+        'created_at' => now()->subDays(5),
+        'last_message_at' => now()->subDays(4),
+    ]);
+    Conversation::factory()->for($site)->for($otherVisitor)->create([
+        'support_code' => 'WF-OTHER1',
+        'subject' => 'Different visitor question',
+    ]);
+    Conversation::factory()->for($otherSite)->for($otherSiteVisitor)->create([
+        'support_code' => 'WF-OTHERS',
+        'subject' => 'Other site question',
+    ]);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CURRENT',
+        'subject' => 'Current billing question',
+        'created_at' => now(),
+        'last_message_at' => now(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CURRENT')
+        ->assertOk()
+        ->assertSee('Prior conversations')
+        ->assertSee('2 previous')
+        ->assertSee('Earlier billing question')
+        ->assertSee('WF-OLDONE')
+        ->assertSee('Second earlier question')
+        ->assertSee('WF-OLDER2')
+        ->assertDontSee('Different visitor question')
+        ->assertDontSee('Other site question');
+});
+
 test('agent can close an open conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

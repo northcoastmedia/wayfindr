@@ -20,6 +20,7 @@ This roadmap is directional and should not include private business strategy.
 - RBAC permission inventory and policy waypoints.
 - Shared inbox.
 - Visitor list.
+- Visitor context panel.
 - Basic conversations.
 - Basic tickets.
 - Agent-controlled AI reply draft spike.
