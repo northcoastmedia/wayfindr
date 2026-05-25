@@ -201,29 +201,50 @@
                     <span class="lede">{{ count($maskSelectors) }} configured</span>
                 </div>
 
-                <form class="section-form" method="POST" action="{{ route('dashboard.sites.update', $site) }}">
-                    @csrf
-                    @method('PUT')
+                @if ($canUpdatePrivacy)
+                    <form class="section-form" method="POST" action="{{ route('dashboard.sites.update', $site) }}">
+                        @csrf
+                        @method('PUT')
 
-                    <div class="field">
-                        <label for="mask_selectors">Selectors to mask before cobrowse sharing</label>
-                        <textarea id="mask_selectors" name="mask_selectors" spellcheck="false">{{ old('mask_selectors', implode("\n", $maskSelectors)) }}</textarea>
-                        @error('mask_selectors')
-                            <p class="field-error">{{ $message }}</p>
-                        @enderror
+                        <div class="field">
+                            <label for="mask_selectors">Selectors to mask before cobrowse sharing</label>
+                            <textarea id="mask_selectors" name="mask_selectors" spellcheck="false">{{ old('mask_selectors', implode("\n", $maskSelectors)) }}</textarea>
+                            @error('mask_selectors')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <p class="field-help">
+                            Add one CSS selector per line. These selectors are sent to the widget as public configuration, so do not put private notes or secrets here.
+                        </p>
+
+                        <div class="notice-list">
+                            <p><code>data-wayfindr-mask</code> and <code>data-wayfindr-private</code> force masking for known sensitive areas.</p>
+                            <p><code>data-wayfindr-allow</code> is only for deliberate false positives where the content is safe to share.</p>
+                        </div>
+
+                        <button class="button" type="submit">Save privacy settings</button>
+                    </form>
+                @else
+                    <div class="notice-copy">
+                        <p>Account owners and admins manage privacy settings.</p>
                     </div>
 
-                    <p class="field-help">
-                        Add one CSS selector per line. These selectors are sent to the widget as public configuration, so do not put private notes or secrets here.
-                    </p>
+                    @if (count($maskSelectors) === 0)
+                        <p class="empty">No custom mask selectors are configured.</p>
+                    @else
+                        <div class="notice-list">
+                            @foreach ($maskSelectors as $maskSelector)
+                                <p><code>{{ $maskSelector }}</code></p>
+                            @endforeach
+                        </div>
+                    @endif
 
                     <div class="notice-list">
                         <p><code>data-wayfindr-mask</code> and <code>data-wayfindr-private</code> force masking for known sensitive areas.</p>
                         <p><code>data-wayfindr-allow</code> is only for deliberate false positives where the content is safe to share.</p>
                     </div>
-
-                    <button class="button" type="submit">Save privacy settings</button>
-                </form>
+                @endif
             </section>
         </main>
     </div>

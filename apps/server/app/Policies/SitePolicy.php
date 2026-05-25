@@ -14,7 +14,7 @@ class SitePolicy
 
     public function updatePrivacy(User $user, Site $site): bool
     {
-        return $this->view($user, $site);
+        return $user->isAdmin() && $this->view($user, $site);
     }
 
     public function manageAccess(User $user, Site $site): bool

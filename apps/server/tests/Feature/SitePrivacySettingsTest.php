@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -67,12 +68,12 @@ test('site creation requires an agent account', function (): void {
     expect(Site::query()->count())->toBe(0);
 });
 
-test('agent can view their account site privacy settings', function (): void {
+test('agent can view their account site privacy settings without edit controls', function (): void {
     config()->set('app.url', 'http://localhost');
     config()->set('broadcasting.default', 'null');
 
     $account = Account::factory()->create(['name' => 'Acme Support']);
-    $agent = User::factory()->for($account)->create();
+    $agent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
     $site = Site::factory()->for($account)->create([
         'name' => 'Acme Docs',
         'domain' => 'docs.example.test',
@@ -102,6 +103,9 @@ test('agent can view their account site privacy settings', function (): void {
         ->assertSee('data-wayfindr-private')
         ->assertSee('data-wayfindr-allow')
         ->assertSee('Retaining visitor-supplied data may create privacy, security, and legal obligations.')
+        ->assertSee('Account owners and admins manage privacy settings.')
+        ->assertDontSee('<textarea id="mask_selectors"', false)
+        ->assertDontSee('Save privacy settings')
         ->assertDontSee('internal_note')
         ->assertDontSee('do not show this');
 });
@@ -137,9 +141,9 @@ test('site install snippet includes public reverb configuration when realtime is
         ->assertDontSee('keep private');
 });
 
-test('agent can update mask selectors for their account site', function (): void {
+test('account admins can update mask selectors for their account site', function (): void {
     $account = Account::factory()->create();
-    $agent = User::factory()->for($account)->create();
+    $agent = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
     $site = Site::factory()->for($account)->create([
         'settings' => [
             'mask_selectors' => ['[data-old]'],
@@ -159,6 +163,25 @@ test('agent can update mask selectors for their account site', function (): void
         'mask_selectors' => ['[data-secret]', 'input[name="token"]'],
         'internal_note' => 'keep me',
     ]);
+});
+
+test('plain agents cannot update mask selectors for their account site', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+    $site = Site::factory()->for($account)->create([
+        'settings' => [
+            'mask_selectors' => ['[data-original]'],
+        ],
+    ]);
+    $site->supportAgents()->attach($agent);
+
+    $this->actingAs($agent)
+        ->put("/dashboard/sites/{$site->id}", [
+            'mask_selectors' => '[data-secret]',
+        ])
+        ->assertForbidden();
+
+    expect($site->fresh()->settings['mask_selectors'])->toBe(['[data-original]']);
 });
 
 test('agent cannot view another account site settings', function (): void {
