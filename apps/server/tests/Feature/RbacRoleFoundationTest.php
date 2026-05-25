@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -127,6 +128,25 @@ test('owners can change another account agent role and record an audit event', f
             'old_role' => AccountRole::Agent->value,
             'new_role' => AccountRole::Admin->value,
         ]);
+});
+
+test('role changes lock actor and target rows in a deterministic query', function (): void {
+    $account = Account::factory()->create();
+    $target = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+    $actor = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+
+    DB::enableQueryLog();
+
+    app(UpdateAgentRole::class)->handle($actor, $target, AccountRole::Admin);
+
+    $lockQuery = collect(DB::getQueryLog())
+        ->pluck('query')
+        ->first(fn (string $query): bool => str_contains($query, 'from "users"')
+            && str_contains($query, '"id" in')
+            && str_contains($query, 'order by "id" asc'));
+
+    expect($target->fresh()->account_role)->toBe(AccountRole::Admin)
+        ->and($lockQuery)->not->toBeNull();
 });
 
 test('admins and agents cannot change account roles', function (AccountRole $actorRole): void {

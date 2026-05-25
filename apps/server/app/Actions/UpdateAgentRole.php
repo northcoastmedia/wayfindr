@@ -6,6 +6,8 @@ use App\Enums\AccountRole;
 use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,8 +16,9 @@ class UpdateAgentRole
     public function handle(User $actor, User $target, AccountRole $role): User
     {
         return DB::transaction(function () use ($actor, $target, $role): User {
-            $actor = User::query()->lockForUpdate()->findOrFail($actor->id);
-            $target = User::query()->lockForUpdate()->findOrFail($target->id);
+            $users = $this->lockUsers($actor, $target);
+            $actor = $this->lockedUser($users, $actor);
+            $target = $this->lockedUser($users, $target);
 
             $this->authorize($actor, $target);
             $this->preventLastOwnerRemoval($target, $role);
@@ -45,6 +48,39 @@ class UpdateAgentRole
 
             return $target->refresh();
         });
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function lockUsers(User $actor, User $target): Collection
+    {
+        $userIds = collect([$actor->id, $target->id])
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return User::query()
+            ->whereKey($userIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+    }
+
+    /**
+     * @param  Collection<int, User>  $users
+     */
+    private function lockedUser(Collection $users, User $user): User
+    {
+        $lockedUser = $users->get($user->id);
+
+        if (! $lockedUser instanceof User) {
+            throw (new ModelNotFoundException)->setModel(User::class, [$user->id]);
+        }
+
+        return $lockedUser;
     }
 
     private function authorize(User $actor, User $target): void
