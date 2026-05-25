@@ -86,6 +86,54 @@
                 </section>
             @endif
 
+            @if ($visitorContext['last_page_url'] || $visitorContext['started_page_url'] || $visitorContext['host_context'] !== [])
+                <section class="section" aria-labelledby="ticket-visitor-context-heading">
+                    <div class="section-header">
+                        <h2 id="ticket-visitor-context-heading">Visitor context</h2>
+                        <span class="lede">Captured from conversation</span>
+                    </div>
+
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Latest page</span>
+                            <span class="meta-value">{{ $visitorContext['last_page_url'] ?? 'Not reported' }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Started on</span>
+                            <span class="meta-value">{{ $visitorContext['started_page_url'] ?? 'Not reported' }}</span>
+                        </div>
+                    </div>
+
+                    <div class="section-header">
+                        <strong>Host context</strong>
+                        <span class="lede">{{ count($visitorContext['host_context']) }} fields</span>
+                    </div>
+
+                    @if ($visitorContext['host_context'] === [])
+                        <p class="empty">No host-provided context was captured.</p>
+                    @else
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Field</th>
+                                        <th scope="col">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($visitorContext['host_context'] as $field => $value)
+                                        <tr>
+                                            <td>{{ $field }}</td>
+                                            <td>{{ $value }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </section>
+            @endif
+
             <section class="section" aria-labelledby="ticket-actions-heading">
                 <div class="section-header">
                     <h2 id="ticket-actions-heading">Actions</h2>

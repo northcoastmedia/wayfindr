@@ -1183,11 +1183,24 @@ test('agent can create a ticket from their account conversation', function (): v
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
     $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
-    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $visitor = Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-acme',
+        'metadata' => [
+            'last_page_url' => 'https://docs.example.test/checkout',
+            'context' => [
+                'plan' => 'Team',
+                'support_region' => 'EU',
+                'password' => 'super-secret',
+            ],
+        ],
+    ]);
     $conversation = Conversation::factory()->for($site)->for($visitor)->create([
         'support_code' => 'WF-TICKET1',
         'subject' => 'Checkout trouble',
         'status' => 'open',
+        'metadata' => [
+            'started_page_url' => 'https://docs.example.test/pricing',
+        ],
     ]);
 
     ConversationMessage::factory()->for($conversation)->create([
@@ -1232,7 +1245,17 @@ test('agent can create a ticket from their account conversation', function (): v
     expect($ticket->metadata)->toMatchArray([
         'source' => 'conversation',
         'support_code' => 'WF-TICKET1',
+        'visitor_context' => [
+            'last_page_url' => 'https://docs.example.test/checkout',
+            'started_page_url' => 'https://docs.example.test/pricing',
+            'host_context' => [
+                'plan' => 'Team',
+                'support_region' => 'EU',
+            ],
+        ],
     ]);
+
+    expect($ticket->metadata['visitor_context']['host_context'])->not->toHaveKey('password');
 
     expect($conversation->fresh()->assigned_agent_id)->toBe($agent->id);
 
@@ -1274,6 +1297,17 @@ test('agent can view a durable ticket record for their account', function (): vo
             'priority' => 'high',
             'status' => 'open',
             'subject' => 'Escalated checkout issue',
+            'metadata' => [
+                'visitor_context' => [
+                    'last_page_url' => 'https://docs.example.test/checkout',
+                    'started_page_url' => 'https://docs.example.test/pricing',
+                    'host_context' => [
+                        'plan' => 'Team',
+                        'support_region' => 'EU',
+                        'password' => 'super-secret',
+                    ],
+                ],
+            ],
         ]);
 
     $this->actingAs($agent)
@@ -1287,6 +1321,17 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('anon-acme')
         ->assertSee('WF-TICKETSHOW')
         ->assertSee('Checkout trouble')
+        ->assertSee('Visitor context')
+        ->assertSee('Latest page')
+        ->assertSee('https://docs.example.test/checkout')
+        ->assertSee('Started on')
+        ->assertSee('https://docs.example.test/pricing')
+        ->assertSee('Host context')
+        ->assertSee('plan')
+        ->assertSee('Team')
+        ->assertSee('support_region')
+        ->assertSee('EU')
+        ->assertDontSee('super-secret')
         ->assertSee('The visitor cannot finish checkout after entering shipping details.')
         ->assertSee('Bea Builder')
         ->assertSee('Assign ticket')

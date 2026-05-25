@@ -157,7 +157,7 @@ class AgentConversationController extends Controller
             ->with('status', 'Conversation released.');
     }
 
-    public function storeTicket(Request $request, string $supportCode): RedirectResponse
+    public function storeTicket(Request $request, string $supportCode, VisitorContextSanitizer $visitorContextSanitizer): RedirectResponse
     {
         $agent = $request->user();
         $conversation = $this->conversationForAgent($agent, $supportCode, 'createTicket')
@@ -185,6 +185,7 @@ class AgentConversationController extends Controller
             'metadata' => [
                 'source' => 'conversation',
                 'support_code' => $conversation->support_code,
+                'visitor_context' => $this->ticketVisitorContext($conversation, $visitorContextSanitizer),
             ],
         ]);
 
@@ -324,6 +325,21 @@ class AgentConversationController extends Controller
         $value = trim($value);
 
         return $value === '' ? null : mb_substr($value, 0, 2048);
+    }
+
+    /**
+     * @return array{last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
+     */
+    private function ticketVisitorContext(Conversation $conversation, VisitorContextSanitizer $visitorContextSanitizer): array
+    {
+        $visitorMetadata = $conversation->visitor?->metadata ?? [];
+        $conversationMetadata = $conversation->metadata ?? [];
+
+        return [
+            'last_page_url' => $this->contextString($visitorMetadata['last_page_url'] ?? null),
+            'started_page_url' => $this->contextString($conversationMetadata['started_page_url'] ?? null),
+            'host_context' => $visitorContextSanitizer->sanitize($visitorMetadata['context'] ?? []),
+        ];
     }
 
     private function activeCobrowseSession(Conversation $conversation): ?CobrowseSession
