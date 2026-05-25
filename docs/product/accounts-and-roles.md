@@ -42,7 +42,7 @@ Possible later roles:
 - Site access should land before broad role management.
 - RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
-- Role management should start owner-only, with last-owner protection and audit events before admins can grant roles.
+- Role changes start owner-only at the action layer, with same-account boundaries, self-change denial, last-owner protection, and audit events before any role management UI ships.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Cobrowse access should require both account membership and site access.
