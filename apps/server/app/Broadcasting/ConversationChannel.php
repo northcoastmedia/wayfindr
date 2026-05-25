@@ -5,6 +5,7 @@ namespace App\Broadcasting;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Models\Visitor;
+use Illuminate\Support\Facades\Gate;
 
 class ConversationChannel
 {
@@ -24,7 +25,7 @@ class ConversationChannel
         }
 
         if ($participant instanceof User) {
-            return $conversation->site?->supportsAgent($participant) === true;
+            return Gate::forUser($participant)->allows('view', $conversation);
         }
 
         return $conversation->visitor_id === $participant->id;

@@ -144,7 +144,7 @@ Every RBAC implementation slice should include tests for:
 1. Document the vocabulary, permissions, and role matrix.
 2. Introduce `users.account_role` as the starter role field.
 3. Add role helpers without changing behavior.
-4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`.
+4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`; agent conversation detail, reply, status, assignment, ticket creation, cobrowse request, and realtime channel access now use `ConversationPolicy`.
 5. Tighten site privacy settings behind owner/admin authority plus site access. Site privacy settings now follow this rule.
 6. Add role management UI only after policies exist.
 7. Add audit events for role and site-access changes.
