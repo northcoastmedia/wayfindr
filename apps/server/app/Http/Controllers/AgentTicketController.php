@@ -256,6 +256,7 @@ class AgentTicketController extends Controller
     private function visibleActivityActions(): array
     {
         return [
+            'ticket.created',
             'ticket.updated',
             'ticket.pending',
             'ticket.closed',
