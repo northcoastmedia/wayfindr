@@ -54,8 +54,10 @@ class AgentSiteController extends Controller
     public function show(Request $request, Site $site): View
     {
         $this->authorizeSiteAbility($request, 'view', $site, 404);
+
+        $agent = $request->user();
         $site->loadMissing('latestVisitor');
-        $account = $request->user()->account()->firstOrFail();
+        $account = $agent->account()->firstOrFail();
         $accountAgents = $account->agents()
             ->orderBy('name')
             ->orderBy('email')
@@ -65,8 +67,9 @@ class AgentSiteController extends Controller
         return view('agent.sites.show', [
             'account' => $account,
             'accountAgents' => $accountAgents,
-            'agent' => $request->user(),
-            'canManageSiteAccess' => $request->user()->isAdmin(),
+            'agent' => $agent,
+            'canManageSiteAccess' => $agent->isAdmin(),
+            'canUpdatePrivacy' => Gate::forUser($agent)->allows('updatePrivacy', $site),
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'maskSelectors' => $this->maskSelectors($site),
             'site' => $site,
@@ -79,7 +82,8 @@ class AgentSiteController extends Controller
 
     public function update(Request $request, Site $site): RedirectResponse
     {
-        $this->authorizeSiteAbility($request, 'updatePrivacy', $site, 404);
+        $this->authorizeSiteAbility($request, 'view', $site, 404);
+        $this->authorizeSiteAbility($request, 'updatePrivacy', $site);
 
         $validated = $request->validate([
             'mask_selectors' => ['nullable', 'string', 'max:4000'],

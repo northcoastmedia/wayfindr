@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Gate;
 
 uses(RefreshDatabase::class);
 
-test('site policy allows support agents to view and update privacy for sites they support', function (): void {
+test('site policy allows support agents to view but not update privacy for sites they support', function (): void {
     $account = Account::factory()->create();
     $supportAgent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
     $otherAgent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
@@ -17,9 +17,22 @@ test('site policy allows support agents to view and update privacy for sites the
     $site->supportAgents()->attach($supportAgent);
 
     expect(Gate::forUser($supportAgent)->allows('view', $site))->toBeTrue()
-        ->and(Gate::forUser($supportAgent)->allows('updatePrivacy', $site))->toBeTrue()
+        ->and(Gate::forUser($supportAgent)->allows('updatePrivacy', $site))->toBeFalse()
         ->and(Gate::forUser($otherAgent)->allows('view', $site))->toBeFalse()
         ->and(Gate::forUser($otherAgent)->allows('updatePrivacy', $site))->toBeFalse();
+});
+
+test('site policy allows account owners and admins to update privacy only for sites they support', function (): void {
+    $account = Account::factory()->create();
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+    $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $unsupportedAdmin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach([$owner->id, $admin->id]);
+
+    expect(Gate::forUser($owner)->allows('updatePrivacy', $site))->toBeTrue()
+        ->and(Gate::forUser($admin)->allows('updatePrivacy', $site))->toBeTrue()
+        ->and(Gate::forUser($unsupportedAdmin)->allows('updatePrivacy', $site))->toBeFalse();
 });
 
 test('site policy allows account owners and admins to manage access only for sites they support', function (): void {
