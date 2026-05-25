@@ -1,7 +1,9 @@
 <?php
 
 use App\Broadcasting\ConversationChannel;
+use App\Enums\AccountRole;
 use App\Models\Account;
+use App\Models\AuditEvent;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
@@ -334,6 +336,147 @@ test('bootstrap attaches the first agent to the first site', function (): void {
         ->and($bootstrapSite->supportAgents()->whereKey($bootstrapAgent->id)->exists())->toBeTrue();
 });
 
+test('account admins can manage support agents assigned to a site', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+        'email' => 'ada@example.test',
+    ]);
+    $currentAgent = User::factory()->for($account)->create([
+        'name' => 'Bea Builder',
+        'email' => 'bea@example.test',
+    ]);
+    $newAgent = User::factory()->for($account)->create([
+        'name' => 'Casey Catalog',
+        'email' => 'casey@example.test',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $site->supportAgents()->attach([$admin->id, $currentAgent->id]);
+
+    $this->actingAs($admin)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Support access')
+        ->assertSee('2 assigned')
+        ->assertSee('Ada Admin')
+        ->assertSee('Bea Builder')
+        ->assertSee('Casey Catalog')
+        ->assertSee('Save site access');
+
+    $this->actingAs($admin)
+        ->from("/dashboard/sites/{$site->id}")
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [$admin->id, $newAgent->id],
+        ])
+        ->assertRedirect("/dashboard/sites/{$site->id}")
+        ->assertSessionHas('status', 'Site access saved.');
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->sort()->values()->all())
+        ->toBe([$admin->id, $newAgent->id]);
+
+    $auditEvent = AuditEvent::query()
+        ->where('action', 'site_access.updated')
+        ->firstOrFail();
+
+    expect($auditEvent->account_id)->toBe($account->id)
+        ->and($auditEvent->site_id)->toBe($site->id)
+        ->and($auditEvent->actor->is($admin))->toBeTrue()
+        ->and($auditEvent->subject->is($site))->toBeTrue()
+        ->and($auditEvent->metadata)->toMatchArray([
+            'added_agent_ids' => [$newAgent->id],
+            'removed_agent_ids' => [$currentAgent->id],
+        ]);
+});
+
+test('plain agents can see site access context but cannot manage it', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Ada Agent',
+    ]);
+    $teammate = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $site->supportAgents()->attach([$agent->id, $teammate->id]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Support access')
+        ->assertSee('Ada Agent')
+        ->assertSee('Bea Builder')
+        ->assertSee('Account owners and admins manage site support access.')
+        ->assertDontSee('Save site access');
+
+    $this->actingAs($agent)
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [$agent->id],
+        ])
+        ->assertForbidden();
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->sort()->values()->all())
+        ->toBe([$agent->id, $teammate->id]);
+});
+
+test('site access management rejects agents from another account', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $crossAccountAgent = User::factory()->for($otherAccount)->create();
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach($admin);
+
+    $this->actingAs($admin)
+        ->from("/dashboard/sites/{$site->id}")
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [$admin->id, $crossAccountAgent->id],
+        ])
+        ->assertRedirect("/dashboard/sites/{$site->id}")
+        ->assertSessionHasErrors('support_agent_ids.1');
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->all())->toBe([$admin->id])
+        ->and(AuditEvent::query()->where('action', 'site_access.updated')->exists())->toBeFalse();
+});
+
+test('site access management requires at least one assigned support agent', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach($admin);
+
+    $this->actingAs($admin)
+        ->from("/dashboard/sites/{$site->id}")
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [],
+        ])
+        ->assertRedirect("/dashboard/sites/{$site->id}")
+        ->assertSessionHasErrors('support_agent_ids');
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->all())->toBe([$admin->id])
+        ->and(AuditEvent::query()->where('action', 'site_access.updated')->exists())->toBeFalse();
+});
+
+test('site access management requires at least one assigned owner or admin', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $supportAgent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+    $anotherSupportAgent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach([$admin->id, $supportAgent->id]);
+
+    $this->actingAs($admin)
+        ->from("/dashboard/sites/{$site->id}")
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [$supportAgent->id, $anotherSupportAgent->id],
+        ])
+        ->assertRedirect("/dashboard/sites/{$site->id}")
+        ->assertSessionHasErrors('support_agent_ids');
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->sort()->values()->all())
+        ->toBe([$admin->id, $supportAgent->id])
+        ->and(AuditEvent::query()->where('action', 'site_access.updated')->exists())->toBeFalse();
+});
+
 test('account and role roadmap documents the boundary between site access and account authority', function (): void {
     $path = base_path('../../docs/product/accounts-and-roles.md');
 
@@ -343,5 +486,5 @@ test('account and role roadmap documents the boundary between site access and ac
         ->and(file_get_contents($path))->toContain('owner')
         ->and(file_get_contents($path))->toContain('admin')
         ->and(file_get_contents($path))->toContain('agent')
-        ->and(file_get_contents($path))->toContain('not implemented yet');
+        ->and(file_get_contents($path))->toContain('role management UI is not implemented yet');
 });

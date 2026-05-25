@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Site;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AgentSiteController extends Controller
@@ -50,13 +54,24 @@ class AgentSiteController extends Controller
     {
         $this->authorizeSite($request, $site);
         $site->loadMissing('latestVisitor');
+        $account = $request->user()->account()->firstOrFail();
+        $accountAgents = $account->agents()
+            ->orderBy('name')
+            ->orderBy('email')
+            ->get();
+        $supportAgentIds = $this->eligibleSupportAgentIds($site);
 
         return view('agent.sites.show', [
-            'account' => $request->user()->account()->firstOrFail(),
+            'account' => $account,
+            'accountAgents' => $accountAgents,
             'agent' => $request->user(),
+            'canManageSiteAccess' => $request->user()->isAdmin(),
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'maskSelectors' => $this->maskSelectors($site),
             'site' => $site,
+            'siteHasExplicitSupportAgents' => $site->hasExplicitSupportAgents(),
+            'supportAgentIds' => $supportAgentIds,
+            'supportAgents' => $accountAgents->whereIn('id', $supportAgentIds)->values(),
             'widgetInstallSnippet' => $this->widgetInstallSnippet($site),
         ]);
     }
@@ -77,6 +92,48 @@ class AgentSiteController extends Controller
         return redirect()
             ->route('dashboard.sites.show', $site)
             ->with('status', 'Site privacy settings saved.');
+    }
+
+    public function updateSupportAgents(Request $request, Site $site): RedirectResponse
+    {
+        $this->authorizeSite($request, $site);
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $accountAgentIds = $site->account()
+            ->firstOrFail()
+            ->agents()
+            ->pluck('users.id')
+            ->map(fn (int|string $id): int => (int) $id)
+            ->values()
+            ->all();
+
+        $validated = $request->validate([
+            'support_agent_ids' => ['required', 'array', 'min:1'],
+            'support_agent_ids.*' => ['integer', Rule::in($accountAgentIds)],
+        ], [
+            'support_agent_ids.required' => 'Choose at least one support agent.',
+            'support_agent_ids.min' => 'Choose at least one support agent.',
+            'support_agent_ids.*.in' => 'Choose only agents from this account.',
+        ]);
+
+        $beforeAgentIds = $this->eligibleSupportAgentIds($site);
+        $afterAgentIds = $this->normalizeAgentIds($validated['support_agent_ids']);
+
+        if (! $this->hasAssignedSiteManager($site, $afterAgentIds)) {
+            throw ValidationException::withMessages([
+                'support_agent_ids' => 'Keep at least one account owner or admin assigned so site access remains manageable.',
+            ]);
+        }
+
+        $site->supportAgents()->sync($afterAgentIds);
+
+        if ($beforeAgentIds !== $afterAgentIds) {
+            $this->recordSiteAccessChange($site, $request->user(), $beforeAgentIds, $afterAgentIds);
+        }
+
+        return redirect()
+            ->route('dashboard.sites.show', $site)
+            ->with('status', 'Site access saved.');
     }
 
     private function authorizeSite(Request $request, Site $site): void
@@ -114,6 +171,72 @@ class AgentSiteController extends Controller
         $selectors = array_map(fn (string $selector): string => mb_substr($selector, 0, 255), $selectors);
 
         return array_values(array_unique($selectors));
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function eligibleSupportAgentIds(Site $site): array
+    {
+        return $site->eligibleSupportAgents()
+            ->pluck('users.id')
+            ->map(fn (int|string $id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int|string>  $agentIds
+     * @return array<int, int>
+     */
+    private function normalizeAgentIds(array $agentIds): array
+    {
+        return collect($agentIds)
+            ->map(fn (int|string $id): int => (int) $id)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $agentIds
+     */
+    private function hasAssignedSiteManager(Site $site, array $agentIds): bool
+    {
+        return $site->account()
+            ->firstOrFail()
+            ->agents()
+            ->whereIn('users.id', $agentIds)
+            ->whereIn('account_role', [
+                AccountRole::Owner->value,
+                AccountRole::Admin->value,
+            ])
+            ->exists();
+    }
+
+    /**
+     * @param  array<int, int>  $beforeAgentIds
+     * @param  array<int, int>  $afterAgentIds
+     */
+    private function recordSiteAccessChange(Site $site, User $actor, array $beforeAgentIds, array $afterAgentIds): void
+    {
+        $site->auditEvents()->create([
+            'account_id' => $site->account_id,
+            'actor_type' => $actor->getMorphClass(),
+            'actor_id' => $actor->id,
+            'subject_type' => $site->getMorphClass(),
+            'subject_id' => $site->id,
+            'action' => 'site_access.updated',
+            'metadata' => [
+                'before_agent_ids' => $beforeAgentIds,
+                'after_agent_ids' => $afterAgentIds,
+                'added_agent_ids' => array_values(array_diff($afterAgentIds, $beforeAgentIds)),
+                'removed_agent_ids' => array_values(array_diff($beforeAgentIds, $afterAgentIds)),
+            ],
+            'occurred_at' => now(),
+        ]);
     }
 
     private function normalizeDomain(?string $value): ?string

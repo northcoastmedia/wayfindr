@@ -20,11 +20,13 @@ Site access controls which agents support which sites. Conversations, tickets, a
 
 If a site has no assigned support agents yet, Wayfindr treats it as account-wide so first-run installs and existing self-hosted setups do not lock themselves out. Once one or more support agents are assigned to a site, only those agents should see and work that site's support queue.
 
-## Future Account Roles
+Account owners and admins can manage site support access from the site settings screen when they also have access to that site. The UI requires at least one assigned support agent and at least one assigned owner or admin so an operator does not accidentally reopen a configured site to the account-wide fallback or remove every person who can manage access later.
 
-Account roles are about authority, not queue membership. They are not implemented yet. The working RBAC map lives in [RBAC Waypoints](rbac-waypoints.md).
+## Account Roles
 
-The likely first roles are:
+Account roles are about authority, not queue membership. The starter role helpers are implemented on `users.account_role`; role management UI is not implemented yet. The working RBAC map lives in [RBAC Waypoints](rbac-waypoints.md).
+
+The first roles are:
 
 - `owner`: can manage account-level settings, billing or hosted-plan details, agents, roles, sites, and site access. Support queue visibility should still follow site access unless a future elevated-access decision explicitly changes that.
 - `admin`: can manage agents, sites, site access, privacy settings, and support operations for sites they can access, but may not own billing, account transfer controls, or role ownership.
@@ -49,6 +51,5 @@ Possible later roles:
 ## Open Questions
 
 - Should newly created agents be added to all current sites by default, no sites by default, or selected sites only?
-- Should site access management be owner/admin-only from the first role slice?
 - Should WordPress and future integrations expose site-agent assignment hints during install?
 - Should account roles be stored as a simple enum on account membership, or should Wayfindr introduce a dedicated membership model before hosted multi-tenant plans?
