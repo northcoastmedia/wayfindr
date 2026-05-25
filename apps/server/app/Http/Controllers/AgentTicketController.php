@@ -10,6 +10,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +20,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'view', $ticket);
         $this->markTicketAssignmentNotificationsRead($agent, $ticket);
         $ticket->loadMissing('site');
 
@@ -51,7 +52,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'addNote', $ticket);
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:4000'],
@@ -68,7 +69,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'update', $ticket);
 
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
@@ -93,7 +94,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'updateStatus', $ticket);
 
         $ticket->forceFill([
             'status' => 'pending',
@@ -109,7 +110,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'updateStatus', $ticket);
 
         $ticket->forceFill([
             'status' => 'closed',
@@ -125,7 +126,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'updateStatus', $ticket);
 
         $ticket->forceFill([
             'status' => 'open',
@@ -141,7 +142,7 @@ class AgentTicketController extends Controller
     {
         $agent = $request->user();
 
-        $this->abortUnlessAgentTicket($agent, $ticket);
+        $this->authorizeTicketAbility($agent, 'assign', $ticket);
 
         $validated = $request->validate([
             'assignee_id' => [
@@ -183,16 +184,9 @@ class AgentTicketController extends Controller
         return $this->redirectAfterUpdate($ticket, 'Ticket assignee updated.');
     }
 
-    private function abortUnlessAgentTicket(User $agent, Ticket $ticket): void
+    private function authorizeTicketAbility(User $agent, string $ability, Ticket $ticket): void
     {
-        $ticket->loadMissing('site');
-
-        abort_unless(
-            $agent->account_id
-                && (int) $ticket->account_id === (int) $agent->account_id
-                && $ticket->site?->supportsAgent($agent),
-            404
-        );
+        abort_unless(Gate::forUser($agent)->allows($ability, $ticket), 404);
     }
 
     private function supportAgentsForSite(Site $site): Collection
