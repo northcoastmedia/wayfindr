@@ -7,6 +7,7 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 - `accounts`: tenant boundary for a support team.
 - `users`: Laravel users; currently treated as support agents and attached to one account.
 - `sites`: install targets owned by an account. Each site has a public key used by widgets and integrations.
+- `site_user`: support-agent access for sites. Empty site membership means account-wide fallback for early installs; explicit rows narrow the support queue to assigned agents.
 - `visitors`: anonymous or identified people seen on a site.
 - `conversations`: chat/support sessions between a visitor and support agents. Each conversation has a unique support code for later lookup.
 - `conversation_messages`: messages or system events inside a conversation. The sender is polymorphic so visitors, agents, and future system actors can share one message stream.

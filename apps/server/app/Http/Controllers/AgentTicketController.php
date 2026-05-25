@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AgentTicketController extends Controller
 {
@@ -18,10 +21,11 @@ class AgentTicketController extends Controller
 
         $this->abortUnlessAgentTicket($agent, $ticket);
         $this->markTicketAssignmentNotificationsRead($agent, $ticket);
+        $ticket->loadMissing('site');
 
         return view('agent.tickets.show', [
             'account' => $agent->account()->firstOrFail(),
-            'accountAgents' => $agent->account->agents()->orderBy('name')->get(),
+            'accountAgents' => $this->supportAgentsForSite($ticket->site),
             'agent' => $agent,
             'ticketActivity' => $ticket->auditEvents()
                 ->with('actor')
@@ -147,13 +151,20 @@ class AgentTicketController extends Controller
             ],
         ]);
 
-        $ticket->loadMissing('assignee');
+        $ticket->loadMissing(['assignee', 'site']);
         $oldAssigneeId = $ticket->assignee_id;
         $oldAssigneeName = $ticket->assignee?->name;
         $newAssigneeId = $validated['assignee_id'] ?? null;
         $newAssignee = $newAssigneeId
             ? $agent->account->agents()->whereKey($newAssigneeId)->first()
             : null;
+
+        if ($newAssignee && ! $ticket->site->supportsAgent($newAssignee)) {
+            throw ValidationException::withMessages([
+                'assignee_id' => 'Choose an agent assigned to this site.',
+            ]);
+        }
+
         $newAssigneeName = $newAssignee?->name;
 
         $ticket->forceFill([
@@ -174,7 +185,25 @@ class AgentTicketController extends Controller
 
     private function abortUnlessAgentTicket(User $agent, Ticket $ticket): void
     {
-        abort_unless($agent->account_id && $ticket->account_id === $agent->account_id, 404);
+        $ticket->loadMissing('site');
+
+        abort_unless(
+            $agent->account_id
+                && (int) $ticket->account_id === (int) $agent->account_id
+                && $ticket->site?->supportsAgent($agent),
+            404
+        );
+    }
+
+    private function supportAgentsForSite(Site $site): Collection
+    {
+        $supportAgents = $site->eligibleSupportAgents()
+            ->orderBy('name')
+            ->get();
+
+        return $supportAgents->isNotEmpty()
+            ? $supportAgents
+            : $site->account->agents()->orderBy('name')->get();
     }
 
     private function redirectAfterUpdate(Ticket $ticket, string $status): RedirectResponse

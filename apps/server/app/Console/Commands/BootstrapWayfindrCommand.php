@@ -60,7 +60,7 @@ class BootstrapWayfindrCommand extends Command
             ['name' => $accountName],
         );
 
-        User::query()->updateOrCreate(
+        $agent = User::query()->updateOrCreate(
             ['email' => $email],
             [
                 'account_id' => $account->id,
@@ -69,7 +69,7 @@ class BootstrapWayfindrCommand extends Command
             ],
         );
 
-        Site::query()->updateOrCreate(
+        $site = Site::query()->updateOrCreate(
             ['public_key' => $sitePublicKey],
             [
                 'account_id' => $account->id,
@@ -80,6 +80,8 @@ class BootstrapWayfindrCommand extends Command
                 ],
             ],
         );
+
+        $site->supportAgents()->syncWithoutDetaching($agent->id);
 
         $this->info('Wayfindr is ready.');
         $this->line("Account: {$accountName}");

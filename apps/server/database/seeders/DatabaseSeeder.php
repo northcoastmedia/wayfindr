@@ -23,7 +23,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Demo Support Co'],
         );
 
-        User::query()->updateOrCreate(
+        $agent = User::query()->updateOrCreate(
             ['email' => 'agent@example.com'],
             [
                 'account_id' => $account->id,
@@ -32,7 +32,7 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        Site::query()->updateOrCreate(
+        $site = Site::query()->updateOrCreate(
             ['public_key' => 'site_demo_public_key'],
             [
                 'account_id' => $account->id,
@@ -43,5 +43,7 @@ class DatabaseSeeder extends Seeder
                 ],
             ],
         );
+
+        $site->supportAgents()->syncWithoutDetaching($agent->id);
     }
 }

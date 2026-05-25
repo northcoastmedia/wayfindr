@@ -24,11 +24,22 @@ class NotifyAgentsOfVisitorMessage
         $message->loadMissing(['conversation.site.account']);
 
         $conversation = $message->conversation;
-        $agentQuery = $conversation->site->account->agents();
 
         if ($conversation->assigned_agent_id) {
-            $agentQuery->whereKey($conversation->assigned_agent_id);
+            $assignedAgent = $conversation->site->account->agents()
+                ->whereKey($conversation->assigned_agent_id)
+                ->first();
+
+            if ($assignedAgent && $conversation->site->supportsAgent($assignedAgent)) {
+                $this->notifyAgent($assignedAgent, new ConversationNeedsReply($message), $conversation->id);
+
+                return;
+            }
         }
+
+        $agentQuery = $conversation->site->hasExplicitSupportAgents()
+            ? $conversation->site->eligibleSupportAgents()
+            : $conversation->site->account->agents();
 
         $agentQuery
             ->get()
