@@ -34,6 +34,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.sites.show');
     Route::put('/dashboard/sites/{site}', [AgentSiteController::class, 'update'])
         ->name('dashboard.sites.update');
+    Route::put('/dashboard/sites/{site}/support-agents', [AgentSiteController::class, 'updateSupportAgents'])
+        ->name('dashboard.sites.support-agents.update');
     Route::get('/dashboard/conversations/{supportCode}', [AgentConversationController::class, 'show'])
         ->name('dashboard.conversations.show');
     Route::post('/dashboard/conversations/{supportCode}/close', [AgentConversationController::class, 'close'])

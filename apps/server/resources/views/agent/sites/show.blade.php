@@ -26,6 +26,9 @@
             @php
                 $latestVisitor = $site->latestVisitor;
                 $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
+                $selectedSupportAgentIds = collect(old('support_agent_ids', $supportAgentIds))
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
             @endphp
 
             <section class="section" aria-labelledby="site-context-heading">
@@ -66,6 +69,105 @@
                         <span class="meta-value">{{ $lastPageUrl ?: 'Not reported' }}</span>
                     </div>
                 </div>
+            </section>
+
+            <section class="section" aria-labelledby="support-access-heading">
+                <div class="section-header">
+                    <h2 id="support-access-heading">Support access</h2>
+                    <span class="lede">
+                        @if ($siteHasExplicitSupportAgents)
+                            {{ count($supportAgentIds) }} assigned
+                        @else
+                            Account-wide fallback
+                        @endif
+                    </span>
+                </div>
+
+                @if (! $siteHasExplicitSupportAgents)
+                    <div class="notice-copy">
+                        <p>No support agents are assigned yet, so all account agents can support this site. Saving assignments will switch this site to explicit access.</p>
+                    </div>
+                @endif
+
+                @if ($canManageSiteAccess)
+                    <form class="section-form" method="POST" action="{{ route('dashboard.sites.support-agents.update', $site) }}">
+                        @csrf
+                        @method('PUT')
+
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Assigned</th>
+                                        <th scope="col">Name</th>
+                                        <th scope="col">Email</th>
+                                        <th scope="col">Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($accountAgents as $accountAgent)
+                                        <tr>
+                                            <td>
+                                                <input
+                                                    id="support_agent_{{ $accountAgent->id }}"
+                                                    name="support_agent_ids[]"
+                                                    type="checkbox"
+                                                    value="{{ $accountAgent->id }}"
+                                                    @checked(in_array($accountAgent->id, $selectedSupportAgentIds, true))
+                                                >
+                                            </td>
+                                            <td>
+                                                <label for="support_agent_{{ $accountAgent->id }}">{{ $accountAgent->name }}</label>
+                                            </td>
+                                            <td>{{ $accountAgent->email }}</td>
+                                            <td>{{ ucfirst($accountAgent->account_role?->value ?? 'agent') }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @error('support_agent_ids')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                        @error('support_agent_ids.*')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+
+                        <p class="field-help">
+                            Choose at least one support agent and keep at least one owner or admin assigned. Empty assignments are blocked here so site access does not accidentally reopen to the whole account.
+                        </p>
+
+                        <button class="button" type="submit">Save site access</button>
+                    </form>
+                @else
+                    @if ($supportAgents->isEmpty())
+                        <p class="empty">All account agents can support this site until an owner or admin configures explicit access.</p>
+                    @else
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Name</th>
+                                        <th scope="col">Email</th>
+                                        <th scope="col">Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($supportAgents as $supportAgent)
+                                        <tr>
+                                            <td>{{ $supportAgent->name }}</td>
+                                            <td>{{ $supportAgent->email }}</td>
+                                            <td>{{ ucfirst($supportAgent->account_role?->value ?? 'agent') }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
+                    <p class="empty">Account owners and admins manage site support access.</p>
+                @endif
             </section>
 
             <section class="section" aria-labelledby="data-responsibility-heading">
