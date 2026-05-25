@@ -5,13 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Notifications\ConversationNeedsReply;
-use App\Notifications\TicketAssigned;
 use App\Support\RealtimeHealth;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 class AgentDashboardController extends Controller
 {
@@ -140,38 +139,9 @@ class AgentDashboardController extends Controller
     private function visibleUnreadNotifications(User $agent): Collection
     {
         return $agent->unreadNotifications()
-            ->whereIn('type', [
-                ConversationNeedsReply::class,
-                TicketAssigned::class,
-            ])
             ->latest()
             ->get()
-            ->filter(fn (DatabaseNotification $notification): bool => $this->notificationVisibleToAgent($agent, $notification))
+            ->filter(fn (DatabaseNotification $notification): bool => Gate::forUser($agent)->allows('view', $notification))
             ->values();
-    }
-
-    private function notificationVisibleToAgent(User $agent, DatabaseNotification $notification): bool
-    {
-        if ($notification->type === TicketAssigned::class) {
-            $ticketId = (int) data_get($notification->data, 'ticket_id');
-
-            return $ticketId > 0
-                && Ticket::query()
-                    ->whereKey($ticketId)
-                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
-                    ->exists();
-        }
-
-        if ($notification->type === ConversationNeedsReply::class) {
-            $conversationId = (int) data_get($notification->data, 'conversation_id');
-
-            return $conversationId > 0
-                && Conversation::query()
-                    ->whereKey($conversationId)
-                    ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
-                    ->exists();
-        }
-
-        return false;
     }
 }
