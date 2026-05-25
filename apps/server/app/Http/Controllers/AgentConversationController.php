@@ -14,6 +14,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class AgentConversationController extends Controller
@@ -22,7 +23,7 @@ class AgentConversationController extends Controller
     {
         $agent = $request->user();
 
-        $conversation = $this->conversationForAgent($agent, $supportCode)
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'view')
             ->load(['assignedAgent', 'latestMessage', 'site', 'visitor']);
 
         $this->markConversationNotificationsRead($agent, $conversation);
@@ -52,7 +53,7 @@ class AgentConversationController extends Controller
     public function storeMessage(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'reply');
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:4000'],
@@ -93,7 +94,7 @@ class AgentConversationController extends Controller
     public function close(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'updateStatus');
 
         $conversation->forceFill([
             'status' => 'closed',
@@ -108,7 +109,7 @@ class AgentConversationController extends Controller
     public function reopen(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'updateStatus');
 
         $conversation->forceFill([
             'status' => 'open',
@@ -123,9 +124,9 @@ class AgentConversationController extends Controller
     public function claim(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'view');
 
-        abort_if($conversation->assigned_agent_id && $conversation->assigned_agent_id !== $agent->id, 403);
+        abort_unless(Gate::forUser($agent)->allows('claim', $conversation), 403);
 
         $conversation->forceFill([
             'assigned_agent_id' => $agent->id,
@@ -139,9 +140,9 @@ class AgentConversationController extends Controller
     public function release(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'view');
 
-        abort_unless($conversation->assigned_agent_id === $agent->id, 403);
+        abort_unless(Gate::forUser($agent)->allows('release', $conversation), 403);
 
         $conversation->forceFill([
             'assigned_agent_id' => null,
@@ -155,7 +156,7 @@ class AgentConversationController extends Controller
     public function storeTicket(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode)
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'createTicket')
             ->load(['site', 'visitor']);
 
         $validated = $request->validate([
@@ -197,7 +198,7 @@ class AgentConversationController extends Controller
     public function requestCobrowse(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode)
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'requestCobrowse')
             ->load(['site', 'visitor']);
 
         if ($this->activeCobrowseSession($conversation)) {
@@ -226,7 +227,7 @@ class AgentConversationController extends Controller
     public function endCobrowse(Request $request, string $supportCode): RedirectResponse
     {
         $agent = $request->user();
-        $conversation = $this->conversationForAgent($agent, $supportCode);
+        $conversation = $this->conversationForAgent($agent, $supportCode, 'endCobrowse');
         $cobrowseSession = $this->activeCobrowseSession($conversation);
 
         if (! $cobrowseSession) {
@@ -252,14 +253,17 @@ class AgentConversationController extends Controller
             ->with('status', 'Cobrowse session ended.');
     }
 
-    private function conversationForAgent(User $agent, string $supportCode): Conversation
+    private function conversationForAgent(User $agent, string $supportCode, string $ability): Conversation
     {
         abort_unless($agent->account_id, 403);
 
-        return Conversation::query()
+        $conversation = Conversation::query()
             ->where('support_code', $supportCode)
-            ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
             ->firstOrFail();
+
+        abort_unless(Gate::forUser($agent)->allows($ability, $conversation), 404);
+
+        return $conversation;
     }
 
     private function supportAgentsForSite(Site $site): Collection
