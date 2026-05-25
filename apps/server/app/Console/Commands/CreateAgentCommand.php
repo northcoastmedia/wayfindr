@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -50,14 +51,18 @@ class CreateAgentCommand extends Command
             $password = Str::password(24);
         }
 
-        User::query()->updateOrCreate(
-            ['email' => $email],
-            [
-                'account_id' => $account->id,
-                'name' => $agentName,
-                'password' => Hash::make($password),
-            ],
-        );
+        $agent = User::query()->firstOrNew(['email' => $email]);
+        $attributes = [
+            'account_id' => $account->id,
+            'name' => $agentName,
+            'password' => Hash::make($password),
+        ];
+
+        if (! $agent->exists) {
+            $attributes['account_role'] = AccountRole::Agent;
+        }
+
+        $agent->forceFill($attributes)->save();
 
         $this->info('Agent ready.');
         $this->line("Account: {$account->name}");
