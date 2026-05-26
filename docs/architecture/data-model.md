@@ -14,7 +14,7 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 - `tickets`: durable support records that may be created from a conversation.
   Tickets can carry provider-neutral category values for local triage without
   depending on an external issue tracker.
-- Future `ticket_external_links`: provider-neutral records that connect a local
+- `ticket_external_links`: provider-neutral records that connect a local
   Wayfindr ticket to an external issue tracker record without making that
   external provider the source of truth.
 - `cobrowse_sessions`: consent-based cobrowsing attempts tied to a conversation, site, and visitor. Early connection telemetry is kept in `metadata.telemetry`, the latest passive page state is kept in `metadata.page_state`, the latest sanitized DOM snapshot is kept in `metadata.snapshot`, and a bounded recent mutation buffer is kept in `metadata.mutations`, while the transport shape is still changing.
@@ -31,5 +31,8 @@ operator-facing data inventory and retention posture.
 - External ticket integrations should link to Wayfindr tickets through explicit
   local records and audit events. Provider-specific identifiers, capabilities,
   and sync metadata should stay outside the core `tickets` table.
+- External links store provider, project or repository key, external ID or key,
+  URL, sync status, last sync time, and metadata separately from the canonical
+  Wayfindr ticket lifecycle.
 - Audit actors and subjects are polymorphic so the model can track agent, visitor, conversation, ticket, and cobrowse events without creating a new audit table per feature.
 - Integration packages should stay thin and write through Laravel APIs rather than owning product persistence directly.

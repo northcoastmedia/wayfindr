@@ -163,6 +163,107 @@
                 </section>
             @endif
 
+            <section class="section" aria-labelledby="external-links-heading">
+                <div class="section-header">
+                    <h2 id="external-links-heading">External links</h2>
+                    <span class="lede">{{ $ticket->externalLinks->count() }} linked</span>
+                </div>
+
+                <div class="message-list">
+                    @forelse ($ticket->externalLinks as $externalLink)
+                        <article class="message-card">
+                            <div class="message-meta">
+                                <strong>{{ $externalLink->providerLabel() }}</strong>
+                                <span>{{ $externalLink->syncStatusLabel() }}</span>
+                            </div>
+                            <p>
+                                <span>{{ $externalLink->external_key ?? $externalLink->external_id ?? 'External record' }}</span>
+                                <span class="lede">{{ $externalLink->project_key }}</span>
+                            </p>
+                            <p>
+                                <a class="text-link" href="{{ $externalLink->url }}" rel="noopener noreferrer" target="_blank">
+                                    {{ $externalLink->url }}
+                                </a>
+                            </p>
+
+                            <form method="POST" action="{{ route('dashboard.tickets.external-links.destroy', [$ticket, $externalLink]) }}">
+                                @csrf
+                                @method('DELETE')
+                                <button class="button secondary" type="submit">Remove external link</button>
+                            </form>
+                        </article>
+                    @empty
+                        <div class="empty-state">No external issue links yet.</div>
+                    @endforelse
+                </div>
+
+                <form class="section-form" method="POST" action="{{ route('dashboard.tickets.external-links.store', $ticket) }}">
+                    @csrf
+
+                    <div class="field">
+                        <label for="provider">Provider</label>
+                        <select id="provider" name="provider">
+                            @foreach ($externalIssueProviders as $value => $label)
+                                <option value="{{ $value }}" @selected(old('provider', 'github') === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('provider')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="project_key">Project or repository</label>
+                        <input id="project_key" name="project_key" type="text" value="{{ old('project_key') }}" placeholder="owner/repository, group/project, or project key">
+                        @error('project_key')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="external_id">External ID</label>
+                        <input id="external_id" name="external_id" type="text" value="{{ old('external_id') }}" placeholder="123">
+                        @error('external_id')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="external_key">External key</label>
+                        <input id="external_key" name="external_key" type="text" value="{{ old('external_key') }}" placeholder="#123 or PROJ-123">
+                        @error('external_key')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="url">URL</label>
+                        <input id="url" name="url" type="url" value="{{ old('url') }}" placeholder="https://example.test/issues/123">
+                        @error('url')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label for="sync_status">Sync status</label>
+                        <select id="sync_status" name="sync_status">
+                            @foreach ($externalIssueSyncStatuses as $value => $label)
+                                <option value="{{ $value }}" @selected(old('sync_status', 'linked') === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('sync_status')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <button class="button" type="submit">Add external link</button>
+                </form>
+            </section>
+
             @if ($visitorContext['last_page_url'] || $visitorContext['started_page_url'] || $visitorContext['host_context'] !== [])
                 <section class="section" aria-labelledby="ticket-visitor-context-heading">
                     <div class="section-header">
@@ -398,6 +499,18 @@
 
                                     @case('ticket.reply_sent')
                                         Visitor reply sent
+                                        @break
+
+                                    @case('ticket.external_link_created')
+                                        External link added
+                                        @break
+
+                                    @case('ticket.external_link_removed')
+                                        External link removed
+                                        @break
+
+                                    @case('ticket.external_sync_failed')
+                                        External sync failed
                                         @break
 
                                     @case('ticket.assignee_updated')

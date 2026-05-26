@@ -5,6 +5,7 @@ use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\AgentSiteController;
 use App\Http\Controllers\AgentTicketController;
+use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Widget\WidgetScriptController;
 use Illuminate\Support\Facades\Route;
@@ -58,6 +59,10 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.tickets.notes.store');
     Route::post('/dashboard/tickets/{ticket}/replies', [AgentTicketController::class, 'storeReply'])
         ->name('dashboard.tickets.replies.store');
+    Route::post('/dashboard/tickets/{ticket}/external-links', [AgentTicketExternalLinkController::class, 'store'])
+        ->name('dashboard.tickets.external-links.store');
+    Route::delete('/dashboard/tickets/{ticket}/external-links/{externalLink}', [AgentTicketExternalLinkController::class, 'destroy'])
+        ->name('dashboard.tickets.external-links.destroy');
     Route::post('/dashboard/tickets/{ticket}/pending', [AgentTicketController::class, 'pending'])
         ->name('dashboard.tickets.pending');
     Route::post('/dashboard/tickets/{ticket}/close', [AgentTicketController::class, 'close'])
