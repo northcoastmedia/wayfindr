@@ -39,7 +39,7 @@ class AgentTicketController extends Controller
                 ->latest()
                 ->latest('id'),
             'requester',
-            'site',
+            'site.externalIssueProjects.providerConnection',
             'auditEvents' => fn ($query) => $query
                 ->where('action', 'ticket.note_added')
                 ->with('actor')
@@ -53,6 +53,7 @@ class AgentTicketController extends Controller
             'agent' => $agent,
             'externalIssueProviders' => ExternalIssueProvider::options(),
             'externalIssueSyncStatuses' => ExternalIssueSyncStatus::options(),
+            'githubIssueProjects' => $this->githubIssueProjectsForTicket($ticket),
             'ticketActivity' => $ticket->auditEvents()
                 ->with('actor')
                 ->whereIn('action', $this->visibleActivityActions())
@@ -358,6 +359,15 @@ class AgentTicketController extends Controller
             ->values();
     }
 
+    private function githubIssueProjectsForTicket(Ticket $ticket): Collection
+    {
+        return $ticket->site->externalIssueProjects
+            ->filter(fn ($project): bool => $project->providerConnection?->provider === 'github'
+                && $project->providerConnection->is_enabled
+                && $project->hasCapability('create_issue'))
+            ->values();
+    }
+
     /**
      * @return array{last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
      */
@@ -403,6 +413,7 @@ class AgentTicketController extends Controller
             'ticket.note_added',
             'ticket.reply_sent',
             'ticket.external_link_created',
+            'ticket.external_issue_created',
             'ticket.external_link_removed',
             'ticket.external_sync_failed',
             'ticket.visitor_replied',
@@ -423,6 +434,7 @@ class AgentTicketController extends Controller
             'ticket.assignee_updated',
             'ticket.note_added',
             'ticket.external_link_created',
+            'ticket.external_issue_created',
             'ticket.external_link_removed',
             'ticket.external_sync_failed',
             'ticket.visitor_replied',
@@ -441,6 +453,7 @@ class AgentTicketController extends Controller
             'ticket.visitor_replied' => 'Visitor replied',
             'ticket.note_added' => 'Internal note',
             'ticket.external_link_created' => 'External link added: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
+            'ticket.external_issue_created' => 'GitHub issue created: '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
             'ticket.external_link_removed' => 'External link removed: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
             'ticket.external_sync_failed' => 'External sync failed: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')),
             'ticket.assignee_updated' => 'Assignee changed from '.(data_get($activity->metadata, 'old_assignee_name') ?? 'Unassigned').' to '.(data_get($activity->metadata, 'new_assignee_name') ?? 'Unassigned'),

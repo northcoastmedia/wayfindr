@@ -7,6 +7,7 @@ use App\Http\Controllers\AgentExternalIssueProviderConnectionController;
 use App\Http\Controllers\AgentSiteController;
 use App\Http\Controllers\AgentSiteExternalIssueProjectController;
 use App\Http\Controllers\AgentTicketController;
+use App\Http\Controllers\AgentTicketExternalIssueController;
 use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Widget\WidgetScriptController;
@@ -69,6 +70,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.tickets.replies.store');
     Route::post('/dashboard/tickets/{ticket}/external-links', [AgentTicketExternalLinkController::class, 'store'])
         ->name('dashboard.tickets.external-links.store');
+    Route::post('/dashboard/tickets/{ticket}/external-issues/github', [AgentTicketExternalIssueController::class, 'storeGithub'])
+        ->name('dashboard.tickets.external-issues.github.store');
     Route::delete('/dashboard/tickets/{ticket}/external-links/{externalLink}', [AgentTicketExternalLinkController::class, 'destroy'])
         ->name('dashboard.tickets.external-links.destroy');
     Route::post('/dashboard/tickets/{ticket}/pending', [AgentTicketController::class, 'pending'])
