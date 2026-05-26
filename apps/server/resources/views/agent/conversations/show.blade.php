@@ -184,6 +184,20 @@
                         @csrf
 
                         <div class="field">
+                            <label for="category">Category</label>
+                            <select id="category" name="category">
+                                <option value="">Uncategorized</option>
+                                @foreach ($ticketCategories as $value => $category)
+                                    <option value="{{ $value }}" @selected(old('category') === $value)>{{ $category['label'] }}</option>
+                                @endforeach
+                            </select>
+                            <x-ticket-category-guidance :categories="$ticketCategoryGuidance" />
+                            @error('category')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="field">
                             <label for="priority">Priority</label>
                             <select id="priority" name="priority">
                                 @foreach ($ticketPriorities as $value => $priority)
@@ -205,6 +219,7 @@
                                 <tr>
                                     <th scope="col">Subject</th>
                                     <th scope="col">Status</th>
+                                    <th scope="col">Category</th>
                                     <th scope="col">Priority</th>
                                     <th scope="col">Assignee</th>
                                     <th scope="col">Created</th>
@@ -220,6 +235,7 @@
                                             </a>
                                         </td>
                                         <td>{{ ucfirst($ticket->status) }}</td>
+                                        <td>{{ $ticket->categoryLabel() }}</td>
                                         <td>{{ ucfirst($ticket->priority) }}</td>
                                         <td>
                                             <form method="POST" action="{{ route('dashboard.tickets.assignee.update', $ticket) }}">

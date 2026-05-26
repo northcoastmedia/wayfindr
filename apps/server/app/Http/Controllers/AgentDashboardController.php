@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\RealtimeHealth;
+use App\Support\TicketCategory;
 use App\Support\TicketPriority;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -77,6 +78,15 @@ class AgentDashboardController extends Controller
         $ticketPriority = is_string($ticketPriority) && array_key_exists($ticketPriority, $ticketPriorityFilters)
             ? $ticketPriority
             : 'all';
+        $ticketCategoryFilters = [
+            'all' => 'Any category',
+            'uncategorized' => 'Uncategorized',
+            ...array_map(fn (array $category): string => $category['label'], TicketCategory::options()),
+        ];
+        $ticketCategory = $request->query('ticket_category', 'all');
+        $ticketCategory = is_string($ticketCategory) && array_key_exists($ticketCategory, $ticketCategoryFilters)
+            ? $ticketCategory
+            : 'all';
         $requestedTicketSite = $request->query('ticket_site');
         $ticketSite = is_string($requestedTicketSite) && ctype_digit($requestedTicketSite) && $sites->contains('id', (int) $requestedTicketSite)
             ? (int) $requestedTicketSite
@@ -120,6 +130,8 @@ class AgentDashboardController extends Controller
             ->when($ticketFilter === 'unassigned', fn ($query) => $query->whereNull('assignee_id'))
             ->when($ticketSite, fn ($query) => $query->where('site_id', $ticketSite))
             ->when($ticketPriority !== 'all', fn ($query) => $query->where('priority', $ticketPriority))
+            ->when($ticketCategory === 'uncategorized', fn ($query) => $query->whereNull('category'))
+            ->when($ticketCategory !== 'all' && $ticketCategory !== 'uncategorized', fn ($query) => $query->where('category', $ticketCategory))
             ->when($ticketSearch !== '', function ($query) use ($ticketSearch): void {
                 $searchPattern = '%'.$ticketSearch.'%';
 
@@ -153,12 +165,14 @@ class AgentDashboardController extends Controller
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'realtimeHealth' => $realtimeHealth->summary(),
             'sites' => $sites,
+            'ticketCategory' => $ticketCategory,
+            'ticketCategoryFilters' => $ticketCategoryFilters,
             'ticketEmptyMessage' => $ticketEmptyMessage,
             'ticketFilter' => $ticketFilter,
             'ticketFilters' => $ticketFilters,
             'ticketPriority' => $ticketPriority,
             'ticketPriorityFilters' => $ticketPriorityFilters,
-            'ticketQuery' => $this->ticketQueryParams($ticketStatus, $ticketFilter, $ticketSite, $ticketPriority, $ticketSearch),
+            'ticketQuery' => $this->ticketQueryParams($ticketStatus, $ticketFilter, $ticketSite, $ticketPriority, $ticketCategory, $ticketSearch),
             'ticketSearch' => $ticketSearch,
             'ticketSite' => $ticketSite,
             'ticketStatus' => $ticketStatus,
@@ -182,7 +196,7 @@ class AgentDashboardController extends Controller
     /**
      * @return array<string, string|int>
      */
-    private function ticketQueryParams(string $ticketStatus, string $ticketFilter, ?int $ticketSite, string $ticketPriority, string $ticketSearch): array
+    private function ticketQueryParams(string $ticketStatus, string $ticketFilter, ?int $ticketSite, string $ticketPriority, string $ticketCategory, string $ticketSearch): array
     {
         $params = [];
 
@@ -200,6 +214,10 @@ class AgentDashboardController extends Controller
 
         if ($ticketPriority !== 'all') {
             $params['ticket_priority'] = $ticketPriority;
+        }
+
+        if ($ticketCategory !== 'all') {
+            $params['ticket_category'] = $ticketCategory;
         }
 
         if ($ticketSearch !== '') {

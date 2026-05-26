@@ -24,6 +24,7 @@ class TicketFactory extends Factory
             'assignee_id' => null,
             'status' => 'open',
             'priority' => 'normal',
+            'category' => null,
             'subject' => fake()->sentence(),
             'description' => fake()->paragraph(),
             'metadata' => [],

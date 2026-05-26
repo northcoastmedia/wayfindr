@@ -12,6 +12,8 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 - `conversations`: chat/support sessions between a visitor and support agents. Each conversation has a unique support code for later lookup.
 - `conversation_messages`: messages or system events inside a conversation. The sender is polymorphic so visitors, agents, and future system actors can share one message stream.
 - `tickets`: durable support records that may be created from a conversation.
+  Tickets can carry provider-neutral category values for local triage without
+  depending on an external issue tracker.
 - Future `ticket_external_links`: provider-neutral records that connect a local
   Wayfindr ticket to an external issue tracker record without making that
   external provider the source of truth.

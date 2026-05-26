@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TicketCategory;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
     'assignee_id',
     'status',
     'priority',
+    'category',
     'subject',
     'description',
     'metadata',
@@ -122,6 +124,11 @@ class Ticket extends Model
             'resolved' => 90,
             default => 50,
         };
+    }
+
+    public function categoryLabel(): string
+    {
+        return TicketCategory::label($this->category);
     }
 
     public function auditEvents(): MorphMany

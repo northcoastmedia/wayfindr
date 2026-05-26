@@ -113,7 +113,9 @@ Default behavior should be conservative:
 
 ## Suggested Roadmap
 
-1. Add local ticket categories and keep them provider-neutral.
+1. Add local ticket categories and keep them provider-neutral. This is now the
+   local classification baseline; external label mapping should remain
+   opt-in.
 2. Add a provider-neutral external link data model and audit events.
 3. Add account-level provider connection placeholders and capability flags.
 4. Add GitHub outbound issue creation as the first concrete adapter.

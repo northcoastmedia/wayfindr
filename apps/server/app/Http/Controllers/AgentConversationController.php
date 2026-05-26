@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
 use App\Support\CobrowseConsentState;
+use App\Support\TicketCategory;
 use App\Support\TicketPriority;
 use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
@@ -52,7 +53,9 @@ class AgentConversationController extends Controller
             'priorConversations' => $this->priorConversations($conversation),
             'realtime' => $this->realtimeConfig($conversation),
             'tickets' => $tickets,
+            'ticketCategories' => TicketCategory::options(),
             'ticketPriorities' => TicketPriority::options(),
+            'ticketCategoryGuidance' => TicketCategory::options(),
             'ticketPriorityGuidance' => TicketPriority::guidanceOptions(),
             'visitorContext' => $this->visitorContext($conversation, $visitorContextSanitizer),
         ]);
@@ -168,6 +171,7 @@ class AgentConversationController extends Controller
             ->load(['site', 'visitor']);
 
         $validated = $request->validate([
+            'category' => ['nullable', 'string', Rule::in(TicketCategory::values())],
             'priority' => ['nullable', 'string', Rule::in(TicketPriority::values())],
         ]);
 
@@ -184,6 +188,7 @@ class AgentConversationController extends Controller
             'assignee_id' => $agent->id,
             'status' => 'open',
             'priority' => $validated['priority'] ?? 'normal',
+            'category' => $validated['category'] ?? null,
             'subject' => $conversation->subject ?: 'Conversation '.$conversation->support_code,
             'description' => $this->ticketDescription($conversation),
             'metadata' => [

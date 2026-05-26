@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
+use App\Support\TicketCategory;
 use App\Support\TicketPriority;
 use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
@@ -47,6 +48,8 @@ class AgentTicketController extends Controller
                 ->latest('occurred_at')
                 ->latest('id')
                 ->get(),
+            'ticketCategories' => TicketCategory::options(),
+            'ticketCategoryGuidance' => TicketCategory::options(),
             'ticketPriorities' => TicketPriority::options(),
             'ticketPriorityGuidance' => TicketPriority::guidanceOptions(),
             'ticket' => $ticket,
@@ -80,6 +83,7 @@ class AgentTicketController extends Controller
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:10000'],
+            'category' => ['nullable', Rule::in(TicketCategory::values())],
             'priority' => ['required', Rule::in(TicketPriority::values())],
         ]);
 
@@ -270,14 +274,14 @@ class AgentTicketController extends Controller
     }
 
     /**
-     * @param  array{subject: string, description?: string|null, priority: string}  $validated
+     * @param  array{subject: string, description?: string|null, category?: string|null, priority: string}  $validated
      * @return array<string, array{old: string|null, new: string|null}>
      */
     private function ticketFieldChanges(Ticket $ticket, array $validated): array
     {
         $changes = [];
 
-        foreach (['subject', 'description', 'priority'] as $field) {
+        foreach (['subject', 'description', 'category', 'priority'] as $field) {
             $oldValue = $ticket->{$field};
             $newValue = $validated[$field] ?? null;
 
