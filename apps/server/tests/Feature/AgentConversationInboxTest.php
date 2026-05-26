@@ -2564,6 +2564,58 @@ test('agent can close a linked ticket from their account conversation', function
         ->assertSee('Reopen ticket');
 });
 
+test('agent can close a linked ticket with a resolution note from the conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CONVRESOLVE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+            'closed_at' => null,
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CONVRESOLVE')
+        ->assertOk()
+        ->assertSee('Resolution note')
+        ->assertSee('Close ticket');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-CONVRESOLVE')
+        ->post("/dashboard/tickets/{$ticket->id}/close", [
+            'resolution_note' => 'Confirmed the visitor can complete checkout.',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-CONVRESOLVE')
+        ->assertSessionHas('status', 'Ticket closed.');
+
+    $activity = AuditEvent::query()
+        ->where('subject_type', Ticket::class)
+        ->where('subject_id', $ticket->id)
+        ->where('action', 'ticket.closed')
+        ->firstOrFail();
+
+    expect($activity->metadata)->toMatchArray([
+        'resolution_note' => 'Confirmed the visitor can complete checkout.',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Confirmed the visitor can complete checkout.');
+});
+
 test('agent can reopen a linked ticket from their account conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

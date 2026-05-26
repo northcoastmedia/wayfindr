@@ -275,6 +275,13 @@
                                             @if ($ticket->status !== 'closed')
                                                 <form method="POST" action="{{ route('dashboard.tickets.close', $ticket) }}">
                                                     @csrf
+                                                    <div class="field">
+                                                        <label for="ticket_{{ $ticket->id }}_resolution_note">Resolution note</label>
+                                                        <textarea id="ticket_{{ $ticket->id }}_resolution_note" name="resolution_note" rows="2" placeholder="What changed or why this can be closed.">{{ old('resolution_note') }}</textarea>
+                                                        @error('resolution_note')
+                                                            <p class="field-error">{{ $message }}</p>
+                                                        @enderror
+                                                    </div>
                                                     <button class="button secondary" type="submit">Close ticket</button>
                                                 </form>
                                             @endif
