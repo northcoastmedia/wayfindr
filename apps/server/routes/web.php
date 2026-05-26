@@ -56,6 +56,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.tickets.update');
     Route::post('/dashboard/tickets/{ticket}/notes', [AgentTicketController::class, 'storeNote'])
         ->name('dashboard.tickets.notes.store');
+    Route::post('/dashboard/tickets/{ticket}/replies', [AgentTicketController::class, 'storeReply'])
+        ->name('dashboard.tickets.replies.store');
     Route::post('/dashboard/tickets/{ticket}/pending', [AgentTicketController::class, 'pending'])
         ->name('dashboard.tickets.pending');
     Route::post('/dashboard/tickets/{ticket}/close', [AgentTicketController::class, 'close'])

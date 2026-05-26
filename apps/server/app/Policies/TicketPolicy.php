@@ -21,6 +21,12 @@ class TicketPolicy
         return $this->view($user, $ticket);
     }
 
+    public function reply(User $user, Ticket $ticket): bool
+    {
+        return $this->view($user, $ticket)
+            && $ticket->conversation_id !== null;
+    }
+
     public function update(User $user, Ticket $ticket): bool
     {
         return $this->view($user, $ticket);
