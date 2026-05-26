@@ -207,12 +207,23 @@ class AgentTicketController extends Controller
 
         $this->authorizeTicketAbility($agent, 'updateStatus', $ticket);
 
+        $validated = $request->validate([
+            'resolution_note' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        $resolutionNote = trim((string) ($validated['resolution_note'] ?? ''));
+
         $ticket->forceFill([
             'status' => 'closed',
             'closed_at' => now(),
         ])->save();
 
-        $this->recordActivity($ticket, $agent, 'ticket.closed');
+        $this->recordActivity(
+            $ticket,
+            $agent,
+            'ticket.closed',
+            $resolutionNote === '' ? [] : ['resolution_note' => $resolutionNote],
+        );
 
         return $this->redirectAfterUpdate($ticket, 'Ticket closed.');
     }
@@ -368,7 +379,7 @@ class AgentTicketController extends Controller
                 'label' => $this->ticketActivityLabel($activity),
                 'actor' => $this->ticketActivityActor($activity),
                 'badge' => $activity->action === 'ticket.note_added' ? 'Internal' : 'Ticket activity',
-                'body' => $activity->action === 'ticket.note_added' ? data_get($activity->metadata, 'body') : null,
+                'body' => $this->ticketTimelineBody($activity),
                 'occurred_at' => $activity->occurred_at,
                 'sequence' => $activity->id,
             ]);
@@ -489,6 +500,15 @@ class AgentTicketController extends Controller
         }
 
         return $activity->actor?->name ?? 'System';
+    }
+
+    private function ticketTimelineBody(object $activity): ?string
+    {
+        return match ($activity->action) {
+            'ticket.note_added' => data_get($activity->metadata, 'body'),
+            'ticket.closed' => data_get($activity->metadata, 'resolution_note'),
+            default => null,
+        };
     }
 
     private function ticketUpdatedLabel(array $changes): string

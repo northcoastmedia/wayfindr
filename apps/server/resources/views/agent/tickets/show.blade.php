@@ -401,6 +401,13 @@
                 @if ($ticket->status !== 'closed')
                     <form class="section-form" method="POST" action="{{ route('dashboard.tickets.close', $ticket) }}">
                         @csrf
+                        <div class="field">
+                            <label for="resolution_note">Resolution note</label>
+                            <textarea id="resolution_note" name="resolution_note" rows="3" placeholder="What changed, what was confirmed, or why this can be closed.">{{ old('resolution_note') }}</textarea>
+                            @error('resolution_note')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
                         <button class="button secondary" type="submit">Close ticket</button>
                     </form>
                 @endif
@@ -593,6 +600,9 @@
                                         {{ ucfirst(str_replace(['ticket.', '_'], ['', ' '], $activity->action)) }}
                                 @endswitch
                             </p>
+                            @if (data_get($activity->metadata, 'resolution_note'))
+                                <p class="message-body">{{ data_get($activity->metadata, 'resolution_note') }}</p>
+                            @endif
                         </article>
                     @empty
                         <div class="empty-state">No ticket activity yet.</div>
