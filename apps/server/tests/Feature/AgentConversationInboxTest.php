@@ -1331,6 +1331,82 @@ test('message direction changes the conversation attention state', function (): 
         ->assertSee('Needs reply');
 });
 
+test('visitor reply reopens a pending linked ticket for agent attention', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Acme Docs',
+        'public_key' => 'site_public_docs',
+    ]);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-CUSTOMER',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+        'last_message_at' => now()->subMinutes(5),
+    ]);
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'Can you send a screenshot?',
+        'created_at' => now()->subMinutes(5),
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'status' => 'pending',
+            'closed_at' => null,
+            'subject' => 'Escalated checkout issue',
+        ]);
+
+    expect($ticket->attentionState())->toBe('waiting_on_customer');
+
+    $token = $this->postJson('/api/widget/bootstrap', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-acme',
+        'page_url' => 'https://docs.example.test/checkout',
+    ])
+        ->assertSuccessful()
+        ->json('data.visitor.token');
+
+    $this->postJson('/api/conversations/WF-CUSTOMER/messages', [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-acme',
+        'visitor_token' => $token,
+        'body' => 'Here is the screenshot you asked for.',
+    ])->assertCreated();
+
+    $ticket = $ticket->fresh();
+
+    expect($ticket)
+        ->status->toBe('open')
+        ->closed_at->toBeNull()
+        ->attentionState()->toBe('needs_reply')
+        ->attentionLabel()->toBe('Needs reply');
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => Visitor::class,
+        'actor_id' => $visitor->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.visitor_replied',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Needs reply')
+        ->assertSee('Visitor replied')
+        ->assertSee('Here is the screenshot you asked for.');
+});
+
 test('agent cannot close another account conversation', function (): void {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();

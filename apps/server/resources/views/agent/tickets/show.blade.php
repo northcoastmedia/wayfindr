@@ -51,6 +51,11 @@
                         <span class="meta-value">{{ $ticket->assignee?->name ?? 'Unassigned' }}</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Attention</span>
+                        <span class="meta-value">{{ $ticket->attentionLabel() }}</span>
+                        <span class="lede">{{ $ticket->attentionDescription() }}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Created</span>
                         <span class="meta-value">{{ $ticket->created_at->diffForHumans() }}</span>
                     </div>
