@@ -511,6 +511,53 @@ test('dashboard filters tickets by priority', function (): void {
         ->assertDontSee('Normal docs question');
 });
 
+test('dashboard filters tickets by category', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'category' => 'bug',
+            'subject' => 'Broken checkout flow',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'category' => 'question',
+            'subject' => 'How do I export invoices?',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'category' => null,
+            'subject' => 'Needs triage',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_category=bug')
+        ->assertOk()
+        ->assertSee('Broken checkout flow')
+        ->assertDontSee('How do I export invoices?')
+        ->assertDontSee('Needs triage');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_category=uncategorized')
+        ->assertOk()
+        ->assertSee('Needs triage')
+        ->assertDontSee('Broken checkout flow')
+        ->assertDontSee('How do I export invoices?');
+});
+
 test('dashboard searches tickets by subject description and support code', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -1340,6 +1387,7 @@ test('agent can create a ticket from their account conversation', function (): v
     $this->actingAs($agent)
         ->from('/dashboard/conversations/WF-TICKET1')
         ->post('/dashboard/conversations/WF-TICKET1/tickets', [
+            'category' => 'bug',
             'priority' => 'high',
         ])
         ->assertRedirect('/dashboard/conversations/WF-TICKET1')
@@ -1351,6 +1399,7 @@ test('agent can create a ticket from their account conversation', function (): v
         'conversation_id' => $conversation->id,
         'requester_id' => $visitor->id,
         'assignee_id' => $agent->id,
+        'category' => 'bug',
         'status' => 'open',
         'priority' => 'high',
         'subject' => 'Checkout trouble',
@@ -1396,8 +1445,33 @@ test('agent can create a ticket from their account conversation', function (): v
         ->assertSee('Ticket')
         ->assertSee('Checkout trouble')
         ->assertSee("/dashboard/tickets/{$ticket->id}", false)
+        ->assertSee('Bug')
         ->assertSee('High')
         ->assertSee('Open');
+});
+
+test('agent ticket creation explains provider-neutral categories', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CATEGORY1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-CATEGORY1')
+        ->assertOk()
+        ->assertSee('Category')
+        ->assertSee('Question - General question or how-to help.')
+        ->assertSee('Bug - Something broken or not working as expected.')
+        ->assertSee('Billing - Pricing, invoice, payment, or account billing issue.')
+        ->assertSee('Access - Login, permissions, or account access issue.')
+        ->assertSee('Task - Follow-up work, configuration, or operational request.')
+        ->assertSee('Other - Anything that does not fit the other categories.');
 });
 
 test('agent ticket creation explains priority semantics', function (): void {
@@ -1444,6 +1518,7 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->for($visitor, 'requester')
         ->for($assignee, 'assignee')
         ->create([
+            'category' => 'access',
             'description' => 'The visitor cannot finish checkout after entering shipping details.',
             'priority' => 'high',
             'status' => 'open',
@@ -1479,6 +1554,7 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('Back to dashboard')
         ->assertSee('Escalated checkout issue')
         ->assertSee('Open')
+        ->assertSee('Access')
         ->assertSee('High')
         ->assertSee('Acme Docs')
         ->assertSee('anon-acme')
@@ -1513,6 +1589,7 @@ test('agent ticket detail explains priority semantics', function (): void {
         ->for($site)
         ->for($agent, 'assignee')
         ->create([
+            'category' => 'billing',
             'priority' => 'urgent',
             'status' => 'open',
             'subject' => 'Production checkout outage',
@@ -1521,6 +1598,13 @@ test('agent ticket detail explains priority semantics', function (): void {
     $this->actingAs($agent)
         ->get("/dashboard/tickets/{$ticket->id}")
         ->assertOk()
+        ->assertSee('Billing')
+        ->assertSee('Question - General question or how-to help.')
+        ->assertSee('Bug - Something broken or not working as expected.')
+        ->assertSee('Billing - Pricing, invoice, payment, or account billing issue.')
+        ->assertSee('Access - Login, permissions, or account access issue.')
+        ->assertSee('Task - Follow-up work, configuration, or operational request.')
+        ->assertSee('Other - Anything that does not fit the other categories.')
         ->assertSee('Urgent - Business-critical, active outage, or blocked production work.')
         ->assertSee('High - Time-sensitive issue affecting an important customer workflow.')
         ->assertSee('Normal - Standard support request with no immediate deadline.')
@@ -1574,6 +1658,7 @@ test('agent can update ticket fields from the detail page', function (): void {
         ->for($account)
         ->for($site)
         ->create([
+            'category' => 'question',
             'subject' => 'Old checkout issue',
             'description' => 'The original ticket description.',
             'priority' => 'normal',
@@ -1583,6 +1668,7 @@ test('agent can update ticket fields from the detail page', function (): void {
     $this->actingAs($agent)
         ->from("/dashboard/tickets/{$ticket->id}")
         ->put("/dashboard/tickets/{$ticket->id}", [
+            'category' => 'bug',
             'subject' => 'Updated checkout issue',
             'description' => 'The visitor cannot finish checkout on mobile.',
             'priority' => 'high',
@@ -1591,6 +1677,7 @@ test('agent can update ticket fields from the detail page', function (): void {
         ->assertSessionHas('status', 'Ticket updated.');
 
     expect($ticket->fresh())
+        ->category->toBe('bug')
         ->subject->toBe('Updated checkout issue')
         ->description->toBe('The visitor cannot finish checkout on mobile.')
         ->priority->toBe('high');
@@ -1610,6 +1697,8 @@ test('agent can update ticket fields from the detail page', function (): void {
         ->assertOk()
         ->assertSee('Updated checkout issue')
         ->assertSee('The visitor cannot finish checkout on mobile.')
+        ->assertSee('Bug')
+        ->assertSee('Category changed from Question to Bug')
         ->assertSee('High')
         ->assertSee('Subject changed from Old checkout issue to Updated checkout issue')
         ->assertSee('Priority changed from Normal to High')
@@ -1624,6 +1713,7 @@ test('ticket field updates validate editable fields', function (): void {
         ->for($account)
         ->for($site)
         ->create([
+            'category' => 'question',
             'subject' => 'Original subject',
             'description' => 'Original description.',
             'priority' => 'normal',
@@ -1632,14 +1722,16 @@ test('ticket field updates validate editable fields', function (): void {
     $this->actingAs($agent)
         ->from("/dashboard/tickets/{$ticket->id}")
         ->put("/dashboard/tickets/{$ticket->id}", [
+            'category' => 'space-laser',
             'subject' => '',
             'description' => 'Still valid text.',
             'priority' => 'maximum-chaos',
         ])
         ->assertRedirect("/dashboard/tickets/{$ticket->id}")
-        ->assertSessionHasErrors(['subject', 'priority']);
+        ->assertSessionHasErrors(['category', 'subject', 'priority']);
 
     expect($ticket->fresh())
+        ->category->toBe('question')
         ->subject->toBe('Original subject')
         ->description->toBe('Original description.')
         ->priority->toBe('normal');

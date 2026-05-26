@@ -33,7 +33,7 @@ This roadmap is directional and should not include private business strategy.
 ## Phase 2: Real Support Beta
 
 - Better ticket views.
-- Assignment, tags, and site access management.
+- Assignment, categories, tags, and site access management.
 - Laravel policy-backed authorization.
 - Account roles for owner, admin, and agent authority.
 - Canned replies.

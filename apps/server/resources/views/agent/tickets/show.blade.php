@@ -43,6 +43,10 @@
                         <span class="meta-value">{{ ucfirst($ticket->priority) }}</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Category</span>
+                        <span class="meta-value">{{ $ticket->categoryLabel() }}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Assignee</span>
                         <span class="meta-value">{{ $ticket->assignee?->name ?? 'Unassigned' }}</span>
                     </div>
@@ -208,6 +212,22 @@
                     </div>
 
                     <div class="field">
+                        <label for="category">Category</label>
+                        <select id="category" name="category">
+                            <option value="">Uncategorized</option>
+                            @foreach ($ticketCategories as $value => $category)
+                                <option value="{{ $value }}" @selected(old('category', $ticket->category) === $value)>
+                                    {{ $category['label'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <x-ticket-category-guidance :categories="$ticketCategoryGuidance" />
+                        @error('category')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="field">
                         <label for="priority">Priority</label>
                         <select id="priority" name="priority">
                             @foreach ($ticketPriorities as $value => $priority)
@@ -316,6 +336,8 @@
                                         @foreach (data_get($activity->metadata, 'changes', []) as $field => $change)
                                             @if ($field === 'description')
                                                 <span>Description updated</span>@if (! $loop->last)<br>@endif
+                                            @elseif ($field === 'category')
+                                                <span>Category changed from {{ \App\Support\TicketCategory::label(data_get($change, 'old')) }} to {{ \App\Support\TicketCategory::label(data_get($change, 'new')) }}</span>@if (! $loop->last)<br>@endif
                                             @elseif ($field === 'priority')
                                                 <span>Priority changed from {{ ucfirst(data_get($change, 'old')) }} to {{ ucfirst(data_get($change, 'new')) }}</span>@if (! $loop->last)<br>@endif
                                             @else
