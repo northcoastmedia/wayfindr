@@ -100,6 +100,11 @@ class Site extends Model
         return $this->hasMany(TicketExternalLink::class);
     }
 
+    public function externalIssueProjects(): HasMany
+    {
+        return $this->hasMany(SiteExternalIssueProject::class);
+    }
+
     public function cobrowseSessions(): HasMany
     {
         return $this->hasMany(CobrowseSession::class);

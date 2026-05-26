@@ -17,6 +17,10 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 - `ticket_external_links`: provider-neutral records that connect a local
   Wayfindr ticket to an external issue tracker record without making that
   external provider the source of truth.
+- `external_issue_provider_connections`: account-owned provider connection
+  records with encrypted credential storage and explicit capability flags.
+- `site_external_issue_projects`: site-scoped mappings from a Wayfindr site to
+  a provider project or repository.
 - `cobrowse_sessions`: consent-based cobrowsing attempts tied to a conversation, site, and visitor. Early connection telemetry is kept in `metadata.telemetry`, the latest passive page state is kept in `metadata.page_state`, the latest sanitized DOM snapshot is kept in `metadata.snapshot`, and a bounded recent mutation buffer is kept in `metadata.mutations`, while the transport shape is still changing.
 - `audit_events`: append-style records for important user, visitor, or system actions.
 
@@ -31,6 +35,9 @@ operator-facing data inventory and retention posture.
 - External ticket integrations should link to Wayfindr tickets through explicit
   local records and audit events. Provider-specific identifiers, capabilities,
   and sync metadata should stay outside the core `tickets` table.
+- Provider credentials belong to the account, while project routing belongs to
+  the site. This lets one account support many sites without leaking unrelated
+  project destinations across site boundaries.
 - External links store provider, project or repository key, external ID or key,
   URL, sync status, last sync time, and metadata separately from the canonical
   Wayfindr ticket lifecycle.

@@ -6,6 +6,8 @@ use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\ExternalIssueCapability;
+use App\Support\ExternalIssueProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -56,11 +58,19 @@ class AgentSiteController extends Controller
         $this->authorizeSiteAbility($request, 'view', $site, 404);
 
         $agent = $request->user();
-        $site->loadMissing('latestVisitor');
+        $site->loadMissing([
+            'externalIssueProjects.providerConnection',
+            'latestVisitor',
+        ]);
         $account = $agent->account()->firstOrFail();
         $accountAgents = $account->agents()
             ->orderBy('name')
             ->orderBy('email')
+            ->get();
+        $externalIssueProviderConnections = $account->externalIssueProviderConnections()
+            ->where('is_enabled', true)
+            ->orderBy('provider')
+            ->orderBy('name')
             ->get();
         $supportAgentIds = $this->eligibleSupportAgentIds($site);
 
@@ -68,11 +78,16 @@ class AgentSiteController extends Controller
             'account' => $account,
             'accountAgents' => $accountAgents,
             'agent' => $agent,
+            'canManageIntegrations' => Gate::forUser($agent)->allows('manageIntegrations', $site),
             'canManageSiteAccess' => $agent->isAdmin(),
             'canUpdatePrivacy' => Gate::forUser($agent)->allows('updatePrivacy', $site),
             'dataResponsibility' => config('wayfindr.data_responsibility'),
+            'externalIssueCapabilities' => ExternalIssueCapability::options(),
+            'externalIssueProviderConnections' => $externalIssueProviderConnections,
+            'externalIssueProviders' => ExternalIssueProvider::options(),
             'maskSelectors' => $this->maskSelectors($site),
             'site' => $site,
+            'siteExternalIssueProjects' => $site->externalIssueProjects,
             'siteHasExplicitSupportAgents' => $site->hasExplicitSupportAgents(),
             'supportAgentIds' => $supportAgentIds,
             'supportAgents' => $accountAgents->whereIn('id', $supportAgentIds)->values(),

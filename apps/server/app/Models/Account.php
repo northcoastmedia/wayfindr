@@ -34,6 +34,16 @@ class Account extends Model
         return $this->hasMany(TicketExternalLink::class);
     }
 
+    public function externalIssueProviderConnections(): HasMany
+    {
+        return $this->hasMany(ExternalIssueProviderConnection::class);
+    }
+
+    public function siteExternalIssueProjects(): HasMany
+    {
+        return $this->hasMany(SiteExternalIssueProject::class);
+    }
+
     public function auditEvents(): HasMany
     {
         return $this->hasMany(AuditEvent::class);

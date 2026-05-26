@@ -29,6 +29,10 @@
                 $selectedSupportAgentIds = collect(old('support_agent_ids', $supportAgentIds))
                     ->map(fn ($id) => (int) $id)
                     ->all();
+                $selectedCapabilities = collect(old('capabilities', ['create_issue']))
+                    ->filter()
+                    ->map(fn ($capability) => (string) $capability)
+                    ->all();
             @endphp
 
             <section class="section" aria-labelledby="site-context-heading">
@@ -167,6 +171,201 @@
                     @endif
 
                     <p class="empty">Account owners and admins manage site support access.</p>
+                @endif
+            </section>
+
+            <section class="section" aria-labelledby="external-issue-routing-heading">
+                <div class="section-header">
+                    <h2 id="external-issue-routing-heading">External issue routing</h2>
+                    <span class="lede">{{ $siteExternalIssueProjects->count() }} mapped</span>
+                </div>
+
+                @if ($siteExternalIssueProjects->isEmpty())
+                    <p class="empty">No external issue projects are mapped to this site yet.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Provider</th>
+                                    <th scope="col">Project</th>
+                                    <th scope="col">Capabilities</th>
+                                    <th scope="col">Link</th>
+                                    @if ($canManageIntegrations)
+                                        <th scope="col">Action</th>
+                                    @endif
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($siteExternalIssueProjects as $externalIssueProject)
+                                    <tr>
+                                        <td>
+                                            <strong>{{ $externalIssueProject->providerConnection?->name ?? $externalIssueProject->providerLabel() }}</strong>
+                                            <span class="lede">{{ $externalIssueProject->providerLabel() }}</span>
+                                        </td>
+                                        <td>
+                                            <strong>{{ $externalIssueProject->project_key }}</strong>
+                                            @if ($externalIssueProject->project_name)
+                                                <span class="lede">{{ $externalIssueProject->project_name }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @forelse ($externalIssueProject->capabilityLabels() as $capabilityLabel)
+                                                <span>{{ $capabilityLabel }}</span>@if (! $loop->last)<br>@endif
+                                            @empty
+                                                <span>Link only</span>
+                                            @endforelse
+                                        </td>
+                                        <td>
+                                            @if ($externalIssueProject->web_url)
+                                                <a class="text-link" href="{{ $externalIssueProject->web_url }}" rel="noopener noreferrer" target="_blank">Open project</a>
+                                            @else
+                                                <span class="lede">Not set</span>
+                                            @endif
+                                        </td>
+                                        @if ($canManageIntegrations)
+                                            <td>
+                                                <form method="POST" action="{{ route('dashboard.sites.external-issue-projects.destroy', [$site, $externalIssueProject]) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="button secondary" type="submit">Remove</button>
+                                                </form>
+                                            </td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                @if ($canManageIntegrations)
+                    <form class="section-form" method="POST" action="{{ route('dashboard.external-issue-provider-connections.store') }}">
+                        @csrf
+                        <input type="hidden" name="site_id" value="{{ $site->id }}">
+
+                        <div class="section-header">
+                            <strong>Add provider connection</strong>
+                            <span class="lede">Account-owned</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="provider">Provider</label>
+                            <select id="provider" name="provider">
+                                @foreach ($externalIssueProviders as $value => $label)
+                                    <option value="{{ $value }}" @selected(old('provider', 'github') === $value)>
+                                        {{ $label }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('provider')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="field">
+                            <label for="provider_connection_name">Connection name</label>
+                            <input id="provider_connection_name" name="name" type="text" value="{{ old('name') }}" placeholder="Engineering GitHub">
+                            @error('name')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="field">
+                            <label for="base_url">Base URL</label>
+                            <input id="base_url" name="base_url" type="url" value="{{ old('base_url') }}" placeholder="https://api.github.com">
+                            @error('base_url')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="field">
+                            <label for="credential_token">Token or credential placeholder</label>
+                            <input id="credential_token" name="credential_token" type="password" value="" autocomplete="new-password">
+                            @error('credential_token')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="notice-list">
+                            @foreach ($externalIssueCapabilities as $value => $label)
+                                <label class="check-row" for="capability_{{ $value }}">
+                                    <input
+                                        id="capability_{{ $value }}"
+                                        name="capabilities[]"
+                                        type="checkbox"
+                                        value="{{ $value }}"
+                                        @checked(in_array($value, $selectedCapabilities, true))
+                                    >
+                                    <span>Provider can {{ strtolower($label) }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+
+                        @error('capabilities')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+                        @error('capabilities.*')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+
+                        <button class="button" type="submit">Save provider connection</button>
+                    </form>
+
+                    <form class="section-form" method="POST" action="{{ route('dashboard.sites.external-issue-projects.store', $site) }}">
+                        @csrf
+
+                        <div class="section-header">
+                            <strong>Map project</strong>
+                            <span class="lede">Site-scoped</span>
+                        </div>
+
+                        @if ($externalIssueProviderConnections->isEmpty())
+                            <p class="empty">Add a provider connection before mapping this site to an external project.</p>
+                        @else
+                            <div class="field">
+                                <label for="external_issue_provider_connection_id">Provider connection</label>
+                                <select id="external_issue_provider_connection_id" name="external_issue_provider_connection_id">
+                                    @foreach ($externalIssueProviderConnections as $connection)
+                                        <option value="{{ $connection->id }}" @selected((int) old('external_issue_provider_connection_id') === $connection->id)>
+                                            {{ $connection->name }} - {{ $connection->providerLabel() }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('external_issue_provider_connection_id')
+                                    <p class="field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="field">
+                                <label for="project_key">Project or repository</label>
+                                <input id="project_key" name="project_key" type="text" value="{{ old('project_key') }}" placeholder="owner/repository, group/project, or project key">
+                                @error('project_key')
+                                    <p class="field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="field">
+                                <label for="project_name">Project name</label>
+                                <input id="project_name" name="project_name" type="text" value="{{ old('project_name') }}" placeholder="Wayfindr">
+                                @error('project_name')
+                                    <p class="field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="field">
+                                <label for="web_url">Project URL</label>
+                                <input id="web_url" name="web_url" type="url" value="{{ old('web_url') }}" placeholder="https://github.com/adamgreenwell/wayfindr">
+                                @error('web_url')
+                                    <p class="field-error">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <button class="button" type="submit">Map project</button>
+                        @endif
+                    </form>
+                @else
+                    <p class="empty">Account owners and admins manage external issue routing.</p>
                 @endif
             </section>
 
