@@ -77,6 +77,35 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="ticket-timeline-heading">
+                <div class="section-header">
+                    <h2 id="ticket-timeline-heading">Timeline</h2>
+                    <span class="lede">{{ $ticketTimeline->count() }} events</span>
+                </div>
+
+                <div class="timeline-list">
+                    @forelse ($ticketTimeline as $timelineItem)
+                        <article class="timeline-item {{ $timelineItem['type'] }}">
+                            <div class="timeline-content">
+                                <div class="message-meta">
+                                    <strong>{{ $timelineItem['label'] }}</strong>
+                                    <span>{{ $timelineItem['occurred_at']?->diffForHumans() }}</span>
+                                </div>
+                                <div class="timeline-meta">
+                                    <span>{{ $timelineItem['actor'] }}</span>
+                                    <span>{{ $timelineItem['badge'] }}</span>
+                                </div>
+                                @if ($timelineItem['body'])
+                                    <p class="message-body">{{ $timelineItem['body'] }}</p>
+                                @endif
+                            </div>
+                        </article>
+                    @empty
+                        <div class="empty-state">No ticket timeline events yet.</div>
+                    @endforelse
+                </div>
+            </section>
+
             @if ($ticket->conversation)
                 <section class="section" aria-labelledby="linked-conversation-heading">
                     <div class="section-header">

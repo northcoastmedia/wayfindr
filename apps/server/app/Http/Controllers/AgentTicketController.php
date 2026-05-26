@@ -58,6 +58,7 @@ class AgentTicketController extends Controller
             'ticket' => $ticket,
             'visitorContext' => $this->visitorContext($ticket, $visitorContextSanitizer),
             'linkedConversationMessages' => $this->linkedConversationMessages($ticket),
+            'ticketTimeline' => $this->ticketTimeline($ticket),
         ]);
     }
 
@@ -308,6 +309,47 @@ class AgentTicketController extends Controller
             ->values();
     }
 
+    private function ticketTimeline(Ticket $ticket): Collection
+    {
+        $conversationMessages = $ticket->conversation
+            ? $ticket->conversation->messages()->with('sender')->get()
+            : collect();
+
+        $messageItems = $conversationMessages->toBase()->map(function ($message): array {
+            $isAgentMessage = $message->sender_type === User::class;
+
+            return [
+                'type' => $isAgentMessage ? 'agent-message' : 'visitor-message',
+                'label' => $isAgentMessage ? 'Agent reply' : 'Visitor message',
+                'actor' => $isAgentMessage ? ($message->sender?->name ?? 'Agent') : 'Visitor',
+                'badge' => $isAgentMessage ? 'Customer-visible' : 'Customer message',
+                'body' => $message->body,
+                'occurred_at' => $message->created_at,
+                'sequence' => $message->id,
+            ];
+        });
+
+        $activityItems = $ticket->auditEvents()
+            ->with('actor')
+            ->whereIn('action', $this->timelineActivityActions())
+            ->get()
+            ->toBase()
+            ->map(fn ($activity): array => [
+                'type' => $activity->action === 'ticket.note_added' ? 'internal-note' : 'ticket-activity',
+                'label' => $this->ticketActivityLabel($activity),
+                'actor' => $activity->actor?->name ?? 'System',
+                'badge' => $activity->action === 'ticket.note_added' ? 'Internal' : 'Ticket activity',
+                'body' => $activity->action === 'ticket.note_added' ? data_get($activity->metadata, 'body') : null,
+                'occurred_at' => $activity->occurred_at,
+                'sequence' => $activity->id,
+            ]);
+
+        return $messageItems
+            ->merge($activityItems)
+            ->sortBy(fn (array $item): string => ($item['occurred_at']?->format('U.u') ?? '0').'-'.str_pad((string) $item['sequence'], 10, '0', STR_PAD_LEFT))
+            ->values();
+    }
+
     /**
      * @return array{last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
      */
@@ -353,6 +395,63 @@ class AgentTicketController extends Controller
             'ticket.note_added',
             'ticket.reply_sent',
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function timelineActivityActions(): array
+    {
+        return [
+            'ticket.created',
+            'ticket.updated',
+            'ticket.pending',
+            'ticket.closed',
+            'ticket.reopened',
+            'ticket.assignee_updated',
+            'ticket.note_added',
+        ];
+    }
+
+    private function ticketActivityLabel(object $activity): string
+    {
+        return match ($activity->action) {
+            'ticket.created' => data_get($activity->metadata, 'source') === 'conversation' && data_get($activity->metadata, 'support_code')
+                ? 'Ticket created from conversation '.data_get($activity->metadata, 'support_code')
+                : 'Ticket created',
+            'ticket.closed' => 'Ticket closed',
+            'ticket.pending' => 'Ticket marked pending',
+            'ticket.reopened' => 'Ticket reopened',
+            'ticket.note_added' => 'Internal note',
+            'ticket.assignee_updated' => 'Assignee changed from '.(data_get($activity->metadata, 'old_assignee_name') ?? 'Unassigned').' to '.(data_get($activity->metadata, 'new_assignee_name') ?? 'Unassigned'),
+            'ticket.updated' => $this->ticketUpdatedLabel(data_get($activity->metadata, 'changes', [])),
+            default => ucfirst(str_replace(['ticket.', '_'], ['', ' '], $activity->action)),
+        };
+    }
+
+    private function ticketUpdatedLabel(array $changes): string
+    {
+        if ($changes === []) {
+            return 'Ticket updated';
+        }
+
+        return collect($changes)
+            ->map(function (array $change, string $field): string {
+                if ($field === 'description') {
+                    return 'Description updated';
+                }
+
+                if ($field === 'category') {
+                    return 'Category changed from '.TicketCategory::label(data_get($change, 'old')).' to '.TicketCategory::label(data_get($change, 'new'));
+                }
+
+                if ($field === 'priority') {
+                    return 'Priority changed from '.ucfirst((string) data_get($change, 'old')).' to '.ucfirst((string) data_get($change, 'new'));
+                }
+
+                return ucfirst($field).' changed from '.data_get($change, 'old').' to '.data_get($change, 'new');
+            })
+            ->implode(' ');
     }
 
     /**
