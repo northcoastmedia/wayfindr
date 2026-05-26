@@ -1,0 +1,74 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Account;
+use App\Support\ExternalIssueCapability;
+use App\Support\ExternalIssueProvider;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class AgentExternalIssueProviderConnectionController extends Controller
+{
+    public function store(Request $request): RedirectResponse
+    {
+        $agent = $request->user();
+
+        abort_unless($agent?->isAdmin(), 403);
+
+        $account = $agent->account()->firstOrFail();
+
+        $validated = $request->validate([
+            'site_id' => ['nullable', 'integer', Rule::exists('sites', 'id')->where('account_id', $account->id)],
+            'provider' => ['required', 'string', Rule::in(ExternalIssueProvider::values())],
+            'name' => ['required', 'string', 'max:255'],
+            'base_url' => ['nullable', 'url', 'max:2048'],
+            'credential_token' => ['nullable', 'string', 'max:4096'],
+            'capabilities' => ['nullable', 'array'],
+            'capabilities.*' => ['string', Rule::in(ExternalIssueCapability::values())],
+        ]);
+
+        $account->externalIssueProviderConnections()->create([
+            'provider' => $validated['provider'],
+            'name' => trim($validated['name']),
+            'base_url' => $this->blankToNull($validated['base_url'] ?? null),
+            'credentials' => $this->credentials($validated['credential_token'] ?? null),
+            'capabilities' => ExternalIssueCapability::flags($validated['capabilities'] ?? []),
+            'settings' => [],
+            'is_enabled' => true,
+        ]);
+
+        return $this->redirectAfterUpdate($account, $validated['site_id'] ?? null, 'Provider connection saved.');
+    }
+
+    private function redirectAfterUpdate(Account $account, mixed $siteId, string $status): RedirectResponse
+    {
+        if (is_numeric($siteId) && $account->sites()->whereKey((int) $siteId)->exists()) {
+            return redirect()
+                ->route('dashboard.sites.show', (int) $siteId)
+                ->with('status', $status);
+        }
+
+        return redirect()
+            ->route('dashboard')
+            ->with('status', $status);
+    }
+
+    /**
+     * @return array{token: string}|null
+     */
+    private function credentials(?string $token): ?array
+    {
+        $token = trim((string) $token);
+
+        return $token === '' ? null : ['token' => $token];
+    }
+
+    private function blankToNull(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+}

@@ -3,7 +3,9 @@
 use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
+use App\Http\Controllers\AgentExternalIssueProviderConnectionController;
 use App\Http\Controllers\AgentSiteController;
+use App\Http\Controllers\AgentSiteExternalIssueProjectController;
 use App\Http\Controllers\AgentTicketController;
 use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
@@ -27,6 +29,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.alerts.read-all');
     Route::post('/dashboard/alerts/{notification}/read', [AgentAlertController::class, 'markRead'])
         ->name('dashboard.alerts.read');
+    Route::post('/dashboard/external-issue-provider-connections', [AgentExternalIssueProviderConnectionController::class, 'store'])
+        ->name('dashboard.external-issue-provider-connections.store');
     Route::get('/dashboard/sites/new', [AgentSiteController::class, 'create'])
         ->name('dashboard.sites.create');
     Route::post('/dashboard/sites', [AgentSiteController::class, 'store'])
@@ -37,6 +41,10 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.sites.update');
     Route::put('/dashboard/sites/{site}/support-agents', [AgentSiteController::class, 'updateSupportAgents'])
         ->name('dashboard.sites.support-agents.update');
+    Route::post('/dashboard/sites/{site}/external-issue-projects', [AgentSiteExternalIssueProjectController::class, 'store'])
+        ->name('dashboard.sites.external-issue-projects.store');
+    Route::delete('/dashboard/sites/{site}/external-issue-projects/{externalIssueProject}', [AgentSiteExternalIssueProjectController::class, 'destroy'])
+        ->name('dashboard.sites.external-issue-projects.destroy');
     Route::get('/dashboard/conversations/{supportCode}', [AgentConversationController::class, 'show'])
         ->name('dashboard.conversations.show');
     Route::post('/dashboard/conversations/{supportCode}/close', [AgentConversationController::class, 'close'])

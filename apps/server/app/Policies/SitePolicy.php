@@ -21,4 +21,9 @@ class SitePolicy
     {
         return $user->isAdmin() && $this->view($user, $site);
     }
+
+    public function manageIntegrations(User $user, Site $site): bool
+    {
+        return $user->isAdmin() && $this->view($user, $site);
+    }
 }

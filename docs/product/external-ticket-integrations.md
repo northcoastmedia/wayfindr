@@ -77,9 +77,11 @@ Expected pieces:
 - `ticket_external_links`: a local record connecting a Wayfindr ticket to a
   provider object.
 - Provider connection records owned by an account, with encrypted credentials
-  and visible capability flags.
+  and visible capability flags. This is now the account-level connection
+  baseline; live provider calls still belong behind adapters.
 - Site-to-provider-project mappings so one Wayfindr account can route different
-  sites to different repositories or projects.
+  sites to different repositories or projects. This is now the site-level
+  routing baseline.
 - Adapter interfaces for creating an external issue, adding comments, fetching
   status, and handling webhooks when supported.
 - Audit events for external issue creation, sync attempts, sync failures, and
@@ -119,7 +121,9 @@ Default behavior should be conservative:
 2. Add a provider-neutral external link data model and audit events. This is
    now the local linking baseline for manual records and future provider
    adapters.
-3. Add account-level provider connection placeholders and capability flags.
+3. Add account-level provider connection placeholders, capability flags, and
+   site-to-project mappings. This is now the routing baseline before outbound
+   provider creation.
 4. Add GitHub outbound issue creation as the first concrete adapter.
 5. Add GitLab outbound issue creation after the adapter boundary proves itself.
 6. Evaluate Bitbucket Cloud issues versus Jira based on real operator demand.
