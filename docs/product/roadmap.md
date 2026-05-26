@@ -38,8 +38,17 @@ This roadmap is directional and should not include private business strategy.
 - Account roles for owner, admin, and agent authority.
 - Canned replies.
 - Conversation summaries and ticket suggestions.
+- External ticket integration planning and provider-neutral link model (see
+  [external ticket integrations](external-ticket-integrations.md)).
 - Transcript retention controls.
 - SPA route tracking.
 - Next.js/React package.
 - Webhooks.
 - Self-hosting documentation.
+
+## Phase 3: Integration Expansion
+
+- GitHub outbound issue creation.
+- GitLab outbound issue creation.
+- Bitbucket Cloud or Jira outbound issue creation based on operator demand.
+- External issue sync health and audit visibility.
