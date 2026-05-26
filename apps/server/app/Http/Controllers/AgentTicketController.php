@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
 use App\Support\ExternalIssueProvider;
@@ -344,7 +345,7 @@ class AgentTicketController extends Controller
             ->map(fn ($activity): array => [
                 'type' => $activity->action === 'ticket.note_added' ? 'internal-note' : 'ticket-activity',
                 'label' => $this->ticketActivityLabel($activity),
-                'actor' => $activity->actor?->name ?? 'System',
+                'actor' => $this->ticketActivityActor($activity),
                 'badge' => $activity->action === 'ticket.note_added' ? 'Internal' : 'Ticket activity',
                 'body' => $activity->action === 'ticket.note_added' ? data_get($activity->metadata, 'body') : null,
                 'occurred_at' => $activity->occurred_at,
@@ -404,6 +405,7 @@ class AgentTicketController extends Controller
             'ticket.external_link_created',
             'ticket.external_link_removed',
             'ticket.external_sync_failed',
+            'ticket.visitor_replied',
         ];
     }
 
@@ -423,6 +425,7 @@ class AgentTicketController extends Controller
             'ticket.external_link_created',
             'ticket.external_link_removed',
             'ticket.external_sync_failed',
+            'ticket.visitor_replied',
         ];
     }
 
@@ -435,6 +438,7 @@ class AgentTicketController extends Controller
             'ticket.closed' => 'Ticket closed',
             'ticket.pending' => 'Ticket marked pending',
             'ticket.reopened' => 'Ticket reopened',
+            'ticket.visitor_replied' => 'Visitor replied',
             'ticket.note_added' => 'Internal note',
             'ticket.external_link_created' => 'External link added: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
             'ticket.external_link_removed' => 'External link removed: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
@@ -443,6 +447,15 @@ class AgentTicketController extends Controller
             'ticket.updated' => $this->ticketUpdatedLabel(data_get($activity->metadata, 'changes', [])),
             default => ucfirst(str_replace(['ticket.', '_'], ['', ' '], $activity->action)),
         };
+    }
+
+    private function ticketActivityActor(object $activity): string
+    {
+        if ($activity->actor_type === Visitor::class) {
+            return 'Visitor';
+        }
+
+        return $activity->actor?->name ?? 'System';
     }
 
     private function ticketUpdatedLabel(array $changes): string

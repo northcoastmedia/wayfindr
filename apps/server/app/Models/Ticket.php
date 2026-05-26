@@ -69,20 +69,15 @@ class Ticket extends Model
             return 'resolved';
         }
 
-        if ($this->status === 'pending') {
+        $latestMessage = $this->latestConversationMessage();
+
+        if ($this->status === 'pending' && $latestMessage?->sender_type !== Visitor::class) {
             return 'waiting_on_customer';
         }
 
         if (! $this->assignee_id) {
             return 'needs_owner';
         }
-
-        $latestMessage = $this->conversation?->relationLoaded('latestMessage')
-            ? $this->conversation->latestMessage
-            : $this->conversation?->messages()
-                ->latest('created_at')
-                ->latest('id')
-                ->first();
 
         if ($latestMessage) {
             return $latestMessage->sender_type === User::class
@@ -125,6 +120,16 @@ class Ticket extends Model
             'resolved' => 90,
             default => 50,
         };
+    }
+
+    private function latestConversationMessage(): ?ConversationMessage
+    {
+        return $this->conversation?->relationLoaded('latestMessage')
+            ? $this->conversation->latestMessage
+            : $this->conversation?->messages()
+                ->latest('created_at')
+                ->latest('id')
+                ->first();
     }
 
     public function categoryLabel(): string

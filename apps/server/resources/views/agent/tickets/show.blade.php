@@ -51,6 +51,11 @@
                         <span class="meta-value">{{ $ticket->assignee?->name ?? 'Unassigned' }}</span>
                     </div>
                     <div class="meta-item">
+                        <span class="meta-label">Attention</span>
+                        <span class="meta-value">{{ $ticket->attentionLabel() }}</span>
+                        <span class="lede">{{ $ticket->attentionDescription() }}</span>
+                    </div>
+                    <div class="meta-item">
                         <span class="meta-label">Created</span>
                         <span class="meta-value">{{ $ticket->created_at->diffForHumans() }}</span>
                     </div>
@@ -468,7 +473,13 @@
                     @forelse ($ticketActivity as $activity)
                         <article class="message-card">
                             <div class="message-meta">
-                                <strong>{{ $activity->actor?->name ?? 'System' }}</strong>
+                                <strong>
+                                    @if ($activity->actor_type === \App\Models\Visitor::class)
+                                        Visitor
+                                    @else
+                                        {{ $activity->actor?->name ?? 'System' }}
+                                    @endif
+                                </strong>
                                 <span>{{ $activity->occurred_at->diffForHumans() }}</span>
                             </div>
                             <p>
@@ -511,6 +522,10 @@
 
                                     @case('ticket.external_sync_failed')
                                         External sync failed
+                                        @break
+
+                                    @case('ticket.visitor_replied')
+                                        Visitor replied
                                         @break
 
                                     @case('ticket.assignee_updated')
