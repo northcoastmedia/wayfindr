@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
+use App\Support\AgentReplyTemplate;
 use App\Support\ExternalIssueProvider;
 use App\Support\ExternalIssueSyncStatus;
 use App\Support\TicketCategory;
@@ -54,6 +55,7 @@ class AgentTicketController extends Controller
             'externalIssueProviders' => ExternalIssueProvider::options(),
             'externalIssueSyncStatuses' => ExternalIssueSyncStatus::options(),
             'githubIssueProjects' => $this->githubIssueProjectsForTicket($ticket),
+            'replyTemplates' => AgentReplyTemplate::options(),
             'ticketActivity' => $ticket->auditEvents()
                 ->with('actor')
                 ->whereIn('action', $this->visibleActivityActions())
@@ -98,10 +100,16 @@ class AgentTicketController extends Controller
         abort_unless($ticket->conversation, 404);
 
         $validated = $request->validate([
-            'message' => ['required', 'string', 'max:4000'],
+            'message' => ['nullable', 'string', 'max:4000'],
+            'reply_template' => ['nullable', Rule::in(AgentReplyTemplate::values())],
         ]);
 
-        $body = trim($validated['message']);
+        $selectedTemplate = $validated['reply_template'] ?? null;
+        $body = trim((string) ($validated['message'] ?? ''));
+
+        if ($body === '' && $selectedTemplate) {
+            $body = trim((string) AgentReplyTemplate::body($selectedTemplate));
+        }
 
         if ($body === '') {
             throw ValidationException::withMessages([
@@ -110,15 +118,21 @@ class AgentTicketController extends Controller
         }
 
         $conversation = $ticket->conversation;
+        $metadata = [
+            'source' => 'ticket',
+            'ticket_id' => $ticket->id,
+        ];
+
+        if ($selectedTemplate) {
+            $metadata['reply_template'] = $selectedTemplate;
+        }
+
         $message = $conversation->messages()->create([
             'sender_type' => User::class,
             'sender_id' => $agent->id,
             'type' => 'text',
             'body' => $body,
-            'metadata' => [
-                'source' => 'ticket',
-                'ticket_id' => $ticket->id,
-            ],
+            'metadata' => $metadata,
         ]);
 
         $conversation->forceFill([
@@ -128,10 +142,16 @@ class AgentTicketController extends Controller
             'last_message_at' => $message->created_at,
         ])->save();
 
-        $this->recordActivity($ticket, $agent, 'ticket.reply_sent', [
+        $activityMetadata = [
             'conversation_id' => $conversation->id,
             'message_id' => $message->id,
-        ]);
+        ];
+
+        if ($selectedTemplate) {
+            $activityMetadata['reply_template'] = $selectedTemplate;
+        }
+
+        $this->recordActivity($ticket, $agent, 'ticket.reply_sent', $activityMetadata);
         $this->markConversationNotificationsRead($agent, $conversation);
 
         event(new ConversationMessageCreated($message));

@@ -156,6 +156,25 @@
                         @csrf
 
                         <div class="field">
+                            <label for="reply_template">Reply helper</label>
+                            <select id="reply_template" name="reply_template" data-reply-template data-target="#message">
+                                <option value="">Write a custom reply</option>
+                                @foreach ($replyTemplates as $replyTemplateKey => $replyTemplate)
+                                    <option
+                                        value="{{ $replyTemplateKey }}"
+                                        data-body="{{ $replyTemplate['body'] }}"
+                                        @selected(old('reply_template') === $replyTemplateKey)
+                                    >
+                                        {{ $replyTemplate['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('reply_template')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="field">
                             <label for="message">Visitor reply</label>
                             <textarea id="message" name="message" rows="4" placeholder="Send a reply to the visitor.">{{ old('message') }}</textarea>
                             @error('message')
@@ -582,4 +601,22 @@
             </section>
         </main>
     </div>
+
+    <script>
+        const replyTemplate = document.querySelector('[data-reply-template]');
+        const replyTemplateTarget = replyTemplate
+            ? document.querySelector(replyTemplate.dataset.target)
+            : null;
+
+        replyTemplate?.addEventListener('change', () => {
+            const body = replyTemplate.selectedOptions[0]?.dataset.body || '';
+
+            if (! body || ! replyTemplateTarget) {
+                return;
+            }
+
+            replyTemplateTarget.value = body;
+            replyTemplateTarget.focus();
+        });
+    </script>
 </x-layouts.app>
