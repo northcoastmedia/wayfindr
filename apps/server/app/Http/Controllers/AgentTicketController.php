@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ConversationMessageCreated;
+use App\Models\Conversation;
 use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
 use App\Support\TicketCategory;
 use App\Support\TicketPriority;
@@ -54,6 +57,7 @@ class AgentTicketController extends Controller
             'ticketPriorityGuidance' => TicketPriority::guidanceOptions(),
             'ticket' => $ticket,
             'visitorContext' => $this->visitorContext($ticket, $visitorContextSanitizer),
+            'linkedConversationMessages' => $this->linkedConversationMessages($ticket),
         ]);
     }
 
@@ -72,6 +76,57 @@ class AgentTicketController extends Controller
         ]);
 
         return $this->redirectAfterUpdate($ticket, 'Ticket note added.');
+    }
+
+    public function storeReply(Request $request, Ticket $ticket): RedirectResponse
+    {
+        $agent = $request->user();
+
+        $this->authorizeTicketAbility($agent, 'reply', $ticket);
+        $ticket->loadMissing('conversation');
+
+        abort_unless($ticket->conversation, 404);
+
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $body = trim($validated['message']);
+
+        if ($body === '') {
+            throw ValidationException::withMessages([
+                'message' => 'Please enter a reply.',
+            ]);
+        }
+
+        $conversation = $ticket->conversation;
+        $message = $conversation->messages()->create([
+            'sender_type' => User::class,
+            'sender_id' => $agent->id,
+            'type' => 'text',
+            'body' => $body,
+            'metadata' => [
+                'source' => 'ticket',
+                'ticket_id' => $ticket->id,
+            ],
+        ]);
+
+        $conversation->forceFill([
+            'assigned_agent_id' => $conversation->assigned_agent_id ?: $agent->id,
+            'status' => 'open',
+            'closed_at' => null,
+            'last_message_at' => $message->created_at,
+        ])->save();
+
+        $this->recordActivity($ticket, $agent, 'ticket.reply_sent', [
+            'conversation_id' => $conversation->id,
+            'message_id' => $message->id,
+        ]);
+        $this->markConversationNotificationsRead($agent, $conversation);
+
+        event(new ConversationMessageCreated($message));
+
+        return $this->redirectAfterUpdate($ticket, 'Reply sent.');
     }
 
     public function update(Request $request, Ticket $ticket): RedirectResponse
@@ -227,6 +282,32 @@ class AgentTicketController extends Controller
             ->markAsRead();
     }
 
+    private function markConversationNotificationsRead(User $agent, Conversation $conversation): void
+    {
+        $agent->unreadNotifications()
+            ->where('type', ConversationNeedsReply::class)
+            ->get()
+            ->filter(fn ($notification): bool => (int) data_get($notification->data, 'conversation_id') === $conversation->id)
+            ->each
+            ->markAsRead();
+    }
+
+    private function linkedConversationMessages(Ticket $ticket): Collection
+    {
+        if (! $ticket->conversation) {
+            return collect();
+        }
+
+        return $ticket->conversation->messages()
+            ->with('sender')
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(5)
+            ->get()
+            ->reverse()
+            ->values();
+    }
+
     /**
      * @return array{last_page_url: string|null, started_page_url: string|null, host_context: array<string, string>}
      */
@@ -270,6 +351,7 @@ class AgentTicketController extends Controller
             'ticket.reopened',
             'ticket.assignee_updated',
             'ticket.note_added',
+            'ticket.reply_sent',
         ];
     }
 

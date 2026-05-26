@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\CobrowseStateUpdated;
+use App\Events\ConversationMessageCreated;
 use App\Models\Account;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
@@ -9,6 +10,7 @@ use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Notifications\ConversationNeedsReply;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 
@@ -1648,6 +1650,139 @@ test('agent can add an internal note to a ticket record', function (): void {
         ->assertSee('Internal notes')
         ->assertSee('Ada Agent')
         ->assertSee('Customer wants an update before noon.');
+});
+
+test('agent can send a visitor reply from a linked ticket record', function (): void {
+    Event::fake([ConversationMessageCreated::class]);
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-TICKETREPLY',
+        'subject' => 'Checkout trouble',
+        'status' => 'closed',
+        'closed_at' => now()->subMinute(),
+    ]);
+    $visitorMessage = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'The checkout button is still stuck.',
+        'created_at' => now()->subMinute(),
+    ]);
+    $agent->notify(new ConversationNeedsReply($visitorMessage));
+
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/replies", [
+            'message' => 'I can help from the ticket.',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Reply sent.');
+
+    $reply = $conversation->messages()->latest('id')->firstOrFail();
+
+    expect($reply)
+        ->sender_type->toBe(User::class)
+        ->sender_id->toBe($agent->id)
+        ->body->toBe('I can help from the ticket.')
+        ->and($reply->metadata)->toMatchArray([
+            'source' => 'ticket',
+            'ticket_id' => $ticket->id,
+        ]);
+
+    expect($conversation->fresh())
+        ->assigned_agent_id->toBe($agent->id)
+        ->status->toBe('open')
+        ->closed_at->toBeNull()
+        ->last_message_at->not->toBeNull();
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.reply_sent',
+    ]);
+
+    expect($agent->fresh()->unreadNotifications)->toHaveCount(0);
+
+    Event::assertDispatched(
+        ConversationMessageCreated::class,
+        fn (ConversationMessageCreated $event): bool => $event->message->is($reply)
+    );
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Visitor reply')
+        ->assertSee('Recent conversation messages')
+        ->assertSee('The checkout button is still stuck.')
+        ->assertSee('I can help from the ticket.')
+        ->assertSee('Visitor reply sent');
+});
+
+test('ticket visitor replies validate message content', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BLANKREPLY',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/replies", [
+            'message' => '   ',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHasErrors('message');
+
+    expect($conversation->messages()->count())->toBe(0);
+});
+
+test('agent cannot send a visitor reply from another account ticket', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherVisitor = Visitor::factory()->for($otherSite)->create();
+    $otherConversation = Conversation::factory()->for($otherSite)->for($otherVisitor)->create();
+    $otherTicket = Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->for($otherConversation)
+        ->for($otherVisitor, 'requester')
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->post("/dashboard/tickets/{$otherTicket->id}/replies", [
+            'message' => 'Nope.',
+        ])
+        ->assertNotFound();
+
+    expect($otherConversation->messages()->count())->toBe(0);
 });
 
 test('agent can update ticket fields from the detail page', function (): void {
