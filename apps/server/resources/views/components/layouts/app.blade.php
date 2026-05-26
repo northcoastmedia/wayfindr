@@ -325,6 +325,21 @@
             overflow-wrap: anywhere;
         }
 
+        .meta-item input,
+        .meta-item select {
+            width: 100%;
+            margin-top: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 11px;
+            background: #ffffff;
+            color: var(--text);
+        }
+
+        .meta-item .button {
+            margin: 8px 8px 0 0;
+        }
+
         .realtime-grid {
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         }
