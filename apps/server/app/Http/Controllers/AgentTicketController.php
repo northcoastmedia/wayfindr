@@ -6,6 +6,7 @@ use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketAssigned;
+use App\Support\TicketPriority;
 use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -46,6 +47,8 @@ class AgentTicketController extends Controller
                 ->latest('occurred_at')
                 ->latest('id')
                 ->get(),
+            'ticketPriorities' => TicketPriority::options(),
+            'ticketPriorityGuidance' => TicketPriority::guidanceOptions(),
             'ticket' => $ticket,
             'visitorContext' => $this->visitorContext($ticket, $visitorContextSanitizer),
         ]);
@@ -77,7 +80,7 @@ class AgentTicketController extends Controller
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:10000'],
-            'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
+            'priority' => ['required', Rule::in(TicketPriority::values())],
         ]);
 
         $changes = $this->ticketFieldChanges($ticket, $validated);

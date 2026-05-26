@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\RealtimeHealth;
+use App\Support\TicketPriority;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -70,10 +71,7 @@ class AgentDashboardController extends Controller
             : 'open';
         $ticketPriorityFilters = [
             'all' => 'Any priority',
-            'urgent' => 'Urgent',
-            'high' => 'High',
-            'normal' => 'Normal',
-            'low' => 'Low',
+            ...array_map(fn (array $priority): string => $priority['label'], TicketPriority::guidanceOptions()),
         ];
         $ticketPriority = $request->query('ticket_priority', 'all');
         $ticketPriority = is_string($ticketPriority) && array_key_exists($ticketPriority, $ticketPriorityFilters)
