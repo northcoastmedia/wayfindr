@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 #[Fillable([
@@ -139,5 +140,10 @@ class Ticket extends Model
     public function auditEvents(): MorphMany
     {
         return $this->morphMany(AuditEvent::class, 'subject');
+    }
+
+    public function externalLinks(): HasMany
+    {
+        return $this->hasMany(TicketExternalLink::class);
     }
 }

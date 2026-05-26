@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Site;
 use App\Models\Ticket;
+use App\Models\TicketExternalLink;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
@@ -1658,6 +1659,150 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('Assign ticket')
         ->assertSee('Close ticket')
         ->assertSee('/dashboard/conversations/WF-TICKETSHOW', false);
+});
+
+test('agent can add a provider neutral external link to a ticket', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-LINK1',
+        'subject' => 'Checkout trouble',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/external-links", [
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'external_id' => '123',
+            'external_key' => '#123',
+            'url' => 'https://github.com/adamgreenwell/wayfindr/issues/123',
+            'sync_status' => 'linked',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'External link added.');
+
+    $this->assertDatabaseHas('ticket_external_links', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'ticket_id' => $ticket->id,
+        'provider' => 'github',
+        'project_key' => 'adamgreenwell/wayfindr',
+        'external_id' => '123',
+        'external_key' => '#123',
+        'url' => 'https://github.com/adamgreenwell/wayfindr/issues/123',
+        'sync_status' => 'linked',
+    ]);
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.external_link_created',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('External links')
+        ->assertSee('GitHub')
+        ->assertSee('adamgreenwell/wayfindr')
+        ->assertSee('#123')
+        ->assertSee('Linked')
+        ->assertSee('https://github.com/adamgreenwell/wayfindr/issues/123');
+});
+
+test('agent can remove a provider neutral external link from a ticket', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-LINK2',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create(['status' => 'open']);
+    $externalLink = TicketExternalLink::factory()
+        ->for($account)
+        ->for($site)
+        ->for($ticket)
+        ->create([
+            'provider' => 'gitlab',
+            'project_key' => 'acme/docs',
+            'external_id' => '321',
+            'external_key' => '#321',
+            'url' => 'https://gitlab.example.test/acme/docs/-/issues/321',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->delete("/dashboard/tickets/{$ticket->id}/external-links/{$externalLink->id}")
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'External link removed.');
+
+    $this->assertDatabaseMissing('ticket_external_links', [
+        'id' => $externalLink->id,
+    ]);
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.external_link_removed',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('External link removed')
+        ->assertDontSee('https://gitlab.example.test/acme/docs/-/issues/321');
+});
+
+test('agent cannot add an external link to another account ticket', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $otherSite = Site::factory()->for($otherAccount)->create();
+    $otherTicket = Ticket::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create(['status' => 'open']);
+
+    $this->actingAs($agent)
+        ->post("/dashboard/tickets/{$otherTicket->id}/external-links", [
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'external_id' => '123',
+            'external_key' => '#123',
+            'url' => 'https://github.com/adamgreenwell/wayfindr/issues/123',
+            'sync_status' => 'linked',
+        ])
+        ->assertNotFound();
+
+    $this->assertDatabaseCount('ticket_external_links', 0);
 });
 
 test('ticket detail shows a unified timeline across conversation messages notes and activity', function (): void {

@@ -16,6 +16,7 @@ document, not a complete compliance register.
 | Conversations | Subject, status, support code, visitor/site links, page URL metadata | `conversations` | Conversation subjects and page URLs can contain personal data depending on the host site. |
 | Messages | Visitor and agent message bodies, sender references, timestamps, metadata | `conversation_messages` | Message bodies are user-supplied support data. |
 | Tickets | Subject, status, priority, category, requester, assignee, conversation link, metadata | `tickets` | Tickets are durable support records and may outlive the original chat. |
+| Ticket external links | Provider, project or repository key, external ID/key, URL, sync status, last sync time, metadata | `ticket_external_links` | External links point to third-party systems. Operators should assume linked providers have their own access, retention, and privacy rules. |
 | Cobrowse sessions | Consent status, requested/consented/ended timestamps, telemetry, page state, sanitized snapshot, mutation buffer | `cobrowse_sessions` | Cobrowse data should be masked in the browser before transmission. |
 | Audit events | Actor, subject, event type, metadata, timestamps | `audit_events` | Intended for accountability and important lifecycle events. |
 | Sessions, cache, queues | Laravel runtime data | Laravel cache/session/job tables or configured drivers | Runtime stores may include identifiers or serialized job payloads. |

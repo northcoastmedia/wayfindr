@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
+use App\Support\ExternalIssueProvider;
+use App\Support\ExternalIssueSyncStatus;
 use App\Support\TicketCategory;
 use App\Support\TicketPriority;
 use App\Support\VisitorContextSanitizer;
@@ -33,6 +35,9 @@ class AgentTicketController extends Controller
         $ticket->load([
             'assignee',
             'conversation',
+            'externalLinks' => fn ($query) => $query
+                ->latest()
+                ->latest('id'),
             'requester',
             'site',
             'auditEvents' => fn ($query) => $query
@@ -46,6 +51,8 @@ class AgentTicketController extends Controller
             'account' => $agent->account()->firstOrFail(),
             'accountAgents' => $this->supportAgentsForSite($ticket->site),
             'agent' => $agent,
+            'externalIssueProviders' => ExternalIssueProvider::options(),
+            'externalIssueSyncStatuses' => ExternalIssueSyncStatus::options(),
             'ticketActivity' => $ticket->auditEvents()
                 ->with('actor')
                 ->whereIn('action', $this->visibleActivityActions())
@@ -395,6 +402,9 @@ class AgentTicketController extends Controller
             'ticket.assignee_updated',
             'ticket.note_added',
             'ticket.reply_sent',
+            'ticket.external_link_created',
+            'ticket.external_link_removed',
+            'ticket.external_sync_failed',
             'ticket.visitor_replied',
         ];
     }
@@ -412,6 +422,9 @@ class AgentTicketController extends Controller
             'ticket.reopened',
             'ticket.assignee_updated',
             'ticket.note_added',
+            'ticket.external_link_created',
+            'ticket.external_link_removed',
+            'ticket.external_sync_failed',
             'ticket.visitor_replied',
         ];
     }
@@ -427,6 +440,9 @@ class AgentTicketController extends Controller
             'ticket.reopened' => 'Ticket reopened',
             'ticket.visitor_replied' => 'Visitor replied',
             'ticket.note_added' => 'Internal note',
+            'ticket.external_link_created' => 'External link added: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
+            'ticket.external_link_removed' => 'External link removed: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')).' '.(data_get($activity->metadata, 'external_key') ?? data_get($activity->metadata, 'external_id') ?? ''),
+            'ticket.external_sync_failed' => 'External sync failed: '.ExternalIssueProvider::label(data_get($activity->metadata, 'provider')),
             'ticket.assignee_updated' => 'Assignee changed from '.(data_get($activity->metadata, 'old_assignee_name') ?? 'Unassigned').' to '.(data_get($activity->metadata, 'new_assignee_name') ?? 'Unassigned'),
             'ticket.updated' => $this->ticketUpdatedLabel(data_get($activity->metadata, 'changes', [])),
             default => ucfirst(str_replace(['ticket.', '_'], ['', ' '], $activity->action)),
