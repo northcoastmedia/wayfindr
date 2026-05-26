@@ -174,6 +174,26 @@
                     <span class="lede">{{ $ticket->externalLinks->count() }} linked</span>
                 </div>
 
+                @if ($githubIssueProjects->isNotEmpty())
+                    <div class="section-form">
+                        <strong>External issue actions</strong>
+                        <p class="lede">Create a conservative GitHub issue from this ticket without exporting transcripts, cobrowse snapshots, or internal notes.</p>
+
+                        @error('external_issue')
+                            <p class="field-error">{{ $message }}</p>
+                        @enderror
+
+                        @foreach ($githubIssueProjects as $githubIssueProject)
+                            <form method="POST" action="{{ route('dashboard.tickets.external-issues.github.store', $ticket) }}">
+                                @csrf
+                                <input type="hidden" name="site_external_issue_project_id" value="{{ $githubIssueProject->id }}">
+                                <button class="button" type="submit">Create GitHub issue</button>
+                                <span class="lede">{{ $githubIssueProject->project_key }}</span>
+                            </form>
+                        @endforeach
+                    </div>
+                @endif
+
                 <div class="message-list">
                     @forelse ($ticket->externalLinks as $externalLink)
                         <article class="message-card">
@@ -514,6 +534,10 @@
 
                                     @case('ticket.external_link_created')
                                         External link added
+                                        @break
+
+                                    @case('ticket.external_issue_created')
+                                        GitHub issue created
                                         @break
 
                                     @case('ticket.external_link_removed')

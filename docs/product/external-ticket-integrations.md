@@ -32,7 +32,11 @@ Planning notes:
 - Account for the GitHub API caveat that pull requests can appear through issue
   endpoints.
 - Keep repository mapping explicit per Wayfindr site or account.
-- Start with outbound issue creation and comments before inbound sync.
+- Outbound issue creation is the first concrete adapter. It sends a conservative
+  issue body with ticket metadata and a Wayfindr link, then stores the created
+  GitHub URL as a `ticket_external_links` record.
+- Keep comments, inbound sync, labels, milestones, and assignee mapping behind
+  later capability-specific slices.
 
 ### GitLab
 
@@ -82,6 +86,9 @@ Expected pieces:
 - Site-to-provider-project mappings so one Wayfindr account can route different
   sites to different repositories or projects. This is now the site-level
   routing baseline.
+- A GitHub issue creator adapter for explicit outbound issue creation. It calls
+  the GitHub Issues API only when a mapped provider connection has the
+  `create_issue` capability.
 - Adapter interfaces for creating an external issue, adding comments, fetching
   status, and handling webhooks when supported.
 - Audit events for external issue creation, sync attempts, sync failures, and
@@ -111,7 +118,7 @@ Default behavior should be conservative:
   visitor identifiers by default.
 - Require an explicit operator setting before exporting transcripts or internal
   notes.
-- Record exactly what was sent in the Wayfindr audit trail.
+- Record outbound creation success and failure in the Wayfindr audit trail.
 
 ## Suggested Roadmap
 
@@ -124,7 +131,8 @@ Default behavior should be conservative:
 3. Add account-level provider connection placeholders, capability flags, and
    site-to-project mappings. This is now the routing baseline before outbound
    provider creation.
-4. Add GitHub outbound issue creation as the first concrete adapter.
+4. Add GitHub outbound issue creation as the first concrete adapter. This is now
+   the outbound creation baseline.
 5. Add GitLab outbound issue creation after the adapter boundary proves itself.
 6. Evaluate Bitbucket Cloud issues versus Jira based on real operator demand.
 7. Add inbound webhooks and sync health once outbound links are dependable.
