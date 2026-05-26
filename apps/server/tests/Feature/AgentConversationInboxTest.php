@@ -1400,6 +1400,27 @@ test('agent can create a ticket from their account conversation', function (): v
         ->assertSee('Open');
 });
 
+test('agent ticket creation explains priority semantics', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-PRIORITY1',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-PRIORITY1')
+        ->assertOk()
+        ->assertSee('Urgent - Business-critical, active outage, or blocked production work.')
+        ->assertSee('High - Time-sensitive issue affecting an important customer workflow.')
+        ->assertSee('Normal - Standard support request with no immediate deadline.')
+        ->assertSee('Low - Nice-to-have follow-up or non-blocking question.');
+});
+
 test('agent can view a durable ticket record for their account', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -1481,6 +1502,29 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('Assign ticket')
         ->assertSee('Close ticket')
         ->assertSee('/dashboard/conversations/WF-TICKETSHOW', false);
+});
+
+test('agent ticket detail explains priority semantics', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'priority' => 'urgent',
+            'status' => 'open',
+            'subject' => 'Production checkout outage',
+        ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Urgent - Business-critical, active outage, or blocked production work.')
+        ->assertSee('High - Time-sensitive issue affecting an important customer workflow.')
+        ->assertSee('Normal - Standard support request with no immediate deadline.')
+        ->assertSee('Low - Nice-to-have follow-up or non-blocking question.');
 });
 
 test('agent can add an internal note to a ticket record', function (): void {

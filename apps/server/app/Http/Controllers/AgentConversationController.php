@@ -10,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
 use App\Support\CobrowseConsentState;
+use App\Support\TicketPriority;
 use App\Support\VisitorContextSanitizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AgentConversationController extends Controller
@@ -50,6 +52,8 @@ class AgentConversationController extends Controller
             'priorConversations' => $this->priorConversations($conversation),
             'realtime' => $this->realtimeConfig($conversation),
             'tickets' => $tickets,
+            'ticketPriorities' => TicketPriority::options(),
+            'ticketPriorityGuidance' => TicketPriority::guidanceOptions(),
             'visitorContext' => $this->visitorContext($conversation, $visitorContextSanitizer),
         ]);
     }
@@ -164,7 +168,7 @@ class AgentConversationController extends Controller
             ->load(['site', 'visitor']);
 
         $validated = $request->validate([
-            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+            'priority' => ['nullable', 'string', Rule::in(TicketPriority::values())],
         ]);
 
         if ($conversation->tickets()->exists()) {

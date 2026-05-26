@@ -210,12 +210,13 @@
                     <div class="field">
                         <label for="priority">Priority</label>
                         <select id="priority" name="priority">
-                            @foreach (['low', 'normal', 'high', 'urgent'] as $priority)
-                                <option value="{{ $priority }}" @selected(old('priority', $ticket->priority) === $priority)>
-                                    {{ ucfirst($priority) }}
+                            @foreach ($ticketPriorities as $value => $priority)
+                                <option value="{{ $value }}" @selected(old('priority', $ticket->priority) === $value)>
+                                    {{ $priority['label'] }}
                                 </option>
                             @endforeach
                         </select>
+                        <x-ticket-priority-guidance :priorities="$ticketPriorityGuidance" />
                         @error('priority')
                             <p class="field-error">{{ $message }}</p>
                         @enderror

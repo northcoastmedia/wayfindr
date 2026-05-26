@@ -186,10 +186,11 @@
                         <div class="field">
                             <label for="priority">Priority</label>
                             <select id="priority" name="priority">
-                                @foreach (['low' => 'Low', 'normal' => 'Normal', 'high' => 'High', 'urgent' => 'Urgent'] as $value => $label)
-                                    <option value="{{ $value }}" @selected(old('priority', 'normal') === $value)>{{ $label }}</option>
+                                @foreach ($ticketPriorities as $value => $priority)
+                                    <option value="{{ $value }}" @selected(old('priority', 'normal') === $value)>{{ $priority['label'] }}</option>
                                 @endforeach
                             </select>
+                            <x-ticket-priority-guidance :priorities="$ticketPriorityGuidance" />
                             @error('priority')
                                 <p class="field-error">{{ $message }}</p>
                             @enderror
