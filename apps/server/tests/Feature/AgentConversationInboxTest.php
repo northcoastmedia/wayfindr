@@ -2062,6 +2062,94 @@ test('agent can send a visitor reply from a linked ticket record', function (): 
         ->assertSee('Visitor reply sent');
 });
 
+test('ticket detail exposes visitor reply helpers', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-HELPERS',
+        'subject' => 'Checkout trouble',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Reply helper')
+        ->assertSee('Looking into it')
+        ->assertSee('Need more detail')
+        ->assertSee('Ticket follow-up');
+});
+
+test('agent can send a visitor reply from a ticket helper', function (): void {
+    Event::fake([ConversationMessageCreated::class]);
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-HELPERREPLY',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/replies", [
+            'reply_template' => 'looking_into_it',
+            'message' => '',
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'Reply sent.');
+
+    $reply = $conversation->messages()->latest('id')->firstOrFail();
+
+    expect($reply)
+        ->sender_type->toBe(User::class)
+        ->sender_id->toBe($agent->id)
+        ->body->toBe('Thanks for the update. I am looking into this now and will follow up shortly.')
+        ->and($reply->metadata)->toMatchArray([
+            'source' => 'ticket',
+            'ticket_id' => $ticket->id,
+            'reply_template' => 'looking_into_it',
+        ]);
+
+    $this->assertDatabaseHas('audit_events', [
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'subject_type' => Ticket::class,
+        'subject_id' => $ticket->id,
+        'action' => 'ticket.reply_sent',
+    ]);
+
+    Event::assertDispatched(
+        ConversationMessageCreated::class,
+        fn (ConversationMessageCreated $event): bool => $event->message->is($reply)
+    );
+});
+
 test('ticket visitor replies validate message content', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
