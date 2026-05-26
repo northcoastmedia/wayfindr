@@ -4,6 +4,7 @@ namespace App\Support\ExternalIssues;
 
 use App\Models\SiteExternalIssueProject;
 use App\Models\Ticket;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -21,15 +22,19 @@ class GitHubIssueCreator
             throw new GitHubIssueCreationFailed('GitHub token is missing.');
         }
 
-        $response = Http::withToken($token)
-            ->withHeaders([
-                'Accept' => 'application/vnd.github+json',
-                'X-GitHub-Api-Version' => '2022-11-28',
-            ])
-            ->post($this->issuesEndpoint($project), [
-                'title' => $ticket->subject,
-                'body' => $this->issueBody($ticket),
-            ]);
+        try {
+            $response = Http::withToken($token)
+                ->withHeaders([
+                    'Accept' => 'application/vnd.github+json',
+                    'X-GitHub-Api-Version' => '2022-11-28',
+                ])
+                ->post($this->issuesEndpoint($project), [
+                    'title' => $ticket->subject,
+                    'body' => $this->issueBody($ticket),
+                ]);
+        } catch (ConnectionException) {
+            throw new GitHubIssueCreationFailed('GitHub request failed before a response was received.');
+        }
 
         if (! $response->successful()) {
             throw new GitHubIssueCreationFailed(

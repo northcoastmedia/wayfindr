@@ -11,6 +11,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -132,6 +133,42 @@ test('GitHub issue creation failure is audited without storing credentials', fun
             'provider' => 'github',
             'project_key' => 'adamgreenwell/wayfindr',
             'status' => 422,
+        ])
+        ->and(json_encode($auditEvent->metadata))->not->toContain('ghp_test_secret');
+});
+
+test('GitHub connection failures are audited without crashing the agent request', function (): void {
+    $fixture = githubOutboundIssueFixture();
+    $ticket = $fixture['ticket'];
+    $project = $fixture['project'];
+    $agent = $fixture['agent'];
+
+    Http::fake([
+        'https://api.github.com/repos/adamgreenwell/wayfindr/issues' => fn () => throw new ConnectionException('GitHub timed out.'),
+    ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/external-issues/github", [
+            'site_external_issue_project_id' => $project->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHasErrors('external_issue');
+
+    $this->assertDatabaseCount('ticket_external_links', 0);
+
+    $auditEvent = AuditEvent::query()
+        ->where('subject_type', Ticket::class)
+        ->where('subject_id', $ticket->id)
+        ->where('action', 'ticket.external_sync_failed')
+        ->firstOrFail();
+
+    expect($auditEvent->metadata)
+        ->toMatchArray([
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'status' => null,
+            'message' => 'GitHub request failed before a response was received.',
         ])
         ->and(json_encode($auditEvent->metadata))->not->toContain('ghp_test_secret');
 });
