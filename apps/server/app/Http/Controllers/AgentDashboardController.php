@@ -68,6 +68,25 @@ class AgentDashboardController extends Controller
         $ticketStatus = is_string($ticketStatus) && array_key_exists($ticketStatus, $ticketStatusFilters)
             ? $ticketStatus
             : 'open';
+        $ticketPriorityFilters = [
+            'all' => 'Any priority',
+            'urgent' => 'Urgent',
+            'high' => 'High',
+            'normal' => 'Normal',
+            'low' => 'Low',
+        ];
+        $ticketPriority = $request->query('ticket_priority', 'all');
+        $ticketPriority = is_string($ticketPriority) && array_key_exists($ticketPriority, $ticketPriorityFilters)
+            ? $ticketPriority
+            : 'all';
+        $requestedTicketSite = $request->query('ticket_site');
+        $ticketSite = is_string($requestedTicketSite) && ctype_digit($requestedTicketSite) && $sites->contains('id', (int) $requestedTicketSite)
+            ? (int) $requestedTicketSite
+            : null;
+        $ticketSearch = $request->query('ticket_search', '');
+        $ticketSearch = is_string($ticketSearch)
+            ? mb_substr(trim($ticketSearch), 0, 120)
+            : '';
         $ticketStatusSummary = match ($ticketStatus) {
             'all' => 'total',
             default => $ticketStatus,
@@ -101,6 +120,18 @@ class AgentDashboardController extends Controller
             ->when($ticketStatus !== 'all', fn ($query) => $query->where('status', $ticketStatus))
             ->when($ticketFilter === 'assigned_to_me', fn ($query) => $query->where('assignee_id', $agent->id))
             ->when($ticketFilter === 'unassigned', fn ($query) => $query->whereNull('assignee_id'))
+            ->when($ticketSite, fn ($query) => $query->where('site_id', $ticketSite))
+            ->when($ticketPriority !== 'all', fn ($query) => $query->where('priority', $ticketPriority))
+            ->when($ticketSearch !== '', function ($query) use ($ticketSearch): void {
+                $searchPattern = '%'.$ticketSearch.'%';
+
+                $query->where(function ($query) use ($searchPattern): void {
+                    $query
+                        ->whereLike('subject', $searchPattern)
+                        ->orWhereLike('description', $searchPattern)
+                        ->orWhereHas('conversation', fn ($query) => $query->whereLike('support_code', $searchPattern));
+                });
+            })
             ->orderByDesc('updated_at')
             ->orderByDesc('created_at')
             ->get()
@@ -127,6 +158,11 @@ class AgentDashboardController extends Controller
             'ticketEmptyMessage' => $ticketEmptyMessage,
             'ticketFilter' => $ticketFilter,
             'ticketFilters' => $ticketFilters,
+            'ticketPriority' => $ticketPriority,
+            'ticketPriorityFilters' => $ticketPriorityFilters,
+            'ticketQuery' => $this->ticketQueryParams($ticketStatus, $ticketFilter, $ticketSite, $ticketPriority, $ticketSearch),
+            'ticketSearch' => $ticketSearch,
+            'ticketSite' => $ticketSite,
             'ticketStatus' => $ticketStatus,
             'ticketStatusFilters' => $ticketStatusFilters,
             'ticketStatusSummary' => $ticketStatusSummary,
@@ -143,5 +179,35 @@ class AgentDashboardController extends Controller
             ->get()
             ->filter(fn (DatabaseNotification $notification): bool => Gate::forUser($agent)->allows('view', $notification))
             ->values();
+    }
+
+    /**
+     * @return array<string, string|int>
+     */
+    private function ticketQueryParams(string $ticketStatus, string $ticketFilter, ?int $ticketSite, string $ticketPriority, string $ticketSearch): array
+    {
+        $params = [];
+
+        if ($ticketStatus !== 'open') {
+            $params['ticket_status'] = $ticketStatus;
+        }
+
+        if ($ticketFilter !== 'all') {
+            $params['ticket_filter'] = $ticketFilter;
+        }
+
+        if ($ticketSite) {
+            $params['ticket_site'] = $ticketSite;
+        }
+
+        if ($ticketPriority !== 'all') {
+            $params['ticket_priority'] = $ticketPriority;
+        }
+
+        if ($ticketSearch !== '') {
+            $params['ticket_search'] = $ticketSearch;
+        }
+
+        return $params;
     }
 }

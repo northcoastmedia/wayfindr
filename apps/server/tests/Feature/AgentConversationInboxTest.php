@@ -433,6 +433,126 @@ test('dashboard filters tickets by status', function (): void {
         ->assertDontSee('Other account waiting');
 });
 
+test('dashboard filters tickets by site without leaking unsupported sites', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $docsSite = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $storeSite = Site::factory()->for($account)->create(['name' => 'Acme Store']);
+    $restrictedSite = Site::factory()->for($account)->create(['name' => 'Restricted Ops']);
+    $restrictedSite->supportAgents()->attach($otherAgent);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($docsSite)
+        ->create([
+            'subject' => 'Docs checkout issue',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($storeSite)
+        ->create([
+            'subject' => 'Store order issue',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($restrictedSite)
+        ->create([
+            'subject' => 'Restricted escalation',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard?ticket_site={$docsSite->id}")
+        ->assertOk()
+        ->assertSee('Docs checkout issue')
+        ->assertDontSee('Store order issue')
+        ->assertDontSee('Restricted escalation')
+        ->assertDontSee('Restricted Ops');
+
+    $this->actingAs($agent)
+        ->get("/dashboard?ticket_site={$restrictedSite->id}")
+        ->assertOk()
+        ->assertDontSee('Restricted escalation')
+        ->assertDontSee('Restricted Ops');
+});
+
+test('dashboard filters tickets by priority', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Urgent production issue',
+            'priority' => 'urgent',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Normal docs question',
+            'priority' => 'normal',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_priority=urgent')
+        ->assertOk()
+        ->assertSee('Urgent production issue')
+        ->assertDontSee('Normal docs question');
+});
+
+test('dashboard searches tickets by subject description and support code', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-SEARCH777',
+        'status' => 'open',
+    ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->create([
+            'subject' => 'Checkout handoff',
+            'description' => 'Customer cannot export their invoice PDF.',
+            'status' => 'open',
+        ]);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Password reset request',
+            'description' => 'Visitor needs a login reset.',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_search=invoice')
+        ->assertOk()
+        ->assertSee('Checkout handoff')
+        ->assertDontSee('Password reset request');
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_search=WF-SEARCH777')
+        ->assertOk()
+        ->assertSee('Checkout handoff')
+        ->assertDontSee('Password reset request');
+});
+
 test('dashboard surfaces ticket attention signals', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

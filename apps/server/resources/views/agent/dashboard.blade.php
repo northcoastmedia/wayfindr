@@ -222,14 +222,12 @@
                         <span class="lede">{{ $tickets->count() }} {{ $ticketStatusSummary }}</span>
                         @foreach ($ticketStatusFilters as $filterValue => $filterLabel)
                             @php
-                                $statusParams = [];
+                                $statusParams = $ticketQuery;
 
-                                if ($filterValue !== 'open') {
+                                if ($filterValue === 'open') {
+                                    unset($statusParams['ticket_status']);
+                                } else {
                                     $statusParams['ticket_status'] = $filterValue;
-                                }
-
-                                if ($ticketFilter !== 'all') {
-                                    $statusParams['ticket_filter'] = $ticketFilter;
                                 }
                             @endphp
                             <a
@@ -242,13 +240,11 @@
                         @endforeach
                         @foreach ($ticketFilters as $filterValue => $filterLabel)
                             @php
-                                $ownerParams = [];
+                                $ownerParams = $ticketQuery;
 
-                                if ($ticketStatus !== 'open') {
-                                    $ownerParams['ticket_status'] = $ticketStatus;
-                                }
-
-                                if ($filterValue !== 'all') {
+                                if ($filterValue === 'all') {
+                                    unset($ownerParams['ticket_filter']);
+                                } else {
                                     $ownerParams['ticket_filter'] = $filterValue;
                                 }
                             @endphp
@@ -262,6 +258,56 @@
                         @endforeach
                     </div>
                 </div>
+
+                <form class="section-form" method="GET" action="{{ route('dashboard') }}">
+                    @if ($ticketStatus !== 'open')
+                        <input type="hidden" name="ticket_status" value="{{ $ticketStatus }}">
+                    @endif
+
+                    @if ($ticketFilter !== 'all')
+                        <input type="hidden" name="ticket_filter" value="{{ $ticketFilter }}">
+                    @endif
+
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <label class="meta-label" for="ticket_site">Site</label>
+                            <select id="ticket_site" name="ticket_site">
+                                <option value="">Any site</option>
+                                @foreach ($sites as $site)
+                                    <option value="{{ $site->id }}" @selected($ticketSite === $site->id)>
+                                        {{ $site->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="meta-item">
+                            <label class="meta-label" for="ticket_priority">Priority</label>
+                            <select id="ticket_priority" name="ticket_priority">
+                                @foreach ($ticketPriorityFilters as $filterValue => $filterLabel)
+                                    <option value="{{ $filterValue }}" @selected($ticketPriority === $filterValue)>
+                                        {{ $filterLabel }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="meta-item">
+                            <label class="meta-label" for="ticket_search">Search</label>
+                            <input id="ticket_search" name="ticket_search" type="search" value="{{ $ticketSearch }}">
+                        </div>
+
+                        <div class="meta-item">
+                            <span class="meta-label">Queue</span>
+                            <button class="button" type="submit">Apply filters</button>
+                            @php
+                                $clearParams = $ticketQuery;
+                                unset($clearParams['ticket_site'], $clearParams['ticket_priority'], $clearParams['ticket_search']);
+                            @endphp
+                            <a class="button secondary" href="{{ route('dashboard', $clearParams) }}">Clear filters</a>
+                        </div>
+                    </div>
+                </form>
 
                 @if ($tickets->isEmpty())
                     <p class="empty">{{ $ticketEmptyMessage }}</p>
