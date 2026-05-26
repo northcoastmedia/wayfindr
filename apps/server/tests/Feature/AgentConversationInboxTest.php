@@ -1403,7 +1403,9 @@ test('visitor reply reopens a pending linked ticket for agent attention', functi
         ->get("/dashboard/tickets/{$ticket->id}")
         ->assertOk()
         ->assertSee('Needs reply')
+        ->assertSee('Visitor')
         ->assertSee('Visitor replied')
+        ->assertDontSee('<strong>System</strong>', false)
         ->assertSee('Here is the screenshot you asked for.');
 });
 

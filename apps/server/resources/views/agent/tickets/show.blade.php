@@ -372,7 +372,13 @@
                     @forelse ($ticketActivity as $activity)
                         <article class="message-card">
                             <div class="message-meta">
-                                <strong>{{ $activity->actor?->name ?? 'System' }}</strong>
+                                <strong>
+                                    @if ($activity->actor_type === \App\Models\Visitor::class)
+                                        Visitor
+                                    @else
+                                        {{ $activity->actor?->name ?? 'System' }}
+                                    @endif
+                                </strong>
                                 <span>{{ $activity->occurred_at->diffForHumans() }}</span>
                             </div>
                             <p>
@@ -403,6 +409,10 @@
 
                                     @case('ticket.reply_sent')
                                         Visitor reply sent
+                                        @break
+
+                                    @case('ticket.visitor_replied')
+                                        Visitor replied
                                         @break
 
                                     @case('ticket.assignee_updated')
