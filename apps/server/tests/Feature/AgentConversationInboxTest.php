@@ -1582,6 +1582,109 @@ test('agent can view a durable ticket record for their account', function (): vo
         ->assertSee('/dashboard/conversations/WF-TICKETSHOW', false);
 });
 
+test('ticket detail shows a unified timeline across conversation messages notes and activity', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $assignee = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TIMELINE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+    $baseTime = now()->startOfMinute();
+
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'The checkout button is still stuck.',
+        'created_at' => $baseTime,
+    ]);
+    ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => User::class,
+        'sender_id' => $agent->id,
+        'body' => 'I can help with that.',
+        'created_at' => $baseTime->copy()->addMinute(),
+    ]);
+
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($conversation)
+        ->for($visitor, 'requester')
+        ->for($agent, 'assignee')
+        ->create([
+            'subject' => 'Escalated checkout issue',
+            'status' => 'open',
+        ]);
+
+    $ticket->auditEvents()->create([
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'action' => 'ticket.created',
+        'metadata' => [
+            'source' => 'conversation',
+            'support_code' => 'WF-TIMELINE',
+        ],
+        'occurred_at' => $baseTime->copy()->addMinutes(2),
+    ]);
+    $ticket->auditEvents()->create([
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'action' => 'ticket.note_added',
+        'metadata' => [
+            'body' => 'Follow up with billing before noon.',
+        ],
+        'occurred_at' => $baseTime->copy()->addMinutes(3),
+    ]);
+    $ticket->auditEvents()->create([
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'action' => 'ticket.pending',
+        'metadata' => [],
+        'occurred_at' => $baseTime->copy()->addMinutes(4),
+    ]);
+    $ticket->auditEvents()->create([
+        'account_id' => $account->id,
+        'site_id' => $site->id,
+        'actor_type' => User::class,
+        'actor_id' => $agent->id,
+        'action' => 'ticket.assignee_updated',
+        'metadata' => [
+            'old_assignee_name' => $agent->name,
+            'new_assignee_name' => $assignee->name,
+        ],
+        'occurred_at' => $baseTime->copy()->addMinutes(5),
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk()
+        ->assertSee('Timeline')
+        ->assertSee('6 events')
+        ->assertSee('Customer message')
+        ->assertSee('Customer-visible')
+        ->assertSee('Internal')
+        ->assertSeeInOrder([
+            'Visitor message',
+            'The checkout button is still stuck.',
+            'Agent reply',
+            'I can help with that.',
+            'Ticket created from conversation WF-TIMELINE',
+            'Internal note',
+            'Follow up with billing before noon.',
+            'Ticket marked pending',
+            'Assignee changed from Ada Agent to Bea Builder',
+        ]);
+});
+
 test('agent ticket detail explains priority semantics', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
