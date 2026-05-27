@@ -9,6 +9,10 @@
                 </div>
             </div>
 
+            @if (session('status'))
+                <p class="status-message">{{ session('status') }}</p>
+            @endif
+
             <section class="section" aria-labelledby="account-context-heading">
                 <div class="section-header">
                     <h2 id="account-context-heading">{{ $account->name }}</h2>
@@ -37,11 +41,11 @@
             <section class="section" aria-labelledby="role-boundary-heading">
                 <div class="section-header">
                     <h2 id="role-boundary-heading">Role boundary</h2>
-                    <span class="lede">Read-only foundation</span>
+                    <span class="lede">{{ $canManageRoles ? 'Owner controls enabled' : 'Read-only for your role' }}</span>
                 </div>
                 <div class="notice-copy">
                     <p>Account roles describe authority. Site access still decides which support queues an agent can work.</p>
-                    <p>Role management UI is not implemented yet. Owners can use the server-side role action path while the account controls mature.</p>
+                    <p>Role changes are limited to account owners. Owners cannot change their own role here, and every role change is audited.</p>
                 </div>
             </section>
 
@@ -56,6 +60,9 @@
                             <tr>
                                 <th scope="col">Agent</th>
                                 <th scope="col">Role</th>
+                                @if ($canManageRoles)
+                                    <th scope="col">Manage role</th>
+                                @endif
                                 <th scope="col">Site access</th>
                                 <th scope="col">Open conversations</th>
                                 <th scope="col">Open tickets</th>
@@ -69,6 +76,25 @@
                                         <span class="lede">{{ $accountAgent->email }}</span>
                                     </td>
                                     <td>{{ $roleLabels[$accountAgent->account_role?->value] ?? 'Agent' }}</td>
+                                    @if ($canManageRoles)
+                                        <td>
+                                            @if ($accountAgent->is($agent))
+                                                <span class="lede">Current user</span>
+                                            @else
+                                                <form class="compact-form" method="POST" action="{{ route('dashboard.account.agents.role.update', $accountAgent) }}">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <label class="sr-only" for="account-role-{{ $accountAgent->id }}">Manage role for {{ $accountAgent->name }}</label>
+                                                    <select id="account-role-{{ $accountAgent->id }}" name="account_role">
+                                                        @foreach ($roleOptions as $roleValue => $roleLabel)
+                                                            <option value="{{ $roleValue }}" @selected($accountAgent->account_role?->value === $roleValue)>{{ $roleLabel }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <button class="button secondary" type="submit">Save role</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    @endif
                                     <td>{{ $accountAgent->explicit_site_access_count }} {{ \Illuminate\Support\Str::plural('support assignment', $accountAgent->explicit_site_access_count) }}</td>
                                     <td>{{ $accountAgent->visible_open_conversations_count }} {{ \Illuminate\Support\Str::plural('open conversation', $accountAgent->visible_open_conversations_count) }}</td>
                                     <td>{{ $accountAgent->visible_open_tickets_count }} {{ \Illuminate\Support\Str::plural('open ticket', $accountAgent->visible_open_tickets_count) }}</td>
