@@ -14,6 +14,8 @@ An agent is a Laravel user attached to one account. Agents can sign in, view the
 
 The starter RBAC implementation stores account authority on `users.account_role` while Wayfindr still supports one account per user. A dedicated membership model can replace this when multi-account users become a real product need.
 
+Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup.
+
 ### Site access
 
 Site access controls which agents support which sites. Conversations, tickets, alerts, ticket assignment options, and realtime conversation channels should respect site access.
@@ -42,6 +44,7 @@ Possible later roles:
 - Site access should land before broad role management.
 - RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
+- New agents should start as `agent`; role elevation remains an owner-only action.
 - Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
@@ -50,6 +53,6 @@ Possible later roles:
 
 ## Open Questions
 
-- Should newly created agents be added to all current sites by default, no sites by default, or selected sites only?
+- Should future invitation flows ask for site assignments during agent creation?
 - Should WordPress and future integrations expose site-agent assignment hints during install?
 - Should account roles be stored as a simple enum on account membership, or should Wayfindr introduce a dedicated membership model before hosted multi-tenant plans?

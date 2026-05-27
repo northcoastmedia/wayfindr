@@ -13,6 +13,19 @@
                 <p class="status-message">{{ session('status') }}</p>
             @endif
 
+            @if (session('created_agent_email') && session('created_agent_password'))
+                <section class="section" aria-labelledby="temporary-password-heading">
+                    <div class="section-header">
+                        <h2 id="temporary-password-heading">Temporary password</h2>
+                        <span class="lede">{{ session('created_agent_email') }}</span>
+                    </div>
+                    <div class="notice-copy">
+                        <p>Share this password securely. It is shown once and should be changed by the agent after sign-in.</p>
+                    </div>
+                    <pre class="code-block"><code>{{ session('created_agent_password') }}</code></pre>
+                </section>
+            @endif
+
             <section class="section" aria-labelledby="account-context-heading">
                 <div class="section-header">
                     <h2 id="account-context-heading">{{ $account->name }}</h2>
@@ -48,6 +61,34 @@
                     <p>Role changes are limited to account owners. Owners cannot change their own role here, and every role change is audited.</p>
                 </div>
             </section>
+
+            @if ($canCreateAgents)
+                <section class="section" aria-labelledby="add-agent-heading">
+                    <div class="section-header">
+                        <h2 id="add-agent-heading">Add agent</h2>
+                        <span class="lede">New agents start with the Agent role</span>
+                    </div>
+                    <form class="section-form" method="POST" action="{{ route('dashboard.account.agents.store') }}">
+                        @csrf
+                        <div class="field">
+                            <label for="agent-name">Name</label>
+                            <input id="agent-name" name="name" value="{{ old('name') }}" autocomplete="name" required>
+                            @error('name')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="field">
+                            <label for="agent-email">Email</label>
+                            <input id="agent-email" type="email" name="email" value="{{ old('email') }}" autocomplete="email" required>
+                            @error('email')
+                                <p class="field-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <p class="field-help">A temporary password will be generated. Site access follows the current account-wide fallback until you scope agents on each site.</p>
+                        <button class="button" type="submit">Create agent</button>
+                    </form>
+                </section>
+            @endif
 
             <section class="section" aria-labelledby="agents-heading">
                 <div class="section-header">

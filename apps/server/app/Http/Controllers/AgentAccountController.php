@@ -47,6 +47,7 @@ class AgentAccountController extends Controller
             'account' => $account,
             'agent' => $agent,
             'agents' => $agents,
+            'canCreateAgents' => $agent->isAdmin(),
             'canManageRoles' => $agent->isOwner(),
             'roleLabels' => $this->roleLabels(),
             'roleOptions' => $this->roleLabels(),
