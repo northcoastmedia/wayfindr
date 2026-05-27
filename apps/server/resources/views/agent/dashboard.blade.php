@@ -2,6 +2,46 @@
             <h1>{{ $account->name }}</h1>
             <p class="lede">Signed in as {{ $agent->email }}</p>
 
+            <section class="section" aria-labelledby="manage-heading">
+                <div class="section-header">
+                    <h2 id="manage-heading">Manage</h2>
+                    <span class="lede">Common workspace paths</span>
+                </div>
+
+                <div class="management-list">
+                    <a class="management-link" href="{{ route('dashboard.profile.show') }}">
+                        <span>
+                            <strong>Profile and alerts</strong>
+                            <span class="lede">Update your name, password, and notification mode.</span>
+                        </span>
+                        <span class="management-action">Open</span>
+                    </a>
+                    <a class="management-link" href="{{ route('dashboard.sites.index') }}">
+                        <span>
+                            <strong>Sites and widget installs</strong>
+                            <span class="lede">Review connected sites, install snippets, privacy rules, and support access.</span>
+                        </span>
+                        <span class="management-action">Open</span>
+                    </a>
+                    <a class="management-link" href="{{ route('dashboard.account.show') }}">
+                        <span>
+                            <strong>Account and team</strong>
+                            <span class="lede">See account roles, team access, active agents, and support scope.</span>
+                        </span>
+                        <span class="management-action">Open</span>
+                    </a>
+                    @if ($agent->isAdmin())
+                        <a class="management-link" href="{{ route('dashboard.readiness.show') }}">
+                            <span>
+                                <strong>Operator readiness</strong>
+                                <span class="lede">Check app key, database, queues, realtime, storage, and scheduler setup.</span>
+                            </span>
+                            <span class="management-action">Open</span>
+                        </a>
+                    @endif
+                </div>
+            </section>
+
             <section class="section" aria-labelledby="data-responsibility-heading">
                 <div class="section-header">
                     <h2 id="data-responsibility-heading">Data responsibility</h2>
