@@ -9,6 +9,7 @@ use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\AgentExternalIssueProviderConnectionController;
 use App\Http\Controllers\AgentProfileController;
+use App\Http\Controllers\AgentReadinessController;
 use App\Http\Controllers\AgentSiteController;
 use App\Http\Controllers\AgentSiteExternalIssueProjectController;
 use App\Http\Controllers\AgentTicketController;
@@ -42,6 +43,8 @@ Route::middleware(['auth', EnsureAgentIsActive::class])->group(function () {
         ->name('dashboard.profile.password.update');
     Route::get('/dashboard/account', AgentAccountController::class)
         ->name('dashboard.account.show');
+    Route::get('/dashboard/readiness', AgentReadinessController::class)
+        ->name('dashboard.readiness.show');
     Route::post('/dashboard/account/agents', [AgentAccountAgentController::class, 'store'])
         ->name('dashboard.account.agents.store');
     Route::put('/dashboard/account/agents/{agent}/role', AgentAccountAgentRoleController::class)

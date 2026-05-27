@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Conversation;
 use App\Models\Site;
@@ -30,10 +31,12 @@ test('authenticated agent pages share primary app navigation', function (): void
         ->assertSee('Conversations')
         ->assertSee('Tickets')
         ->assertSee('Sites')
+        ->assertDontSee('Readiness')
         ->assertSee('Account')
         ->assertSee('/dashboard#conversations', false)
         ->assertSee('/dashboard?ticket_status=open#tickets', false)
         ->assertSee('/dashboard/sites', false)
+        ->assertDontSee('/dashboard/readiness', false)
         ->assertDontSee('/dashboard#sites', false)
         ->assertSee('/dashboard/account', false)
         ->assertSee('/dashboard/sites/new', false)
@@ -47,4 +50,18 @@ test('authenticated agent pages share primary app navigation', function (): void
         ->assertSee('aria-label="Primary navigation"', false)
         ->assertSee('/dashboard#conversations', false)
         ->assertSee('aria-current="page"', false);
+});
+
+test('account admins see operator readiness navigation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Readiness')
+        ->assertSee('/dashboard/readiness', false);
 });
