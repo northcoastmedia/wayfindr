@@ -9,7 +9,32 @@
 
             @php
                 $latestVisitor = $site->latestVisitor;
+                $lastSeenAt = $latestVisitor?->last_seen_at;
                 $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
+                $installVerificationRefreshUrl = route('dashboard.sites.show', [
+                    'site' => $site,
+                    'verify' => now()->timestamp,
+                ]).'#install-verification';
+                $installVerification = match (true) {
+                    ! $lastSeenAt => [
+                        'status' => 'Not seen yet',
+                        'tone' => 'attention',
+                        'message' => 'Wayfindr has not seen this widget check in yet.',
+                        'guidance' => 'Copy the snippet, load the site, then refresh this page.',
+                    ],
+                    $lastSeenAt->greaterThanOrEqualTo(now()->subMinutes(30)) => [
+                        'status' => 'Seen '.$lastSeenAt->diffForHumans(),
+                        'tone' => 'ready',
+                        'message' => 'The widget has checked in recently.',
+                        'guidance' => 'Send a test message from the widget if you want to confirm the full support loop.',
+                    ],
+                    default => [
+                        'status' => 'Last seen '.$lastSeenAt->diffForHumans(),
+                        'tone' => 'manual',
+                        'message' => 'Wayfindr has seen this widget before, but not recently.',
+                        'guidance' => 'Visit the site and refresh this page if it should still be active.',
+                    ],
+                };
                 $selectedSupportAgentIds = collect(old('support_agent_ids', $supportAgentIds))
                     ->map(fn ($id) => (int) $id)
                     ->all();
@@ -56,6 +81,27 @@
                         <span class="meta-label">Last page</span>
                         <span class="meta-value">{{ $lastPageUrl ?: 'Not reported' }}</span>
                     </div>
+                </div>
+            </section>
+
+            <section id="install-verification" class="section" aria-labelledby="install-verification-heading">
+                <div class="section-header">
+                    <h2 id="install-verification-heading">Install verification</h2>
+                    <div class="section-actions">
+                        <a class="text-link" href="{{ $installVerificationRefreshUrl }}">Verify again</a>
+                        <span class="readiness-status" data-status="{{ $installVerification['tone'] }}">{{ $installVerification['status'] }}</span>
+                    </div>
+                </div>
+
+                <div class="notice-copy">
+                    <p>{{ $installVerification['message'] }}</p>
+                    <p>{{ $installVerification['guidance'] }}</p>
+
+                    @if ($lastPageUrl)
+                        <p><strong>Last verified page</strong>: {{ $lastPageUrl }}</p>
+                    @else
+                        <p><strong>Last verified page</strong>: Not reported yet.</p>
+                    @endif
                 </div>
             </section>
 

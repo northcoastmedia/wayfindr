@@ -81,5 +81,56 @@ test('site settings show the latest widget check in details', function (): void 
         ->assertOk()
         ->assertSee('Latest check-in')
         ->assertSee('Seen 3 minutes ago')
-        ->assertSee('https://wayfindr.cc/docs');
+        ->assertSee('https://wayfindr.cc/docs')
+        ->assertSee('Install verification')
+        ->assertSee('The widget has checked in recently.')
+        ->assertSee('Last verified page')
+        ->assertSee('Verify again')
+        ->assertSee("/dashboard/sites/{$site->id}?verify=", false)
+        ->assertDontSee("href=\"http://localhost/dashboard/sites/{$site->id}#install-verification\"", false);
+});
+
+test('site settings guide agents when the widget has not checked in yet', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Fresh Install',
+        'domain' => 'fresh.example.test',
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Install verification')
+        ->assertSee('Not seen yet')
+        ->assertSee('Wayfindr has not seen this widget check in yet.')
+        ->assertSee('Copy the snippet, load the site, then refresh this page.')
+        ->assertSee('Verify again');
+});
+
+test('site settings call out stale widget check ins', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create();
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Quiet Site',
+        'domain' => 'quiet.example.test',
+    ]);
+
+    Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-stale',
+        'last_seen_at' => now()->subDays(2),
+        'metadata' => [
+            'last_page_url' => 'https://quiet.example.test/help',
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Install verification')
+        ->assertSee('Last seen 2 days ago')
+        ->assertSee('Wayfindr has seen this widget before, but not recently.')
+        ->assertSee('Visit the site and refresh this page if it should still be active.')
+        ->assertSee('Last verified page')
+        ->assertSee('https://quiet.example.test/help');
 });
