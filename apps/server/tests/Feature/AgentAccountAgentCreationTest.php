@@ -96,6 +96,24 @@ test('account agent creation rejects duplicate emails without updating an existi
         ->and(AuditEvent::query()->where('action', 'agent.created')->exists())->toBeFalse();
 });
 
+test('account agent creation rejects duplicate emails after normalizing casing', function (): void {
+    $account = Account::factory()->create();
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+    User::factory()->for($account)->create(['email' => 'bea@example.test']);
+
+    $this->actingAs($owner)
+        ->from('/dashboard/account')
+        ->post('/dashboard/account/agents', [
+            'name' => 'Bea Builder',
+            'email' => 'BEA@example.test',
+        ])
+        ->assertRedirect('/dashboard/account')
+        ->assertSessionHasErrors('email');
+
+    expect(User::query()->where('email', 'bea@example.test')->count())->toBe(1)
+        ->and(AuditEvent::query()->where('action', 'agent.created')->exists())->toBeFalse();
+});
+
 test('account agent creation rejects emails already used by another account', function (): void {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();

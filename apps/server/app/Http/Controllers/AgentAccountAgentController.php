@@ -19,6 +19,12 @@ class AgentAccountAgentController extends Controller
 
         abort_unless($actor?->account_id && $actor->isAdmin(), 403);
 
+        if (is_string($request->input('email'))) {
+            $request->merge([
+                'email' => Str::lower(trim($request->input('email'))),
+            ]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
@@ -30,7 +36,7 @@ class AgentAccountAgentController extends Controller
             'account_id' => $actor->account_id,
             'account_role' => AccountRole::Agent,
             'name' => trim($validated['name']),
-            'email' => strtolower(trim($validated['email'])),
+            'email' => $validated['email'],
             'password' => Hash::make($password),
         ]);
 
