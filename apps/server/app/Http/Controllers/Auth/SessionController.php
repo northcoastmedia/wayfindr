@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\FirstRunState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,8 +12,12 @@ use Illuminate\Validation\ValidationException;
 
 class SessionController extends Controller
 {
-    public function create(): View
+    public function create(FirstRunState $firstRunState): View|RedirectResponse
     {
+        if ($firstRunState->needsSetup()) {
+            return redirect()->route('setup.create');
+        }
+
         return view('auth.login');
     }
 

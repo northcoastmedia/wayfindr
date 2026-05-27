@@ -16,6 +16,7 @@ use App\Http\Controllers\AgentTicketController;
 use App\Http\Controllers\AgentTicketExternalIssueController;
 use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\FirstRunSetupController;
 use App\Http\Controllers\Widget\WidgetScriptController;
 use App\Http\Middleware\EnsureAgentIsActive;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,9 @@ Route::get('/', function () {
 });
 
 Route::get('/widget.js', WidgetScriptController::class)->name('widget.script');
+
+Route::get('/setup', [FirstRunSetupController::class, 'create'])->name('setup.create');
+Route::post('/setup', [FirstRunSetupController::class, 'store'])->name('setup.store');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SessionController::class, 'create'])->name('login');
