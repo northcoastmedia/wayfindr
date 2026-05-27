@@ -13,6 +13,36 @@ test('guest is redirected from the agent profile to login', function (): void {
         ->assertRedirect('/login');
 });
 
+test('agent profile routes require an account', function (): void {
+    $agent = User::factory()->create([
+        'account_id' => null,
+        'name' => 'Detached Agent',
+        'password' => Hash::make('old-password'),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/profile')
+        ->assertForbidden();
+
+    $this->actingAs($agent)
+        ->put('/dashboard/profile', [
+            'name' => 'Updated Agent',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($agent)
+        ->put('/dashboard/profile/password', [
+            'current_password' => 'old-password',
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
+        ])
+        ->assertForbidden();
+
+    expect($agent->fresh()->name)->toBe('Detached Agent')
+        ->and(Hash::check('old-password', $agent->fresh()->password))->toBeTrue()
+        ->and(AuditEvent::query()->where('action', 'agent.password_updated')->exists())->toBeFalse();
+});
+
 test('agent can view their profile from the application shell', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create([

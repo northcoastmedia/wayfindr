@@ -16,9 +16,13 @@ class AgentProfileController extends Controller
     {
         $agent = $request->user();
 
+        abort_unless($agent?->account_id, 403);
+
+        $account = $agent->account()->firstOrFail();
+
         return view('agent.profile.show', [
             'agent' => $agent,
-            'account' => $agent->account,
+            'account' => $account,
             'roleLabels' => [
                 AccountRole::Owner->value => 'Owner',
                 AccountRole::Admin->value => 'Admin',
@@ -29,6 +33,8 @@ class AgentProfileController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        abort_unless($request->user()?->account_id, 403);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
         ]);
@@ -44,6 +50,8 @@ class AgentProfileController extends Controller
 
     public function updatePassword(Request $request): RedirectResponse
     {
+        abort_unless($request->user()?->account_id, 403);
+
         $validated = $request->validate([
             'current_password' => ['required', 'current_password'],
             'password' => ['required', 'confirmed', Password::min(8)],
