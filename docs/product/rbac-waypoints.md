@@ -106,6 +106,7 @@ Audit-worthy RBAC actions include:
 - role changes,
 - owner transfer,
 - agent invitations,
+- agent creation,
 - agent removal,
 - site access changes,
 - privacy setting changes,
@@ -148,7 +149,8 @@ Every RBAC implementation slice should include tests for:
 5. Tighten site privacy settings behind owner/admin authority plus site access. Site privacy settings now follow this rule.
 6. Add role management UI only after policies exist. The account overview now exposes owner-only role changes backed by the same action that enforces same-account boundaries, self-change denial, last-owner protection, and audit events.
 7. Add audit events for role and site-access changes. Site-access updates and role changes now create audit events.
-8. Add owner/admin elevated behavior only when the product decision is explicit.
+8. Add agent creation from the account overview. Owners and admins can create default `agent` users with one-time generated passwords while email invitations remain a later setup/readiness feature.
+9. Add owner/admin elevated behavior only when the product decision is explicit.
 
 ## Role Management Guardrails
 

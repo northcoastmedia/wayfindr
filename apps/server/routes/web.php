@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentAccountController;
+use App\Http\Controllers\AgentAccountAgentController;
 use App\Http\Controllers\AgentAccountAgentRoleController;
 use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
@@ -30,6 +31,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
     Route::get('/dashboard/account', AgentAccountController::class)
         ->name('dashboard.account.show');
+    Route::post('/dashboard/account/agents', [AgentAccountAgentController::class, 'store'])
+        ->name('dashboard.account.agents.store');
     Route::put('/dashboard/account/agents/{agent}/role', AgentAccountAgentRoleController::class)
         ->name('dashboard.account.agents.role.update');
     Route::post('/dashboard/alerts/read', [AgentAlertController::class, 'markAllRead'])
