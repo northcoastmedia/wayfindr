@@ -14,7 +14,7 @@ An agent is a Laravel user attached to one account. Agents can sign in, view the
 
 The starter RBAC implementation stores account authority on `users.account_role` while Wayfindr still supports one account per user. A dedicated membership model can replace this when multi-account users become a real product need.
 
-Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup. Agents can use the profile screen to update their display name and replace a temporary password after sign-in.
+Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup. Agents can use the profile screen to update their display name, replace a temporary password after sign-in, and choose whether alerts should cover all supported sites, only assigned work, or quiet mode.
 
 Agents can be deactivated without deleting their historical messages, tickets, assignments, or audit records. Deactivated agents cannot log in, and existing dashboard sessions are signed out before protected routes continue. Owners can deactivate or reactivate another same-account user. Admins can deactivate or reactivate non-owner agents, but cannot manage owner or admin access.
 
@@ -52,6 +52,7 @@ Possible later roles:
 - Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account, and create audit events for deactivation/reactivation.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
+- Agent alert preferences can narrow or suppress new unread alerts without changing the underlying site access or assignment rules.
 - Cobrowse access should require both account membership and site access.
 - Self-hosted operators remain responsible for mapping roles to their local policies, employment rules, and data obligations.
 

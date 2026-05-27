@@ -31,7 +31,9 @@ class NotifyAgentsOfVisitorMessage
                 ->first();
 
             if ($assignedAgent && $conversation->site->supportsAgent($assignedAgent)) {
-                $this->notifyAgent($assignedAgent, new ConversationNeedsReply($message), $conversation->id);
+                if ($assignedAgent->shouldReceiveConversationAlert($conversation)) {
+                    $this->notifyAgent($assignedAgent, new ConversationNeedsReply($message), $conversation->id);
+                }
 
                 return;
             }
@@ -43,6 +45,7 @@ class NotifyAgentsOfVisitorMessage
 
         $agentQuery
             ->get()
+            ->filter(fn (User $agent): bool => $agent->shouldReceiveConversationAlert($conversation))
             ->each(fn (User $agent) => $this->notifyAgent($agent, new ConversationNeedsReply($message), $conversation->id));
     }
 

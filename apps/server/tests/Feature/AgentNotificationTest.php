@@ -162,6 +162,96 @@ test('unassigned conversation alerts batch for each account agent', function ():
         ]);
 });
 
+test('unassigned conversation alerts honor agent alert preferences', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $allAlertsAgent = User::factory()->for($account)->create([
+        'name' => 'Ada All',
+    ]);
+    $assignedOnlyAgent = User::factory()->for($account)->create([
+        'name' => 'Bea Assigned',
+        'alert_preferences' => ['mode' => 'assigned'],
+    ]);
+    $quietAgent = User::factory()->for($account)->create([
+        'name' => 'Casey Quiet',
+        'alert_preferences' => ['mode' => 'quiet'],
+    ]);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Dee Deactivated',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-PREF1',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'Can someone help?',
+    ])->assertCreated();
+
+    expect($allAlertsAgent->fresh()->unreadNotifications)->toHaveCount(1)
+        ->and($assignedOnlyAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($quietAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
+});
+
+test('assigned only agents still receive alerts for conversations assigned to them', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $assignedAgent = User::factory()->for($account)->create([
+        'name' => 'Ada Assigned',
+        'alert_preferences' => ['mode' => 'assigned'],
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $assignedAgent->id,
+        'support_code' => 'WF-PREF2',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'This one is yours.',
+    ])->assertCreated();
+
+    expect($assignedAgent->fresh()->unreadNotifications)->toHaveCount(1);
+});
+
+test('quiet assigned agents do not fan out conversation alerts to other agents', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $quietAssignedAgent = User::factory()->for($account)->create([
+        'name' => 'Ada Quiet',
+        'alert_preferences' => ['mode' => 'quiet'],
+    ]);
+    $fallbackAgent = User::factory()->for($account)->create([
+        'name' => 'Bea Backup',
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $quietAssignedAgent->id,
+        'support_code' => 'WF-PREF3',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'Please do not broadcast this.',
+    ])->assertCreated();
+
+    expect($quietAssignedAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($fallbackAgent->fresh()->unreadNotifications)->toHaveCount(0);
+});
+
 test('agent replies do not create needs reply notifications', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -217,6 +307,51 @@ test('assigning a ticket notifies the new assignee', function (): void {
         'assigned_by_name' => 'Ada Agent',
         'url' => "/dashboard/tickets/{$ticket->id}",
     ]);
+});
+
+test('ticket assignment alerts honor quiet and deactivated agents', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $assigningAgent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $quietAgent = User::factory()->for($account)->create([
+        'name' => 'Bea Quiet',
+        'alert_preferences' => ['mode' => 'quiet'],
+    ]);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Casey Deactivated',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $firstTicket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Quiet assignment',
+            'status' => 'open',
+        ]);
+    $secondTicket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Deactivated assignment',
+            'status' => 'open',
+        ]);
+
+    $this->actingAs($assigningAgent)
+        ->from("/dashboard/tickets/{$firstTicket->id}")
+        ->put("/dashboard/tickets/{$firstTicket->id}/assignee", [
+            'assignee_id' => $quietAgent->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$firstTicket->id}");
+
+    $this->actingAs($assigningAgent)
+        ->from("/dashboard/tickets/{$secondTicket->id}")
+        ->put("/dashboard/tickets/{$secondTicket->id}/assignee", [
+            'assignee_id' => $deactivatedAgent->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$secondTicket->id}");
+
+    expect($quietAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
 });
 
 test('dashboard shows unread conversation alerts', function (): void {

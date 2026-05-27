@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class AgentProfileController extends Controller
@@ -28,6 +29,8 @@ class AgentProfileController extends Controller
                 AccountRole::Admin->value => 'Admin',
                 AccountRole::Agent->value => 'Agent',
             ],
+            'alertMode' => $agent->alertMode(),
+            'alertModeOptions' => $agent::alertModeOptions(),
         ]);
     }
 
@@ -46,6 +49,27 @@ class AgentProfileController extends Controller
         return redirect()
             ->route('dashboard.profile.show')
             ->with('status', 'Profile updated.');
+    }
+
+    public function updateAlertPreferences(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->account_id, 403);
+
+        $validated = $request->validate([
+            'alert_mode' => ['required', Rule::in(array_keys($request->user()::alertModeOptions()))],
+        ]);
+
+        $alertPreferences = $request->user()->alert_preferences ?? [];
+
+        $request->user()->update([
+            'alert_preferences' => array_merge($alertPreferences, [
+                'mode' => $validated['alert_mode'],
+            ]),
+        ]);
+
+        return redirect()
+            ->route('dashboard.profile.show')
+            ->with('status', 'Alert preferences updated.');
     }
 
     public function updatePassword(Request $request): RedirectResponse

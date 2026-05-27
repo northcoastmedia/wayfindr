@@ -58,6 +58,34 @@
         </form>
     </section>
 
+    <section class="section" aria-labelledby="alert-preferences-heading">
+        <div class="section-header">
+            <h2 id="alert-preferences-heading">Alert preferences</h2>
+            <span class="lede">Keep support signals useful</span>
+        </div>
+
+        <form class="section-form" method="POST" action="{{ route('dashboard.profile.alerts.update') }}">
+            @csrf
+            @method('PUT')
+
+            <div class="field">
+                <label for="alert_mode">Alert mode</label>
+                <select id="alert_mode" name="alert_mode" required>
+                    @foreach ($alertModeOptions as $modeValue => $modeLabel)
+                        <option value="{{ $modeValue }}" @selected(old('alert_mode', $alertMode) === $modeValue)>{{ $modeLabel }}</option>
+                    @endforeach
+                </select>
+                @error('alert_mode')
+                    <p class="field-error">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <p class="field-help">Quiet mode keeps the dashboard usable without creating new unread alerts.</p>
+
+            <button class="button" type="submit">Save alert preferences</button>
+        </form>
+    </section>
+
     <section class="section" aria-labelledby="password-update-heading">
         <div class="section-header">
             <h2 id="password-update-heading">Change password</h2>
