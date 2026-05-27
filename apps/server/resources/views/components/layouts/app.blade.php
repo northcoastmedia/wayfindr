@@ -449,6 +449,75 @@
             margin: 0;
         }
 
+        .readiness-summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .readiness-list {
+            display: grid;
+        }
+
+        .readiness-check {
+            border-bottom: 1px solid var(--border);
+            padding: 18px 20px;
+        }
+
+        .readiness-check:last-child {
+            border-bottom: 0;
+        }
+
+        .readiness-check-main {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .readiness-check h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .readiness-check p {
+            margin: 6px 0 0;
+        }
+
+        .readiness-status {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 0 10px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .readiness-status[data-status="ready"] {
+            background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+            border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+            color: var(--accent-strong);
+        }
+
+        .readiness-status[data-status="attention"] {
+            background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+            border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+            color: var(--danger);
+        }
+
+        .readiness-status[data-status="manual"] {
+            background: #fff8e4;
+            border-color: #ead18b;
+            color: #72540c;
+        }
+
+        .readiness-action {
+            color: var(--text);
+            font-weight: 650;
+        }
+
         .notice-copy {
             padding: 20px;
             color: var(--muted);
@@ -683,6 +752,14 @@
                     'active' => request()->routeIs('dashboard.account.*'),
                 ],
             ];
+
+            if ($agent->isAdmin()) {
+                array_splice($navigationItems, 4, 0, [[
+                    'label' => 'Readiness',
+                    'href' => route('dashboard.readiness.show'),
+                    'active' => request()->routeIs('dashboard.readiness.*'),
+                ]]);
+            }
         @endphp
 
         <div class="shell">
