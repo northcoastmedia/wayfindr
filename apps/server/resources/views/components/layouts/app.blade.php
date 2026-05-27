@@ -643,7 +643,7 @@
                 ],
                 [
                     'label' => 'Sites',
-                    'href' => route('dashboard').'#sites',
+                    'href' => route('dashboard.sites.index'),
                     'active' => request()->routeIs('dashboard.sites.*'),
                 ],
             ];

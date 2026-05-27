@@ -1,5 +1,5 @@
-<x-layouts.app title="Site Privacy Settings" :agent="$agent" :account="$account">
-            <a class="text-link" href="{{ route('dashboard') }}">Back to dashboard</a>
+<x-layouts.app title="Site Settings" :agent="$agent" :account="$account">
+            <a class="text-link" href="{{ route('dashboard.sites.index') }}">Back to sites</a>
             <h1>{{ $site->name }}</h1>
             <p class="lede">Privacy settings for {{ $site->domain ?? 'an unconfigured domain' }}</p>
 

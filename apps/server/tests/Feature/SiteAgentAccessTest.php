@@ -69,6 +69,52 @@ test('dashboard scopes support queues to sites assigned to the agent', function 
         ->assertDontSee('Restricted site ticket');
 });
 
+test('site index scopes management links to sites assigned to the agent', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Ada Agent',
+    ]);
+    $teammate = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+
+    $assignedSite = Site::factory()->for($account)->create([
+        'name' => 'Assigned Docs',
+        'domain' => 'docs.example.test',
+    ]);
+    $assignedSite->supportAgents()->attach($agent);
+    Visitor::factory()->for($assignedSite)->create([
+        'anonymous_id' => 'anon-assigned',
+        'last_seen_at' => now(),
+        'metadata' => [
+            'last_page_url' => 'https://docs.example.test/account',
+        ],
+    ]);
+
+    $openSite = Site::factory()->for($account)->create([
+        'name' => 'Open Knowledge Base',
+        'domain' => null,
+    ]);
+
+    $restrictedSite = Site::factory()->for($account)->create(['name' => 'Restricted Store']);
+    $restrictedSite->supportAgents()->attach($teammate);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/sites')
+        ->assertOk()
+        ->assertSee('Sites')
+        ->assertSee('2 visible')
+        ->assertSee('Assigned Docs')
+        ->assertSee("/dashboard/sites/{$assignedSite->id}", false)
+        ->assertSee('docs.example.test')
+        ->assertSee('Explicit access')
+        ->assertSee('1 assigned')
+        ->assertSee('https://docs.example.test/account')
+        ->assertSee('Open Knowledge Base')
+        ->assertSee('Account-wide fallback')
+        ->assertSee('Not set')
+        ->assertDontSee('Restricted Store');
+});
+
 test('agent cannot view conversations or tickets for a site they do not support', function (): void {
     $account = Account::factory()->create();
     $agent = User::factory()->for($account)->create();
