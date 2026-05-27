@@ -36,6 +36,8 @@ Route::middleware(['auth', EnsureAgentIsActive::class])->group(function () {
         ->name('dashboard.profile.show');
     Route::put('/dashboard/profile', [AgentProfileController::class, 'update'])
         ->name('dashboard.profile.update');
+    Route::put('/dashboard/profile/alerts', [AgentProfileController::class, 'updateAlertPreferences'])
+        ->name('dashboard.profile.alerts.update');
     Route::put('/dashboard/profile/password', [AgentProfileController::class, 'updatePassword'])
         ->name('dashboard.profile.password.update');
     Route::get('/dashboard/account', AgentAccountController::class)

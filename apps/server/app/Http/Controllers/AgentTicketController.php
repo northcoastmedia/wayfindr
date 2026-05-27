@@ -283,8 +283,15 @@ class AgentTicketController extends Controller
             'new_assignee_name' => $newAssigneeName,
         ]);
 
-        if ($newAssignee && $newAssignee->isNot($agent) && $newAssignee->id !== $oldAssigneeId) {
-            $newAssignee->notify(new TicketAssigned($ticket->fresh(), $agent));
+        $freshTicket = $ticket->fresh() ?? $ticket;
+
+        if (
+            $newAssignee
+            && $newAssignee->isNot($agent)
+            && $newAssignee->id !== $oldAssigneeId
+            && $newAssignee->shouldReceiveTicketAssignmentAlert($freshTicket)
+        ) {
+            $newAssignee->notify(new TicketAssigned($freshTicket, $agent));
         }
 
         return $this->redirectAfterUpdate($ticket, 'Ticket assignee updated.');

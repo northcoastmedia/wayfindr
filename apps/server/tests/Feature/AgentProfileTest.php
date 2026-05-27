@@ -65,6 +65,51 @@ test('agent can view their profile from the application shell', function (): voi
         ->assertSee('/dashboard/profile/password', false);
 });
 
+test('agent can update their alert preference mode', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'alert_preferences' => ['mode' => 'all'],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/profile')
+        ->assertOk()
+        ->assertSee('Alert preferences')
+        ->assertSee('/dashboard/profile/alerts', false)
+        ->assertSee('All site alerts I can support')
+        ->assertSee('Only conversations and tickets assigned to me')
+        ->assertSee('Quiet mode');
+
+    $this->actingAs($agent)
+        ->from('/dashboard/profile')
+        ->put('/dashboard/profile/alerts', [
+            'alert_mode' => 'assigned',
+        ])
+        ->assertRedirect('/dashboard/profile')
+        ->assertSessionHas('status', 'Alert preferences updated.');
+
+    expect($agent->fresh()->alert_preferences)->toMatchArray([
+        'mode' => 'assigned',
+    ]);
+});
+
+test('agent alert preference mode must be supported', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'alert_preferences' => ['mode' => 'all'],
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/profile')
+        ->put('/dashboard/profile/alerts', [
+            'alert_mode' => 'party-horn',
+        ])
+        ->assertRedirect('/dashboard/profile')
+        ->assertSessionHasErrors('alert_mode');
+
+    expect($agent->fresh()->alert_preferences)->toMatchArray([
+        'mode' => 'all',
+    ]);
+});
+
 test('agent can update their display name', function (): void {
     $agent = User::factory()->for(Account::factory())->create([
         'name' => 'Ada Agent',

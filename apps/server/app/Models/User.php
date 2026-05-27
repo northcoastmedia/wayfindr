@@ -15,12 +15,18 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['account_id', 'account_role', 'name', 'email', 'password', 'deactivated_at'])]
+#[Fillable(['account_id', 'account_role', 'name', 'email', 'password', 'deactivated_at', 'alert_preferences'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public const ALERT_MODE_ALL = 'all';
+
+    public const ALERT_MODE_ASSIGNED = 'assigned';
+
+    public const ALERT_MODE_QUIET = 'quiet';
 
     /**
      * Get the attributes that should be cast.
@@ -31,9 +37,22 @@ class User extends Authenticatable
     {
         return [
             'account_role' => AccountRole::class,
+            'alert_preferences' => 'array',
             'deactivated_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function alertModeOptions(): array
+    {
+        return [
+            self::ALERT_MODE_ALL => 'All site alerts I can support',
+            self::ALERT_MODE_ASSIGNED => 'Only conversations and tickets assigned to me',
+            self::ALERT_MODE_QUIET => 'Quiet mode',
         ];
     }
 
@@ -65,6 +84,35 @@ class User extends Authenticatable
     public function isDeactivated(): bool
     {
         return $this->deactivated_at !== null;
+    }
+
+    public function alertMode(): string
+    {
+        $mode = data_get($this->alert_preferences, 'mode');
+
+        return is_string($mode) && array_key_exists($mode, self::alertModeOptions())
+            ? $mode
+            : self::ALERT_MODE_ALL;
+    }
+
+    public function shouldReceiveConversationAlert(Conversation $conversation): bool
+    {
+        if ($this->isDeactivated() || $this->alertMode() === self::ALERT_MODE_QUIET) {
+            return false;
+        }
+
+        if ($this->alertMode() === self::ALERT_MODE_ASSIGNED) {
+            return (int) $conversation->assigned_agent_id === $this->id;
+        }
+
+        return true;
+    }
+
+    public function shouldReceiveTicketAssignmentAlert(Ticket $ticket): bool
+    {
+        return ! $this->isDeactivated()
+            && $this->alertMode() !== self::ALERT_MODE_QUIET
+            && (int) $ticket->assignee_id === $this->id;
     }
 
     public function assignedConversations(): HasMany
