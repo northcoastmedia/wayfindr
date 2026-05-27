@@ -42,7 +42,7 @@ class FirstRunSetupController extends Controller
             'site_domain' => ['nullable', 'string', 'max:255'],
         ]);
 
-        [$agent] = DB::transaction(function () use ($validated): array {
+        [$agent, $site] = DB::transaction(function () use ($validated): array {
             $accountName = trim($validated['account_name']);
             $agentName = trim($validated['agent_name']);
             $siteName = trim($validated['site_name']);
@@ -72,15 +72,16 @@ class FirstRunSetupController extends Controller
 
             $site->supportAgents()->syncWithoutDetaching($agent->id);
 
-            return [$agent];
+            return [$agent, $site];
         });
 
         Auth::login($agent);
         $request->session()->regenerate();
 
         return redirect()
-            ->route('dashboard')
-            ->with('status', 'Wayfindr is ready.');
+            ->route('dashboard.sites.show', $site)
+            ->withFragment('install-snippet')
+            ->with('status', 'Wayfindr is ready. Copy the install snippet to connect your first site.');
     }
 
     private function redirectAfterSetup(Request $request): RedirectResponse

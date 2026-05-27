@@ -212,11 +212,12 @@ password. When `--site-public-key` is omitted, it generates and prints the
 public widget key for the site. The browser setup path asks for the owner
 password directly and generates the site public key automatically.
 
-After signing in as the agent, open the site from the dashboard. The site
-settings page includes a copy-ready widget install snippet generated from the
-site public key, `APP_URL`, and any public Reverb settings available to the
-application. Use the dashboard's `Add site` action when you need separate
-public keys for staging, production, or public dogfood sites.
+After browser setup completes, Wayfindr signs in the first owner and sends them
+directly to the new site's install snippet. The site settings page includes a
+copy-ready widget script generated from the site public key, `APP_URL`, and any
+public Reverb settings available to the application. Use the dashboard's
+`Add site` action when you need separate public keys for staging, production,
+or public dogfood sites.
 
 Open `/dashboard/readiness` after bootstrap to review the operator readiness
 checks. The page flags common self-hosting setup gaps such as missing app keys,

@@ -59,6 +59,38 @@
                 </div>
             </section>
 
+            <section id="install-snippet" class="section" aria-labelledby="install-snippet-heading">
+                <div class="section-header">
+                    <h2 id="install-snippet-heading">Install snippet</h2>
+                    <div class="section-actions">
+                        @if ($agent->isAdmin())
+                            <a class="text-link" href="{{ route('dashboard.readiness.show') }}">Review readiness</a>
+                        @endif
+                        <span class="lede">Copy-ready widget script</span>
+                    </div>
+                </div>
+
+                <div class="notice-copy">
+                    <p>
+                        @if ($site->domain)
+                            Use this snippet on {{ $site->domain }} to load Wayfindr.
+                        @else
+                            Use this snippet on the site where Wayfindr should appear.
+                        @endif
+                    </p>
+                    <p>Paste this before the closing <code>&lt;/body&gt;</code> tag, then visit the site and send a test message from the widget.</p>
+
+                    <div class="notice-list" aria-label="Next steps">
+                        <p><strong>Next steps</strong></p>
+                        <p>Copy this snippet into {{ $site->domain ?? 'your site' }}.</p>
+                        <p>Visit the site and send a test message from the widget.</p>
+                        <p>Review readiness if queues, scheduler, storage, or realtime still need attention.</p>
+                    </div>
+                </div>
+
+                <pre class="code-block"><code>{{ $widgetInstallSnippet }}</code></pre>
+            </section>
+
             <section class="section" aria-labelledby="support-access-heading">
                 <div class="section-header">
                     <h2 id="support-access-heading">Support access</h2>
@@ -363,19 +395,6 @@
                     <p>{{ $dataResponsibility['message'] }}</p>
                     <p>{{ $dataResponsibility['guidance'] }}</p>
                 </div>
-            </section>
-
-            <section class="section" aria-labelledby="install-snippet-heading">
-                <div class="section-header">
-                    <h2 id="install-snippet-heading">Install snippet</h2>
-                    <span class="lede">Copy-ready widget script</span>
-                </div>
-
-                <div class="notice-copy">
-                    <p>Paste this before the closing <code>&lt;/body&gt;</code> tag on the site where Wayfindr should appear.</p>
-                </div>
-
-                <pre class="code-block"><code>{{ $widgetInstallSnippet }}</code></pre>
             </section>
 
             <section class="section" aria-labelledby="privacy-settings-heading">
