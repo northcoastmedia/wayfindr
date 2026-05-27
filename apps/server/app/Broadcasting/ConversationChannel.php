@@ -25,6 +25,10 @@ class ConversationChannel
         }
 
         if ($participant instanceof User) {
+            if ($participant->isDeactivated()) {
+                return false;
+            }
+
             return Gate::forUser($participant)->allows('view', $conversation);
         }
 
