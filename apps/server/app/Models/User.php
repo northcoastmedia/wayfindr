@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['account_id', 'account_role', 'name', 'email', 'password'])]
+#[Fillable(['account_id', 'account_role', 'name', 'email', 'password', 'deactivated_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -31,6 +31,7 @@ class User extends Authenticatable
     {
         return [
             'account_role' => AccountRole::class,
+            'deactivated_at' => 'datetime',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
@@ -59,6 +60,11 @@ class User extends Authenticatable
     public function isAgent(): bool
     {
         return $this->isAdmin() || $this->hasAccountRole(AccountRole::Agent);
+    }
+
+    public function isDeactivated(): bool
+    {
+        return $this->deactivated_at !== null;
     }
 
     public function assignedConversations(): HasMany

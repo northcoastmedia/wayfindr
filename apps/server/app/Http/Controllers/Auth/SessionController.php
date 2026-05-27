@@ -29,6 +29,14 @@ class SessionController extends Controller
             ]);
         }
 
+        if ($request->user()?->isDeactivated()) {
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'This agent account is deactivated.',
+            ]);
+        }
+
         $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'));

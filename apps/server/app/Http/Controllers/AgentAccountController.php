@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountRole;
-use App\Models\Account;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -48,6 +47,7 @@ class AgentAccountController extends Controller
             'agent' => $agent,
             'agents' => $agents,
             'canCreateAgents' => $agent->isAdmin(),
+            'canManageAgentAccess' => $agent->isAdmin(),
             'canManageRoles' => $agent->isOwner(),
             'roleLabels' => $this->roleLabels(),
             'roleOptions' => $this->roleLabels(),

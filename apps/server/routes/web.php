@@ -1,8 +1,9 @@
 <?php
 
-use App\Http\Controllers\AgentAccountController;
+use App\Http\Controllers\AgentAccountAgentAccessController;
 use App\Http\Controllers\AgentAccountAgentController;
 use App\Http\Controllers\AgentAccountAgentRoleController;
+use App\Http\Controllers\AgentAccountController;
 use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\AgentTicketExternalIssueController;
 use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Widget\WidgetScriptController;
+use App\Http\Middleware\EnsureAgentIsActive;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -28,7 +30,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [SessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', EnsureAgentIsActive::class])->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
     Route::get('/dashboard/profile', [AgentProfileController::class, 'show'])
         ->name('dashboard.profile.show');
@@ -42,6 +44,10 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.account.agents.store');
     Route::put('/dashboard/account/agents/{agent}/role', AgentAccountAgentRoleController::class)
         ->name('dashboard.account.agents.role.update');
+    Route::post('/dashboard/account/agents/{agent}/deactivate', [AgentAccountAgentAccessController::class, 'deactivate'])
+        ->name('dashboard.account.agents.deactivate');
+    Route::post('/dashboard/account/agents/{agent}/reactivate', [AgentAccountAgentAccessController::class, 'reactivate'])
+        ->name('dashboard.account.agents.reactivate');
     Route::post('/dashboard/alerts/read', [AgentAlertController::class, 'markAllRead'])
         ->name('dashboard.alerts.read-all');
     Route::post('/dashboard/alerts/{notification}/read', [AgentAlertController::class, 'markRead'])

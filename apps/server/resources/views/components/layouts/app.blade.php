@@ -265,6 +265,16 @@
             background: var(--surface-muted);
         }
 
+        .button.danger {
+            background: transparent;
+            border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+            color: var(--danger);
+        }
+
+        .button.danger:hover {
+            background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+        }
+
         .button.full {
             width: 100%;
             margin-top: 22px;
