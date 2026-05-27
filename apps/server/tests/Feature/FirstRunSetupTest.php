@@ -25,7 +25,7 @@ test('login redirects empty installs to first run setup', function (): void {
 });
 
 test('first run setup creates the owner account site and session', function (): void {
-    $this->post('/setup', [
+    $response = $this->post('/setup', [
         'account_name' => 'Acme Support',
         'agent_name' => 'Ada Agent',
         'agent_email' => 'ada@example.com',
@@ -33,13 +33,15 @@ test('first run setup creates the owner account site and session', function (): 
         'password_confirmation' => 'correct-horse-battery-staple',
         'site_name' => 'Acme Docs',
         'site_domain' => 'docs.example.test',
-    ])
-        ->assertRedirect('/dashboard')
-        ->assertSessionHas('status', 'Wayfindr is ready.');
+    ]);
 
     $account = Account::query()->sole();
     $agent = User::query()->sole();
     $site = Site::query()->sole();
+
+    $response
+        ->assertRedirect("/dashboard/sites/{$site->id}#install-snippet")
+        ->assertSessionHas('status', 'Wayfindr is ready. Copy the install snippet to connect your first site.');
 
     expect($account->name)->toBe('Acme Support')
         ->and($account->slug)->toBe('acme-support')
@@ -59,6 +61,32 @@ test('first run setup creates the owner account site and session', function (): 
     expect($site->supportAgents()->whereKey($agent->id)->exists())->toBeTrue();
 
     $this->assertAuthenticatedAs($agent);
+});
+
+test('first run setup handoff shows install guidance and readiness link', function (): void {
+    config()->set('app.url', 'https://support.example.test');
+
+    $this->post('/setup', [
+        'account_name' => 'Acme Support',
+        'agent_name' => 'Ada Agent',
+        'agent_email' => 'ada@example.com',
+        'password' => 'correct-horse-battery-staple',
+        'password_confirmation' => 'correct-horse-battery-staple',
+        'site_name' => 'Acme Docs',
+        'site_domain' => 'docs.example.test',
+    ]);
+
+    $site = Site::query()->sole();
+
+    $this->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Wayfindr is ready. Copy the install snippet to connect your first site.')
+        ->assertSee('Install snippet')
+        ->assertSee('Next steps')
+        ->assertSee('Copy this snippet into docs.example.test.')
+        ->assertSee('Visit the site and send a test message from the widget.')
+        ->assertSee('/dashboard/readiness', false)
+        ->assertSee('data-wayfindr-site-key=&quot;'.$site->public_key.'&quot;', false);
 });
 
 test('first run setup is locked after bootstrap data exists', function (): void {
