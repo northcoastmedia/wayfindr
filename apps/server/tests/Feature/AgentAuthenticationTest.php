@@ -15,6 +15,8 @@ test('guest is redirected from dashboard to login', function (): void {
 });
 
 test('login form renders', function (): void {
+    User::factory()->for(Account::factory())->create();
+
     $this->get('/login')
         ->assertOk()
         ->assertSee('Agent Login');

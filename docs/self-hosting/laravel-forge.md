@@ -186,10 +186,16 @@ Both scripts:
 - cache config, routes, and views,
 - restart queues and Reverb after deploy.
 
-## First Account Bootstrap
+## First Account Setup
 
-After the first deploy, create the first account, agent, and site from the
-Laravel app directory:
+After the first deploy, visit `/setup` on the Forge site to create the first
+account, owner, and install site from the browser. This is the preferred
+first-run path because it keeps the normal self-hosting flow in the web
+interface instead of requiring SSH for routine activation.
+
+The setup screen is locked after Wayfindr has any account, account-scoped
+agent, or site records. If you need to create the first records from the
+terminal instead, run the CLI bootstrap command from the Laravel app directory:
 
 ```bash
 cd ~/wayfindr.on-forge.com/current/apps/server
@@ -201,9 +207,10 @@ php artisan wayfindr:bootstrap \
   --domain="example.com"
 ```
 
-When `--password` is omitted, the command generates and prints the first
-agent password. When `--site-public-key` is omitted, it generates and prints the
-public widget key for the site.
+When `--password` is omitted, the command generates and prints the first agent
+password. When `--site-public-key` is omitted, it generates and prints the
+public widget key for the site. The browser setup path asks for the owner
+password directly and generates the site public key automatically.
 
 After signing in as the agent, open the site from the dashboard. The site
 settings page includes a copy-ready widget install snippet generated from the
@@ -345,7 +352,7 @@ background process reloads the active release.
 12. Run the first deploy.
 13. Enable TLS before testing the widget from another origin.
 14. Enable the deployment health check against `/up`.
-15. Run `php artisan wayfindr:bootstrap` from `apps/server`.
+15. Visit `/setup` and create the first account owner and install site.
 16. Add the queue worker and scheduler.
 17. Add the Reverb process when switching `BROADCAST_CONNECTION` to `reverb`.
 18. Sign in with the generated first agent credentials.

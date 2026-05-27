@@ -19,6 +19,11 @@ Use [laravel-forge.md](laravel-forge.md) for the current Forge deployment
 checklist, deploy script templates, environment values, queue worker, scheduler,
 and smoke test.
 
+After the application is deployed and the environment is configured, visit
+`/setup` on the Wayfindr host to create the first account owner and install
+site from the browser. The setup screen is available only while the database has
+no account, account-scoped agent, or site records.
+
 The intended self-hosting baseline is still Docker Compose with:
 
 - Laravel web process,
