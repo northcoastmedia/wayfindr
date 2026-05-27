@@ -1,10 +1,16 @@
+@props([
+    'title' => config('app.name', 'Wayfindr'),
+    'agent' => null,
+    'account' => null,
+])
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? config('app.name', 'Wayfindr') }}</title>
+    <title>{{ $title }}</title>
     <style>
         :root {
             color-scheme: light;
@@ -58,15 +64,74 @@
         }
 
         .topbar-inner {
-            min-height: 64px;
-            display: flex;
+            min-height: 72px;
+            display: grid;
+            grid-template-columns: minmax(168px, 1fr) auto minmax(168px, 1fr);
             align-items: center;
-            justify-content: space-between;
             gap: 16px;
         }
 
-        .brand {
+        .topbar-main {
+            min-width: 0;
+        }
+
+        .brand,
+        .brand-link {
             font-weight: 700;
+        }
+
+        .brand-link {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .brand-link:hover {
+            color: var(--accent-strong);
+        }
+
+        .topbar-context {
+            margin-top: 2px;
+        }
+
+        .app-nav {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
+        }
+
+        .app-nav-link {
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--muted);
+            font-weight: 700;
+            padding: 8px 10px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .app-nav-link:hover {
+            background: var(--surface-muted);
+            color: var(--text);
+        }
+
+        .app-nav-link[aria-current="page"] {
+            background: var(--surface-muted);
+            border-color: var(--border);
+            color: var(--accent-strong);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .topbar-actions form {
+            margin: 0;
         }
 
         .page {
@@ -220,6 +285,10 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 8px;
+        }
+
+        .section[id] {
+            scroll-margin-top: 96px;
         }
 
         .section-header {
@@ -525,13 +594,19 @@
             font-size: 0.85rem;
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 820px) {
             .topbar-inner {
-                align-items: flex-start;
-                flex-direction: column;
+                grid-template-columns: 1fr;
                 padding: 16px 0;
             }
 
+            .app-nav,
+            .topbar-actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 640px) {
             .section-header {
                 align-items: flex-start;
                 flex-direction: column;
@@ -548,6 +623,67 @@
     </style>
 </head>
 <body>
-    {{ $slot }}
+    @if ($agent && $account)
+        @php
+            $navigationItems = [
+                [
+                    'label' => 'Dashboard',
+                    'href' => route('dashboard'),
+                    'active' => request()->routeIs('dashboard'),
+                ],
+                [
+                    'label' => 'Conversations',
+                    'href' => route('dashboard').'#conversations',
+                    'active' => request()->routeIs('dashboard.conversations.*'),
+                ],
+                [
+                    'label' => 'Tickets',
+                    'href' => route('dashboard', ['ticket_status' => 'open']).'#tickets',
+                    'active' => request()->routeIs('dashboard.tickets.*'),
+                ],
+                [
+                    'label' => 'Sites',
+                    'href' => route('dashboard').'#sites',
+                    'active' => request()->routeIs('dashboard.sites.*'),
+                ],
+            ];
+        @endphp
+
+        <div class="shell">
+            <header class="topbar">
+                <div class="topbar-inner">
+                    <div class="topbar-main">
+                        <a class="brand-link" href="{{ route('dashboard') }}">Wayfindr</a>
+                        <div class="lede topbar-context">{{ $agent->name }} - {{ $account->name }}</div>
+                    </div>
+
+                    <nav class="app-nav" aria-label="Primary navigation">
+                        @foreach ($navigationItems as $navigationItem)
+                            <a
+                                class="app-nav-link"
+                                href="{{ $navigationItem['href'] }}"
+                                @if ($navigationItem['active']) aria-current="page" @endif
+                            >
+                                {{ $navigationItem['label'] }}
+                            </a>
+                        @endforeach
+                    </nav>
+
+                    <div class="topbar-actions">
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button class="button secondary" type="submit">Sign out</button>
+                        </form>
+                    </div>
+                </div>
+            </header>
+
+            <main class="page">
+                {{ $slot }}
+            </main>
+        </div>
+    @else
+        {{ $slot }}
+    @endif
 </body>
 </html>

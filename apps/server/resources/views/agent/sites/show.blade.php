@@ -1,20 +1,4 @@
-<x-layouts.app title="Site Privacy Settings">
-    <div class="shell">
-        <header class="topbar">
-            <div class="topbar-inner">
-                <div>
-                    <div class="brand">Wayfindr</div>
-                    <div class="lede">{{ $agent->name }} - {{ $account->name }}</div>
-                </div>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button class="button secondary" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
-
-        <main class="page">
+<x-layouts.app title="Site Privacy Settings" :agent="$agent" :account="$account">
             <a class="text-link" href="{{ route('dashboard') }}">Back to dashboard</a>
             <h1>{{ $site->name }}</h1>
             <p class="lede">Privacy settings for {{ $site->domain ?? 'an unconfigured domain' }}</p>
@@ -445,6 +429,4 @@
                     </div>
                 @endif
             </section>
-        </main>
-    </div>
 </x-layouts.app>
