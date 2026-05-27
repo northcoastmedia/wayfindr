@@ -646,6 +646,11 @@
                     'href' => route('dashboard.sites.index'),
                     'active' => request()->routeIs('dashboard.sites.*'),
                 ],
+                [
+                    'label' => 'Account',
+                    'href' => route('dashboard.account.show'),
+                    'active' => request()->routeIs('dashboard.account.*'),
+                ],
             ];
         @endphp
 
