@@ -696,6 +696,7 @@
                     </nav>
 
                     <div class="topbar-actions">
+                        <a class="button secondary" href="{{ route('dashboard.profile.show') }}">Profile</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button class="button secondary" type="submit">Sign out</button>

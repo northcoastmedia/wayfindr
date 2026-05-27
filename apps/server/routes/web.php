@@ -7,6 +7,7 @@ use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
 use App\Http\Controllers\AgentExternalIssueProviderConnectionController;
+use App\Http\Controllers\AgentProfileController;
 use App\Http\Controllers\AgentSiteController;
 use App\Http\Controllers\AgentSiteExternalIssueProjectController;
 use App\Http\Controllers\AgentTicketController;
@@ -29,6 +30,12 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
+    Route::get('/dashboard/profile', [AgentProfileController::class, 'show'])
+        ->name('dashboard.profile.show');
+    Route::put('/dashboard/profile', [AgentProfileController::class, 'update'])
+        ->name('dashboard.profile.update');
+    Route::put('/dashboard/profile/password', [AgentProfileController::class, 'updatePassword'])
+        ->name('dashboard.profile.password.update');
     Route::get('/dashboard/account', AgentAccountController::class)
         ->name('dashboard.account.show');
     Route::post('/dashboard/account/agents', [AgentAccountAgentController::class, 'store'])

@@ -14,7 +14,7 @@ An agent is a Laravel user attached to one account. Agents can sign in, view the
 
 The starter RBAC implementation stores account authority on `users.account_role` while Wayfindr still supports one account per user. A dedicated membership model can replace this when multi-account users become a real product need.
 
-Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup.
+Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup. Agents can use the profile screen to update their display name and replace a temporary password after sign-in.
 
 ### Site access
 
@@ -46,6 +46,7 @@ Possible later roles:
 - Role checks should build on explicit account membership and site access, not replace them.
 - New agents should start as `agent`; role elevation remains an owner-only action.
 - Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
+- Agent password changes are self-service from the profile screen and should be audited without exposing password material.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Cobrowse access should require both account membership and site access.

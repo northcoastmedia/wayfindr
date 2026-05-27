@@ -1,0 +1,96 @@
+<?php
+
+use App\Models\Account;
+use App\Models\AuditEvent;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+
+uses(RefreshDatabase::class);
+
+test('guest is redirected from the agent profile to login', function (): void {
+    $this->get('/dashboard/profile')
+        ->assertRedirect('/login');
+});
+
+test('agent can view their profile from the application shell', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'name' => 'Ada Agent',
+        'email' => 'ada@example.test',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('/dashboard/profile', false);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/profile')
+        ->assertOk()
+        ->assertSee('Agent profile')
+        ->assertSee('Ada Agent')
+        ->assertSee('ada@example.test')
+        ->assertSee('Change password')
+        ->assertSee('/dashboard/profile/password', false);
+});
+
+test('agent can update their display name', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'name' => 'Ada Agent',
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/profile')
+        ->put('/dashboard/profile', [
+            'name' => 'Ada Lovelace',
+        ])
+        ->assertRedirect('/dashboard/profile')
+        ->assertSessionHas('status', 'Profile updated.');
+
+    expect($agent->fresh()->name)->toBe('Ada Lovelace');
+});
+
+test('agent can change their password with the current password', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'password' => Hash::make('old-password'),
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/profile')
+        ->put('/dashboard/profile/password', [
+            'current_password' => 'old-password',
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
+        ])
+        ->assertRedirect('/dashboard/profile')
+        ->assertSessionHas('status', 'Password updated.');
+
+    $auditEvent = AuditEvent::query()
+        ->where('action', 'agent.password_updated')
+        ->firstOrFail();
+
+    expect(Hash::check('new-password', $agent->fresh()->password))->toBeTrue()
+        ->and($auditEvent->account_id)->toBe($agent->account_id)
+        ->and($auditEvent->actor->is($agent))->toBeTrue()
+        ->and($auditEvent->subject->is($agent))->toBeTrue();
+});
+
+test('agent cannot change their password with the wrong current password', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'password' => Hash::make('old-password'),
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/profile')
+        ->put('/dashboard/profile/password', [
+            'current_password' => 'wrong-password',
+            'password' => 'new-password',
+            'password_confirmation' => 'new-password',
+        ])
+        ->assertRedirect('/dashboard/profile')
+        ->assertSessionHasErrors('current_password');
+
+    expect(Hash::check('old-password', $agent->fresh()->password))->toBeTrue()
+        ->and(AuditEvent::query()->where('action', 'agent.password_updated')->exists())->toBeFalse();
+});
