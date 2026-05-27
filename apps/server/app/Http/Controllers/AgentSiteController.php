@@ -18,6 +18,27 @@ use Illuminate\View\View;
 
 class AgentSiteController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $agent = $request->user();
+        $account = $this->account($request);
+        $sites = $account->sites()
+            ->visibleToAgent($agent)
+            ->with('latestVisitor')
+            ->withCount([
+                'supportAgents as support_agents_count' => fn ($query) => $query
+                    ->where('users.account_id', $account->id),
+            ])
+            ->orderBy('name')
+            ->get();
+
+        return view('agent.sites.index', [
+            'account' => $account,
+            'agent' => $agent,
+            'sites' => $sites,
+        ]);
+    }
+
     public function create(Request $request): View
     {
         $account = $this->account($request);

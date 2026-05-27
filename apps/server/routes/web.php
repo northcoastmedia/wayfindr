@@ -32,6 +32,8 @@ Route::middleware('auth')->group(function () {
         ->name('dashboard.alerts.read');
     Route::post('/dashboard/external-issue-provider-connections', [AgentExternalIssueProviderConnectionController::class, 'store'])
         ->name('dashboard.external-issue-provider-connections.store');
+    Route::get('/dashboard/sites', [AgentSiteController::class, 'index'])
+        ->name('dashboard.sites.index');
     Route::get('/dashboard/sites/new', [AgentSiteController::class, 'create'])
         ->name('dashboard.sites.create');
     Route::post('/dashboard/sites', [AgentSiteController::class, 'store'])
