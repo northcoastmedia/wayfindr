@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentAccountController;
 use App\Http\Controllers\AgentAlertController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentDashboardController;
@@ -26,6 +27,8 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', AgentDashboardController::class)->name('dashboard');
+    Route::get('/dashboard/account', AgentAccountController::class)
+        ->name('dashboard.account.show');
     Route::post('/dashboard/alerts/read', [AgentAlertController::class, 'markAllRead'])
         ->name('dashboard.alerts.read-all');
     Route::post('/dashboard/alerts/{notification}/read', [AgentAlertController::class, 'markRead'])
