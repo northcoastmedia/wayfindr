@@ -24,7 +24,7 @@ Account owners and admins can manage site support access from the site settings 
 
 ## Account Roles
 
-Account roles are about authority, not queue membership. The starter role helpers are implemented on `users.account_role`; role management UI is not implemented yet. The working RBAC map lives in [RBAC Waypoints](rbac-waypoints.md).
+Account roles are about authority, not queue membership. The starter role helpers are implemented on `users.account_role`; owners can change another same-account agent's role from the account overview. The working RBAC map lives in [RBAC Waypoints](rbac-waypoints.md).
 
 The first roles are:
 
@@ -42,7 +42,7 @@ Possible later roles:
 - Site access should land before broad role management.
 - RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
-- Role changes start owner-only at the action layer, with same-account boundaries, self-change denial, last-owner protection, and audit events before any role management UI ships.
+- Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Cobrowse access should require both account membership and site access.

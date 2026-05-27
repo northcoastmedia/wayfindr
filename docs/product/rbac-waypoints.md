@@ -146,13 +146,13 @@ Every RBAC implementation slice should include tests for:
 3. Add role helpers without changing behavior.
 4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`; agent conversation detail, reply, status, assignment, ticket creation, cobrowse request, and realtime channel access now use `ConversationPolicy`; ticket detail, notes, edits, status changes, and assignment now use `TicketPolicy`; support alert visibility and mark-read actions now use `AlertPolicy`.
 5. Tighten site privacy settings behind owner/admin authority plus site access. Site privacy settings now follow this rule.
-6. Add role management UI only after policies exist. The first role-change action now enforces owner-only updates, same-account boundaries, self-change denial, last-owner protection, and audit events before any UI exists.
+6. Add role management UI only after policies exist. The account overview now exposes owner-only role changes backed by the same action that enforces same-account boundaries, self-change denial, last-owner protection, and audit events.
 7. Add audit events for role and site-access changes. Site-access updates and role changes now create audit events.
 8. Add owner/admin elevated behavior only when the product decision is explicit.
 
 ## Role Management Guardrails
 
-The first implementation keeps role management owner-only at the action layer. Before any role management UI ships, Wayfindr now has explicit tests and product rules for:
+The first implementation keeps role management owner-only and exposes it from the account overview. Wayfindr has explicit tests and product rules for:
 
 - preventing self-promotion,
 - preventing owner transfer without owner approval,

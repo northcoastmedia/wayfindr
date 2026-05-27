@@ -532,5 +532,6 @@ test('account and role roadmap documents the boundary between site access and ac
         ->and(file_get_contents($path))->toContain('owner')
         ->and(file_get_contents($path))->toContain('admin')
         ->and(file_get_contents($path))->toContain('agent')
-        ->and(file_get_contents($path))->toContain('role management UI is not implemented yet');
+        ->and(file_get_contents($path))->toContain('owners can change another same-account agent')
+        ->and(file_get_contents($path))->toContain('Role changes start owner-only');
 });
