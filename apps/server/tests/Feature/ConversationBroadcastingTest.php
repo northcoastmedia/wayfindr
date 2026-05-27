@@ -322,3 +322,19 @@ test('conversation channel authorizes account agents and matching visitors', fun
         ->and($channel->join($otherVisitor, $conversation->support_code))->toBeFalse()
         ->and($channel->join($agent, 'WF-MISSING'))->toBeFalse();
 });
+
+test('conversation channel denies deactivated agents with stale sessions', function (): void {
+    $account = Account::factory()->create();
+    $agent = User::factory()->for($account)->create([
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create();
+    $visitor = Visitor::factory()->for($site)->create();
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-DEACTIVATED',
+    ]);
+
+    $channel = app(ConversationChannel::class);
+
+    expect($channel->join($agent, $conversation->support_code))->toBeFalse();
+});

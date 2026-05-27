@@ -107,6 +107,7 @@ Audit-worthy RBAC actions include:
 - owner transfer,
 - agent invitations,
 - agent creation,
+- agent deactivation and reactivation,
 - agent password changes,
 - agent removal,
 - site access changes,
@@ -152,7 +153,8 @@ Every RBAC implementation slice should include tests for:
 7. Add audit events for role and site-access changes. Site-access updates and role changes now create audit events.
 8. Add agent creation from the account overview. Owners and admins can create default `agent` users with one-time generated passwords while email invitations remain a later setup/readiness feature.
 9. Add agent self-service profile basics. Agents can update their display name and change their password from the dashboard profile screen, with password changes recorded as audit events.
-10. Add owner/admin elevated behavior only when the product decision is explicit.
+10. Add agent deactivation. Owners can suspend or restore another same-account user. Admins can suspend or restore non-owner agents. Deactivated users cannot sign in or continue using existing dashboard sessions, and historical records remain attached to the deactivated user.
+11. Add owner/admin elevated behavior only when the product decision is explicit.
 
 ## Role Management Guardrails
 
@@ -163,3 +165,15 @@ The first implementation keeps role management owner-only and exposes it from th
 - preventing demotion or removal of the last owner,
 - limiting which roles an admin can grant,
 - recording every role change as an audit event.
+
+## Agent Access Guardrails
+
+Agent deactivation is an access-control tool, not a deletion workflow. The first implementation keeps the historical support record intact and has tests for:
+
+- owner/admin authorization differences,
+- same-account boundaries,
+- self-deactivation denial,
+- owner protection for non-owner admins,
+- login denial for deactivated users,
+- stale dashboard session sign-out,
+- audit events for deactivation and reactivation.

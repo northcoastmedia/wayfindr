@@ -59,6 +59,7 @@
                 <div class="notice-copy">
                     <p>Account roles describe authority. Site access still decides which support queues an agent can work.</p>
                     <p>Role changes are limited to account owners. Owners cannot change their own role here, and every role change is audited.</p>
+                    <p>Owners and admins can suspend access without deleting account history. Admins can only suspend agents; owners can manage any other same-account user.</p>
                 </div>
             </section>
 
@@ -100,9 +101,13 @@
                         <thead>
                             <tr>
                                 <th scope="col">Agent</th>
+                                <th scope="col">Status</th>
                                 <th scope="col">Role</th>
                                 @if ($canManageRoles)
                                     <th scope="col">Manage role</th>
+                                @endif
+                                @if ($canManageAgentAccess)
+                                    <th scope="col">Manage access</th>
                                 @endif
                                 <th scope="col">Site access</th>
                                 <th scope="col">Open conversations</th>
@@ -111,11 +116,17 @@
                         </thead>
                         <tbody>
                             @foreach ($agents as $accountAgent)
+                                @php
+                                    $canManageThisAgentAccess = $canManageAgentAccess
+                                        && ! $accountAgent->is($agent)
+                                        && ($agent->isOwner() || $accountAgent->account_role === \App\Enums\AccountRole::Agent);
+                                @endphp
                                 <tr>
                                     <td>
                                         <strong>{{ $accountAgent->name }}</strong>
                                         <span class="lede">{{ $accountAgent->email }}</span>
                                     </td>
+                                    <td>{{ $accountAgent->isDeactivated() ? 'Deactivated' : 'Active' }}</td>
                                     <td>{{ $roleLabels[$accountAgent->account_role?->value] ?? 'Agent' }}</td>
                                     @if ($canManageRoles)
                                         <td>
@@ -132,6 +143,25 @@
                                                         @endforeach
                                                     </select>
                                                     <button class="button secondary" type="submit">Save role</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    @endif
+                                    @if ($canManageAgentAccess)
+                                        <td>
+                                            @if ($accountAgent->is($agent))
+                                                <span class="lede">Current user</span>
+                                            @elseif (! $canManageThisAgentAccess)
+                                                <span class="lede">Owner only</span>
+                                            @elseif ($accountAgent->isDeactivated())
+                                                <form class="compact-form" method="POST" action="{{ route('dashboard.account.agents.reactivate', $accountAgent) }}">
+                                                    @csrf
+                                                    <button class="button secondary" type="submit">Reactivate</button>
+                                                </form>
+                                            @else
+                                                <form class="compact-form" method="POST" action="{{ route('dashboard.account.agents.deactivate', $accountAgent) }}">
+                                                    @csrf
+                                                    <button class="button danger" type="submit">Deactivate</button>
                                                 </form>
                                             @endif
                                         </td>

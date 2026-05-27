@@ -1,0 +1,161 @@
+<?php
+
+use App\Enums\AccountRole;
+use App\Models\Account;
+use App\Models\AuditEvent;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+
+uses(RefreshDatabase::class);
+
+test('owners can deactivate and reactivate another same-account agent', function (): void {
+    $account = Account::factory()->create();
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+
+    $this->actingAs($owner)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Manage access')
+        ->assertSee("/dashboard/account/agents/{$agent->id}/deactivate", false);
+
+    $this->actingAs($owner)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$agent->id}/deactivate")
+        ->assertRedirect('/dashboard/account')
+        ->assertSessionHas('status', 'Agent deactivated.');
+
+    $deactivatedEvent = AuditEvent::query()
+        ->where('action', 'agent.deactivated')
+        ->firstOrFail();
+
+    expect($agent->fresh()->deactivated_at)->not->toBeNull()
+        ->and($deactivatedEvent->account_id)->toBe($account->id)
+        ->and($deactivatedEvent->actor->is($owner))->toBeTrue()
+        ->and($deactivatedEvent->subject->is($agent))->toBeTrue();
+
+    $this->actingAs($owner)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Deactivated')
+        ->assertSee("/dashboard/account/agents/{$agent->id}/reactivate", false);
+
+    $this->actingAs($owner)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$agent->id}/reactivate")
+        ->assertRedirect('/dashboard/account')
+        ->assertSessionHas('status', 'Agent reactivated.');
+
+    $reactivatedEvent = AuditEvent::query()
+        ->where('action', 'agent.reactivated')
+        ->firstOrFail();
+
+    expect($agent->fresh()->deactivated_at)->toBeNull()
+        ->and($reactivatedEvent->account_id)->toBe($account->id)
+        ->and($reactivatedEvent->actor->is($owner))->toBeTrue()
+        ->and($reactivatedEvent->subject->is($agent))->toBeTrue();
+});
+
+test('admins can deactivate and reactivate non-owner agents', function (): void {
+    $account = Account::factory()->create();
+    $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
+    $agent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+
+    $this->actingAs($admin)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$agent->id}/deactivate")
+        ->assertRedirect('/dashboard/account')
+        ->assertSessionHas('status', 'Agent deactivated.');
+
+    expect($agent->fresh()->deactivated_at)->not->toBeNull();
+
+    $this->actingAs($admin)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$agent->id}/reactivate")
+        ->assertRedirect('/dashboard/account')
+        ->assertSessionHas('status', 'Agent reactivated.');
+
+    expect($agent->fresh()->deactivated_at)->toBeNull();
+});
+
+test('admins cannot deactivate owners and agents cannot manage access', function (AccountRole $actorRole): void {
+    $account = Account::factory()->create();
+    $actor = User::factory()->for($account)->create(['account_role' => $actorRole]);
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+    $agent = User::factory()->for($account)->create(['account_role' => AccountRole::Agent]);
+    $target = $actorRole === AccountRole::Admin ? $owner : $agent;
+
+    $this->actingAs($actor)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$target->id}/deactivate")
+        ->assertForbidden();
+
+    expect($target->fresh()->deactivated_at)->toBeNull()
+        ->and(AuditEvent::query()->where('action', 'agent.deactivated')->exists())->toBeFalse();
+})->with([
+    'admin against owner' => [AccountRole::Admin],
+    'agent against agent' => [AccountRole::Agent],
+]);
+
+test('agent access changes stay inside the current account', function (): void {
+    $account = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+    $outsideAgent = User::factory()->for($otherAccount)->create(['account_role' => AccountRole::Agent]);
+
+    $this->actingAs($owner)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$outsideAgent->id}/deactivate")
+        ->assertForbidden();
+
+    expect($outsideAgent->fresh()->deactivated_at)->toBeNull()
+        ->and(AuditEvent::query()->where('action', 'agent.deactivated')->exists())->toBeFalse();
+});
+
+test('owners cannot deactivate themselves', function (): void {
+    $account = Account::factory()->create();
+    $owner = User::factory()->for($account)->create(['account_role' => AccountRole::Owner]);
+
+    $this->actingAs($owner)
+        ->from('/dashboard/account')
+        ->post("/dashboard/account/agents/{$owner->id}/deactivate")
+        ->assertForbidden();
+
+    expect($owner->fresh()->deactivated_at)->toBeNull()
+        ->and(AuditEvent::query()->where('action', 'agent.deactivated')->exists())->toBeFalse();
+});
+
+test('deactivated agents cannot log in', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'email' => 'agent@example.test',
+        'password' => Hash::make('password'),
+        'deactivated_at' => now(),
+    ]);
+
+    $this->post('/login', [
+        'email' => 'agent@example.test',
+        'password' => 'password',
+    ])
+        ->assertRedirect('/')
+        ->assertSessionHasErrors('email');
+
+    $this->assertGuest();
+    expect($agent->fresh()->deactivated_at)->not->toBeNull();
+});
+
+test('deactivated agents are signed out before using dashboard routes', function (): void {
+    $agent = User::factory()->for(Account::factory())->create([
+        'deactivated_at' => now(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertRedirect('/login')
+        ->assertSessionHasErrors('email');
+
+    $this->assertGuest();
+});

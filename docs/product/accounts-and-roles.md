@@ -16,6 +16,8 @@ The starter RBAC implementation stores account authority on `users.account_role`
 
 Owners and admins can create new agents from the account overview. New dashboard-created agents start with the `agent` role and receive a generated temporary password that is shown once; email invitations can replace this after outbound mail readiness is part of setup. Agents can use the profile screen to update their display name and replace a temporary password after sign-in.
 
+Agents can be deactivated without deleting their historical messages, tickets, assignments, or audit records. Deactivated agents cannot log in, and existing dashboard sessions are signed out before protected routes continue. Owners can deactivate or reactivate another same-account user. Admins can deactivate or reactivate non-owner agents, but cannot manage owner or admin access.
+
 ### Site access
 
 Site access controls which agents support which sites. Conversations, tickets, alerts, ticket assignment options, and realtime conversation channels should respect site access.
@@ -47,6 +49,7 @@ Possible later roles:
 - New agents should start as `agent`; role elevation remains an owner-only action.
 - Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Agent password changes are self-service from the profile screen and should be audited without exposing password material.
+- Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account, and create audit events for deactivation/reactivation.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Cobrowse access should require both account membership and site access.
