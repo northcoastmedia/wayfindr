@@ -1,20 +1,4 @@
-<x-layouts.app title="Add Site">
-    <div class="shell">
-        <header class="topbar">
-            <div class="topbar-inner">
-                <div>
-                    <div class="brand">Wayfindr</div>
-                    <div class="lede">{{ $agent->name }} - {{ $account->name }}</div>
-                </div>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button class="button secondary" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
-
-        <main class="page">
+<x-layouts.app title="Add Site" :agent="$agent" :account="$account">
             <a class="text-link" href="{{ route('dashboard') }}">Back to dashboard</a>
             <h1>Add site</h1>
             <p class="lede">Create a new Wayfindr install target for {{ $account->name }}.</p>
@@ -51,6 +35,4 @@
                     <button class="button" type="submit">Create site</button>
                 </form>
             </section>
-        </main>
-    </div>
 </x-layouts.app>

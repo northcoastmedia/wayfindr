@@ -1,20 +1,4 @@
-<x-layouts.app title="Ticket - {{ $ticket->subject }}">
-    <div class="shell">
-        <header class="topbar">
-            <div class="topbar-inner">
-                <div>
-                    <div class="brand">Wayfindr</div>
-                    <div class="lede">{{ $agent->name }} - {{ $account->name }}</div>
-                </div>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button class="button secondary" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
-
-        <main class="page">
+<x-layouts.app title="Ticket - {{ $ticket->subject }}" :agent="$agent" :account="$account">
             <a class="text-link" href="{{ route('dashboard') }}">Back to dashboard</a>
             <h1>{{ $ticket->subject }}</h1>
             <p class="lede">Ticket #{{ $ticket->id }}</p>
@@ -609,9 +593,6 @@
                     @endforelse
                 </div>
             </section>
-        </main>
-    </div>
-
     <script>
         const replyTemplate = document.querySelector('[data-reply-template]');
         const replyTemplateTarget = replyTemplate

@@ -1,20 +1,4 @@
-<x-layouts.app title="Agent Dashboard">
-    <div class="shell">
-        <header class="topbar">
-            <div class="topbar-inner">
-                <div>
-                    <div class="brand">Wayfindr</div>
-                    <div class="lede">{{ $agent->name }} - {{ $account->name }}</div>
-                </div>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button class="button secondary" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
-
-        <main class="page">
+<x-layouts.app title="Agent Dashboard" :agent="$agent" :account="$account">
             <h1>{{ $account->name }}</h1>
             <p class="lede">Signed in as {{ $agent->email }}</p>
 
@@ -126,7 +110,7 @@
                 </div>
             </section>
 
-            <section class="section" aria-labelledby="sites-heading">
+            <section id="sites" class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>
                     <div class="section-actions">
@@ -215,7 +199,7 @@
                 <p class="empty realtime-note">{{ $realtimeHealth['message'] }}</p>
             </section>
 
-            <section class="section" aria-labelledby="tickets-heading">
+            <section id="tickets" class="section" aria-labelledby="tickets-heading">
                 <div class="section-header">
                     <h2 id="tickets-heading">Tickets</h2>
                     <div class="section-actions">
@@ -365,7 +349,7 @@
                 @endif
             </section>
 
-            <section class="section" aria-labelledby="conversations-heading">
+            <section id="conversations" class="section" aria-labelledby="conversations-heading">
                 <div class="section-header">
                     <h2 id="conversations-heading">Conversations</h2>
                     <div class="section-actions">
@@ -419,6 +403,4 @@
                     </div>
                 @endif
             </section>
-        </main>
-    </div>
 </x-layouts.app>

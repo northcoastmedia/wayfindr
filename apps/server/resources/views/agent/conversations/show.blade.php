@@ -1,20 +1,4 @@
-<x-layouts.app title="Conversation {{ $conversation->support_code }}">
-    <div class="shell">
-        <header class="topbar">
-            <div class="topbar-inner">
-                <div>
-                    <div class="brand">Wayfindr</div>
-                    <div class="lede">{{ $agent->name }} - {{ $account->name }}</div>
-                </div>
-
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button class="button secondary" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
-
-        <main class="page">
+<x-layouts.app title="Conversation {{ $conversation->support_code }}" :agent="$agent" :account="$account">
             <a class="text-link" href="{{ route('dashboard') }}">Back to dashboard</a>
             <h1>{{ $conversation->subject ?? 'Untitled conversation' }}</h1>
             <p class="lede">Support code {{ $conversation->support_code }}</p>
@@ -545,8 +529,6 @@
                     <button class="button" type="submit">Send reply</button>
                 </form>
             </section>
-        </main>
-    </div>
 
     @if ($realtime)
         <script>
