@@ -9,7 +9,8 @@ class ConversationPolicy
 {
     public function view(User $user, Conversation $conversation): bool
     {
-        return $conversation->site?->supportsAgent($user) === true;
+        return ! $user->isDeactivated()
+            && $conversation->site?->supportsAgent($user) === true;
     }
 
     public function reply(User $user, Conversation $conversation): bool

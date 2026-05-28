@@ -14,7 +14,8 @@ class AlertPolicy
 {
     public function view(User $user, DatabaseNotification $notification): bool
     {
-        return $this->belongsTo($user, $notification)
+        return ! $user->isDeactivated()
+            && $this->belongsTo($user, $notification)
             && $this->supportAlertVisibleTo($user, $notification);
     }
 

@@ -67,3 +67,23 @@ test('conversation policy protects claim and release assignment transitions', fu
         ->and(Gate::forUser($agent)->allows('release', $assignedConversation))->toBeFalse()
         ->and(Gate::forUser($unsupportedAgent)->allows('release', $assignedConversation))->toBeFalse();
 });
+
+test('conversation policy denies deactivated agents even when stale site assignments remain', function (): void {
+    $account = Account::factory()->create();
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach($deactivatedAgent);
+    $visitor = Visitor::factory()->for($site)->create();
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $deactivatedAgent->id,
+    ]);
+
+    expect(Gate::forUser($deactivatedAgent)->allows('view', $conversation))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('reply', $conversation))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('claim', $conversation))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('release', $conversation))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('requestCobrowse', $conversation))->toBeFalse();
+});

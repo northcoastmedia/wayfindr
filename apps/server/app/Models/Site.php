@@ -48,6 +48,10 @@ class Site extends Model
 
     public function supportsAgent(User $agent): bool
     {
+        if ($agent->isDeactivated()) {
+            return false;
+        }
+
         if (! $agent->account_id || (int) $agent->account_id !== (int) $this->account_id) {
             return false;
         }

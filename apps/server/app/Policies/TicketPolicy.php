@@ -11,7 +11,8 @@ class TicketPolicy
     {
         $ticket->loadMissing('site');
 
-        return $user->account_id
+        return ! $user->isDeactivated()
+            && $user->account_id
             && (int) $ticket->account_id === (int) $user->account_id
             && $ticket->site?->supportsAgent($user) === true;
     }

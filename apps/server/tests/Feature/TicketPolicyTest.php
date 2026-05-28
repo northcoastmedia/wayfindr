@@ -52,3 +52,20 @@ test('ticket policy denies tickets whose account does not match the supported si
         ->and(Gate::forUser($agent)->allows('update', $ticket))->toBeFalse()
         ->and(Gate::forUser($agent)->allows('assign', $ticket))->toBeFalse();
 });
+
+test('ticket policy denies deactivated agents even when stale site assignments remain', function (): void {
+    $account = Account::factory()->create();
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach($deactivatedAgent);
+    $ticket = Ticket::factory()->for($account)->for($site)->for($deactivatedAgent, 'assignee')->create();
+
+    expect(Gate::forUser($deactivatedAgent)->allows('view', $ticket))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('addNote', $ticket))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('reply', $ticket))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('update', $ticket))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('assign', $ticket))->toBeFalse();
+});

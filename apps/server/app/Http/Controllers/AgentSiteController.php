@@ -100,7 +100,7 @@ class AgentSiteController extends Controller
             'accountAgents' => $accountAgents,
             'agent' => $agent,
             'canManageIntegrations' => Gate::forUser($agent)->allows('manageIntegrations', $site),
-            'canManageSiteAccess' => $agent->isAdmin(),
+            'canManageSiteAccess' => Gate::forUser($agent)->allows('manageAccess', $site),
             'canUpdatePrivacy' => Gate::forUser($agent)->allows('updatePrivacy', $site),
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'externalIssueCapabilities' => ExternalIssueCapability::options(),

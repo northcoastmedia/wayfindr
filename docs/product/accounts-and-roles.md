@@ -18,6 +18,8 @@ Owners and admins can create new agents from the account overview. New dashboard
 
 Agents can be deactivated without deleting their historical messages, tickets, assignments, or audit records. Deactivated agents cannot log in, and existing dashboard sessions are signed out before protected routes continue. Owners can deactivate or reactivate another same-account user. Admins can deactivate or reactivate non-owner agents, but cannot manage owner or admin access.
 
+Deactivation is also enforced at the support policy layer. Stale site assignments, ticket assignments, conversation assignments, and unread alerts should not keep a deactivated agent authorized after their account access is suspended.
+
 ### Site access
 
 Site access controls which agents support which sites. Conversations, tickets, alerts, ticket assignment options, and realtime conversation channels should respect site access.
@@ -59,6 +61,7 @@ See [Platform Operator Boundary](platform-operator-boundary.md) for the product 
 - Role changes start owner-only, with same-account boundaries in `UserPolicy`, plus self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Agent password changes are self-service from the profile screen and should be audited without exposing password material.
 - Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account through `UserPolicy`, and create audit events for deactivation/reactivation.
+- Support policies should deny deactivated agents even when stale assignments still reference them.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Agent alert preferences can narrow or suppress new unread alerts without changing the underlying site access or assignment rules.
