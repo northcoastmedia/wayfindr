@@ -41,11 +41,20 @@ Possible later roles:
 - `billing`: can manage billing and plan details without support queue access.
 - `viewer`: can view reports or support history without participating in conversations.
 
+## Platform Operators
+
+Platform operators are outside account RBAC. They operate the Wayfindr installation itself: infrastructure health, setup recovery, background processes, hosted account lifecycle, and other instance-level work.
+
+A platform operator is not automatically an account owner, account admin, support agent, or site-access bypass. Operator authority should not grant routine access to conversations, tickets, cobrowse state, transcripts, alerts, or visitor page data. Any future customer-data access path should be explicit, scoped, time-bound, and audited.
+
+See [Platform Operator Boundary](platform-operator-boundary.md) for the product guardrails before adding platform-admin UI.
+
 ## Guardrails
 
 - Site access should land before broad role management.
 - RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
+- Platform operator authority should stay separate from account roles and must not bypass site access in account support workflows.
 - New agents should start as `agent`; role elevation remains an owner-only action.
 - Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Agent password changes are self-service from the profile screen and should be audited without exposing password material.

@@ -79,6 +79,22 @@ The first `manage_site_access` implementation requires owner/admin authority plu
 
 Site privacy settings require owner/admin authority plus site access. Plain agents can still view install and public masking context for sites they support, but they cannot edit privacy configuration.
 
+## Platform Operator Boundary
+
+Platform operators are a separate instance-level authority, not another account role. They may eventually manage install readiness, queues, scheduler health, Reverb health, mail/storage/database diagnostics, setup recovery, hosted account lifecycle, and global operational warnings.
+
+Platform authority must not imply support authority. A platform operator should not see conversations, ticket bodies, alerts, cobrowse state, visitor page data, transcripts, or site support queues unless a separate customer-data access path explicitly grants that access with scope, expiry, and audit events.
+
+The first platform scaffold should stay small:
+
+- keep `/dashboard` for account and agent work;
+- introduce `/operator` only when an operator-only workflow exists;
+- prefer a dedicated platform role or operator membership over overloading `account_role`;
+- never use platform authority as a shortcut around site access;
+- audit platform actions that change accounts, access, retention, integrations, or availability.
+
+See [Platform Operator Boundary](platform-operator-boundary.md) for the product guardrails.
+
 ## Laravel Authorization Shape
 
 RBAC should be implemented through Laravel policies and gates. Controllers should ask authorization questions instead of composing ad hoc account, role, and site checks inline.
@@ -137,6 +153,7 @@ Every RBAC implementation slice should include tests for:
 - stale alert visibility,
 - role escalation denial,
 - last-owner protection,
+- platform/operator boundary denial,
 - background notification routing,
 - realtime channel authorization,
 - audit event creation for permission changes,
@@ -155,6 +172,7 @@ Every RBAC implementation slice should include tests for:
 9. Add agent self-service profile basics. Agents can update their display name, change their password, and choose their alert preference from the dashboard profile screen, with password changes recorded as audit events.
 10. Add agent deactivation. Owners can suspend or restore another same-account user. Admins can suspend or restore non-owner agents. Deactivated users cannot sign in or continue using existing dashboard sessions, and historical records remain attached to the deactivated user.
 11. Add owner/admin elevated behavior only when the product decision is explicit.
+12. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access.
 
 ## Role Management Guardrails
 
