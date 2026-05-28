@@ -151,6 +151,15 @@
             </section>
 
             <section id="sites" class="section" aria-labelledby="sites-heading">
+                @php
+                    $sitesNeedingInstallAttention = $sites
+                        ->filter(fn ($site) => \App\Support\SiteInstallHealth::fromVisitor($site->latestVisitor)['needs_attention'])
+                        ->count();
+                    $installAttentionSummary = $sitesNeedingInstallAttention === 1
+                        ? '1 site needs setup attention.'
+                        : $sitesNeedingInstallAttention.' sites need setup attention.';
+                @endphp
+
                 <div class="section-header">
                     <h2 id="sites-heading">Sites</h2>
                     <div class="section-actions">
@@ -162,6 +171,18 @@
                 @if ($sites->isEmpty())
                     <p class="empty">No sites have been connected yet.</p>
                 @else
+                    @if ($sitesNeedingInstallAttention > 0)
+                        <div class="notice-copy notice-copy-bordered">
+                            <p><strong>{{ $installAttentionSummary }}</strong></p>
+                            <p>Review stale or missing widget check-ins before you send real visitors there.</p>
+                            <p>
+                                <a class="text-link" href="{{ route('dashboard.sites.index') }}#site-install-health">
+                                    Review site installs
+                                </a>
+                            </p>
+                        </div>
+                    @endif
+
                     <div class="table-wrap">
                         <table>
                             <thead>
@@ -189,6 +210,11 @@
                                         <td>
                                             <span class="readiness-status" data-status="{{ $installHealth['tone'] }}">{{ $installHealth['label'] }}</span>
                                             <div class="lede">{{ $installHealth['detail'] }}</div>
+                                            @if ($installHealth['needs_attention'])
+                                                <a class="health-action text-link" href="{{ route('dashboard.sites.show', $site) }}#install-verification">
+                                                    {{ $installHealth['action_label'] }}
+                                                </a>
+                                            @endif
                                         </td>
                                         <td>{{ $lastPageUrl ?: 'Not reported' }}</td>
                                     </tr>

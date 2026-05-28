@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 class SiteInstallHealth
 {
     /**
-     * @return array{label: string, tone: string, detail: string}
+     * @return array{label: string, tone: string, detail: string, needs_attention: bool, action_label: string|null}
      */
     public static function fromVisitor(?Visitor $visitor, ?Carbon $now = null): array
     {
@@ -19,6 +19,8 @@ class SiteInstallHealth
                 'label' => 'Not installed',
                 'tone' => 'attention',
                 'detail' => 'No check-in yet',
+                'needs_attention' => true,
+                'action_label' => 'Finish install',
             ];
         }
 
@@ -29,6 +31,8 @@ class SiteInstallHealth
                 'label' => 'Live',
                 'tone' => 'ready',
                 'detail' => 'Seen '.$lastSeenAt->diffForHumans(),
+                'needs_attention' => false,
+                'action_label' => null,
             ];
         }
 
@@ -36,6 +40,8 @@ class SiteInstallHealth
             'label' => 'Needs check',
             'tone' => 'manual',
             'detail' => 'Seen '.$lastSeenAt->diffForHumans(),
+            'needs_attention' => true,
+            'action_label' => 'Review install',
         ];
     }
 }
