@@ -217,9 +217,10 @@ password directly and generates the site public key automatically.
 After browser setup completes, Wayfindr signs in the first owner and sends them
 directly to the new site's install snippet. The site settings page includes a
 copy-ready widget script generated from the site public key, `APP_URL`, and any
-public Reverb settings available to the application. Use the dashboard's
-`Add site` action when you need separate public keys for staging, production,
-or public dogfood sites.
+public Reverb settings available to the application. It also links platform
+operators to `/operator` so they can review instance health before chasing site
+install issues. Use the dashboard's `Add site` action when you need separate
+public keys for staging, production, or public dogfood sites.
 
 The first owner is also marked as the initial platform operator. Open
 `/operator` after bootstrap to review safe system identity and instance

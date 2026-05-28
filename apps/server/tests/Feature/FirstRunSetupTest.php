@@ -65,7 +65,7 @@ test('first run setup creates the owner account site and session', function (): 
     $this->assertAuthenticatedAs($agent);
 });
 
-test('first run setup handoff shows install guidance and readiness link', function (): void {
+test('first run setup handoff shows install guidance and operator readiness links', function (): void {
     config()->set('app.url', 'https://support.example.test');
 
     $this->post('/setup', [
@@ -87,6 +87,8 @@ test('first run setup handoff shows install guidance and readiness link', functi
         ->assertSee('Next steps')
         ->assertSee('Copy this snippet into docs.example.test.')
         ->assertSee('Visit the site and send a test message from the widget.')
+        ->assertSee('/operator', false)
+        ->assertSee('Open operator console')
         ->assertSee('/dashboard/readiness', false)
         ->assertSee('data-wayfindr-site-key=&quot;'.$site->public_key.'&quot;', false);
 });
