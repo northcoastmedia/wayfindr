@@ -43,8 +43,9 @@ test('explicit platform operators can inspect the operator console', function ()
 });
 
 test('operator console shows safe system identity and documentation links', function (): void {
+    $this->app->detectEnvironment(fn (): string => 'production');
+
     config([
-        'app.env' => 'production',
         'app.debug' => false,
         'broadcasting.default' => 'reverb',
         'queue.default' => 'redis',
@@ -67,7 +68,7 @@ test('operator console shows safe system identity and documentation links', func
         ->assertSee('Source revision')
         ->assertSee('abc1234')
         ->assertSee('Environment')
-        ->assertSee('production')
+        ->assertSeeInOrder(['Environment', 'production', 'Debug mode'])
         ->assertSee('Debug mode')
         ->assertSee('Disabled')
         ->assertSee('PHP version')
