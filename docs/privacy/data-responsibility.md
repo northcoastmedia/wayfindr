@@ -29,6 +29,12 @@ on local law and the operator's relationship with visitors, the operator may be
 acting as a controller, processor, business, service provider, or another local
 equivalent.
 
+This operator responsibility is distinct from account roles inside the product.
+An account owner or admin can manage tenant support settings, but platform or
+instance authority should remain separate from normal support access. See
+[Platform Operator Boundary](../product/platform-operator-boundary.md) for that
+product boundary.
+
 Wayfindr should remind operators that:
 
 - visitor messages, cobrowse metadata, tickets, audit logs, and attachments can

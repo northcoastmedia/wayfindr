@@ -18,6 +18,7 @@ This roadmap is directional and should not include private business strategy.
 - Agent authentication.
 - Site-scoped agent access.
 - RBAC permission inventory and policy waypoints.
+- Platform operator boundary documentation.
 - Shared inbox.
 - Visitor list.
 - Visitor context panel.
@@ -36,6 +37,7 @@ This roadmap is directional and should not include private business strategy.
 - Assignment, categories, tags, and site access management.
 - Laravel policy-backed authorization.
 - Account roles for owner, admin, and agent authority.
+- First platform operator scaffold for instance readiness and diagnostics.
 - Canned replies.
 - Conversation summaries and ticket suggestions.
 - External ticket integration planning and provider-neutral link model (see
