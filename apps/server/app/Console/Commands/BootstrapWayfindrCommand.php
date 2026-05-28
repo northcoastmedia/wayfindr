@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\AccountRole;
+use App\Enums\PlatformRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -66,6 +67,7 @@ class BootstrapWayfindrCommand extends Command
             [
                 'account_id' => $account->id,
                 'account_role' => AccountRole::Owner,
+                'platform_role' => PlatformRole::Operator,
                 'name' => $agentName,
                 'password' => Hash::make($password),
             ],

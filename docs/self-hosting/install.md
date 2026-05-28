@@ -24,6 +24,11 @@ After the application is deployed and the environment is configured, visit
 site from the browser. The setup screen is available only while the database has
 no account, account-scoped agent, or site records.
 
+The first owner is also marked as the initial platform operator so they can use
+`/operator` for instance readiness diagnostics. Platform operator access remains
+separate from account roles and does not grant support-data visibility by
+itself.
+
 The intended self-hosting baseline is still Docker Compose with:
 
 - Laravel web process,

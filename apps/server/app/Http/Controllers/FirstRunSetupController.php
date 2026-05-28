@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountRole;
+use App\Enums\PlatformRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -55,6 +56,7 @@ class FirstRunSetupController extends Controller
             $agent = User::query()->create([
                 'account_id' => $account->id,
                 'account_role' => AccountRole::Owner,
+                'platform_role' => PlatformRole::Operator,
                 'name' => $agentName,
                 'email' => mb_strtolower(trim($validated['agent_email'])),
                 'password' => Hash::make($validated['password']),

@@ -5,8 +5,8 @@ Wayfindr starts with a small relational model owned by the Laravel server. The m
 ## Core Records
 
 - `accounts`: tenant boundary for a support team.
-- `users`: Laravel users attached to one account with a starter `account_role` of `owner`, `admin`, or `agent`.
-- Platform/instance operator authority is not modeled yet and should not be overloaded onto `account_role`. When an operator-only workflow exists, prefer an explicit platform role or operator membership that stays separate from account support access.
+- `users`: Laravel users attached to one account with a starter `account_role` of `owner`, `admin`, or `agent`, plus optional `platform_role` instance authority.
+- Platform/instance operator authority should not be overloaded onto `account_role`. The first scaffold uses `users.platform_role` for explicit operator access while keeping it separate from account support access.
 - `sites`: install targets owned by an account. Each site has a public key used by widgets and integrations.
 - `site_user`: support-agent access for sites. Empty site membership means account-wide fallback for early installs; explicit rows narrow the support queue to assigned agents.
 - `visitors`: anonymous or identified people seen on a site.
@@ -44,4 +44,4 @@ operator-facing data inventory and retention posture.
   Wayfindr ticket lifecycle.
 - Audit actors and subjects are polymorphic so the model can track agent, visitor, conversation, ticket, and cobrowse events without creating a new audit table per feature.
 - Integration packages should stay thin and write through Laravel APIs rather than owning product persistence directly.
-- Platform operator data, if added later, should describe instance authority only. It should not grant account support visibility, customer content access, or site-access bypass by default.
+- Platform operator data should describe instance authority only. It should not grant account support visibility, customer content access, or site-access bypass by default.

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AccountRole;
+use App\Enums\PlatformRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -47,6 +48,7 @@ test('first run setup creates the owner account site and session', function (): 
         ->and($account->slug)->toBe('acme-support')
         ->and($agent->account_id)->toBe($account->id)
         ->and($agent->account_role)->toBe(AccountRole::Owner)
+        ->and($agent->platform_role)->toBe(PlatformRole::Operator)
         ->and($agent->name)->toBe('Ada Agent')
         ->and($agent->email)->toBe('ada@example.com')
         ->and(Hash::check('correct-horse-battery-staple', $agent->password))->toBeTrue()
