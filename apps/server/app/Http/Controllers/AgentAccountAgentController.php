@@ -7,6 +7,7 @@ use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,7 @@ class AgentAccountAgentController extends Controller
     {
         $actor = $request->user();
 
-        abort_unless($actor?->account_id && $actor->isAdmin(), 403);
+        Gate::forUser($actor)->authorize('createAccountAgent', User::class);
 
         if (is_string($request->input('email'))) {
             $request->merge([

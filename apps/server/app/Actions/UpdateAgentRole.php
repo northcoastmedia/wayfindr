@@ -9,6 +9,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class UpdateAgentRole
@@ -20,7 +21,7 @@ class UpdateAgentRole
             $actor = $this->lockedUser($users, $actor);
             $target = $this->lockedUser($users, $target);
 
-            $this->authorize($actor, $target);
+            Gate::forUser($actor)->authorize('updateRole', $target);
             $this->preventLastOwnerRemoval($target, $role);
             $this->preventSelfChange($actor, $target);
 
@@ -81,17 +82,6 @@ class UpdateAgentRole
         }
 
         return $lockedUser;
-    }
-
-    private function authorize(User $actor, User $target): void
-    {
-        if (! $actor->isOwner() || $actor->account_id === null) {
-            throw new AuthorizationException('Only account owners can change agent roles.');
-        }
-
-        if ($target->account_id === null || $target->account_id !== $actor->account_id) {
-            throw new AuthorizationException('Agent roles can only be changed inside the same account.');
-        }
     }
 
     private function preventSelfChange(User $actor, User $target): void
