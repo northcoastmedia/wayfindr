@@ -88,7 +88,7 @@ Platform authority must not imply support authority. A platform operator should 
 The first platform scaffold should stay small:
 
 - keep `/dashboard` for account and agent work;
-- `/operator` starts with readiness only and remains separate from the account dashboard;
+- `/operator` starts with safe system identity and readiness details, and remains separate from the account dashboard;
 - `users.platform_role` grants explicit operator access without overloading `account_role`;
 - never use platform authority as a shortcut around site access;
 - audit platform actions that change accounts, access, retention, integrations, or availability.
@@ -172,7 +172,7 @@ Every RBAC implementation slice should include tests for:
 9. Add agent self-service profile basics. Agents can update their display name, change their password, and choose their alert preference from the dashboard profile screen, with password changes recorded as audit events.
 10. Add agent deactivation. Owners can suspend or restore another same-account user. Admins can suspend or restore non-owner agents. Deactivated users cannot sign in or continue using existing dashboard sessions, and historical records remain attached to the deactivated user.
 11. Add owner/admin elevated behavior only when the product decision is explicit.
-12. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, and readiness-only diagnostics.
+12. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, safe system identity, documentation links, and readiness diagnostics.
 
 ## Role Management Guardrails
 

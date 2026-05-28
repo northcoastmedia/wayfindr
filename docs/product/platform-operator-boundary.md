@@ -68,7 +68,7 @@ The first code scaffold should be small:
 - no customer-data access;
 - no account-wide support visibility shortcut;
 - `users.platform_role` is nullable and grants explicit operator access only when set to `operator`;
-- `/operator` starts with readiness and instance diagnostics;
+- `/operator` starts with system identity, release/runtime details, documentation links, and instance readiness diagnostics;
 - browser and CLI bootstrap mark the first local user as both account owner and platform operator.
 
 Other account owners and admins remain account roles only. They do not become platform operators by implication.

@@ -491,6 +491,10 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
+        .system-identity-grid {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
         .readiness-list {
             display: grid;
         }
