@@ -27,7 +27,9 @@ no account, account-scoped agent, or site records.
 The first owner is also marked as the initial platform operator so they can use
 `/operator` for instance readiness diagnostics. Platform operator access remains
 separate from account roles and does not grant support-data visibility by
-itself.
+itself. The first site handoff links to this operator console alongside the
+account readiness page so setup gaps stay easy to find after the widget snippet
+is copied.
 
 Set `WAYFINDR_VERSION` and `WAYFINDR_COMMIT` when your deployment process can
 provide release identity values. They are optional, but they make `/operator`

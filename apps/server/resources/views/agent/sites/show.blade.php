@@ -136,6 +136,9 @@
                 <div class="section-header">
                     <h2 id="install-snippet-heading">Install snippet</h2>
                     <div class="section-actions">
+                        @if ($agent->isPlatformOperator())
+                            <a class="text-link" href="{{ route('operator.dashboard') }}">Open operator console</a>
+                        @endif
                         @if ($agent->isAdmin())
                             <a class="text-link" href="{{ route('dashboard.readiness.show') }}">Review readiness</a>
                         @endif
@@ -157,6 +160,9 @@
                         <p><strong>Next steps</strong></p>
                         <p>Copy this snippet into {{ $site->domain ?? 'your site' }}.</p>
                         <p>Visit the site and send a test message from the widget.</p>
+                        @if ($agent->isPlatformOperator())
+                            <p>Open the operator console to review instance health, release identity, and self-hosting docs.</p>
+                        @endif
                         <p>Review readiness if queues, scheduler, storage, or realtime still need attention.</p>
                     </div>
                 </div>
