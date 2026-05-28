@@ -31,7 +31,7 @@
                                 <tr>
                                     <th scope="col">Site</th>
                                     <th scope="col">Access</th>
-                                    <th scope="col">Last check-in</th>
+                                    <th scope="col">Install health</th>
                                     <th scope="col">Last page</th>
                                 </tr>
                             </thead>
@@ -39,6 +39,7 @@
                                 @foreach ($sites as $site)
                                     @php
                                         $latestVisitor = $site->latestVisitor;
+                                        $installHealth = \App\Support\SiteInstallHealth::fromVisitor($latestVisitor);
                                         $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
                                         $supportAgentCount = (int) $site->support_agents_count;
                                     @endphp
@@ -57,11 +58,8 @@
                                             @endif
                                         </td>
                                         <td>
-                                            @if ($latestVisitor?->last_seen_at)
-                                                Seen {{ $latestVisitor->last_seen_at->diffForHumans() }}
-                                            @else
-                                                Not seen yet
-                                            @endif
+                                            <span class="readiness-status" data-status="{{ $installHealth['tone'] }}">{{ $installHealth['label'] }}</span>
+                                            <div class="lede">{{ $installHealth['detail'] }}</div>
                                         </td>
                                         <td>{{ $lastPageUrl ?: 'Not reported' }}</td>
                                     </tr>
