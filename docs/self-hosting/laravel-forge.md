@@ -81,6 +81,8 @@ APP_ENV=staging
 APP_KEY=base64:replace-with-generated-key
 APP_DEBUG=false
 APP_URL=https://replace-with-forge-site-host
+WAYFINDR_VERSION=
+WAYFINDR_COMMIT=
 
 LOG_CHANNEL=stack
 LOG_STACK=single
@@ -220,11 +222,16 @@ public Reverb settings available to the application. Use the dashboard's
 or public dogfood sites.
 
 The first owner is also marked as the initial platform operator. Open
-`/operator` after bootstrap to review instance readiness checks. Account owners
-and admins can still use `/dashboard/readiness` for the same install checkup
-from the account dashboard. These pages flag common self-hosting setup gaps such
-as missing app keys, database connectivity problems, queue worker configuration,
-Reverb settings, storage permissions, and scheduler setup.
+`/operator` after bootstrap to review safe system identity and instance
+readiness checks. Account owners and admins can still use
+`/dashboard/readiness` for the same install checkup from the account dashboard.
+These pages flag common self-hosting setup gaps such as missing app keys,
+database connectivity problems, queue worker configuration, Reverb settings,
+storage permissions, and scheduler setup.
+
+`WAYFINDR_VERSION` and `WAYFINDR_COMMIT` are optional release identity values.
+Set them from your deploy process when available so the operator console can
+show the running build without exposing secrets.
 
 The command refuses to run when bootstrap records already exist. Use `--force`
 only when you intentionally want to create or update the supplied account,

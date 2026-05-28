@@ -5,6 +5,36 @@
         Signed in as {{ $operator->name }}. Platform operator access does not grant support data access.
     </p>
 
+    <section class="section" aria-labelledby="system-identity-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="system-identity-heading">System identity</h2>
+                <p class="lede">Safe release and runtime details for support and troubleshooting.</p>
+            </div>
+        </div>
+
+        <div class="meta-grid system-identity-grid">
+            @foreach ($systemIdentity['items'] as $item)
+                <div class="meta-item">
+                    <span class="meta-label">{{ $item['label'] }}</span>
+                    <span class="meta-value">{{ $item['value'] }}</span>
+                </div>
+            @endforeach
+        </div>
+
+        <div class="management-list">
+            @foreach ($systemIdentity['docs'] as $doc)
+                <a class="management-link" href="{{ $doc['url'] }}" target="_blank" rel="noreferrer">
+                    <span>
+                        <strong>{{ $doc['label'] }}</strong>
+                        <span class="lede">{{ $doc['description'] }}</span>
+                    </span>
+                    <span class="management-action">Open docs</span>
+                </a>
+            @endforeach
+        </div>
+    </section>
+
     <section class="section">
         <div class="section-header">
             <div>

@@ -29,6 +29,10 @@ The first owner is also marked as the initial platform operator so they can use
 separate from account roles and does not grant support-data visibility by
 itself.
 
+Set `WAYFINDR_VERSION` and `WAYFINDR_COMMIT` when your deployment process can
+provide release identity values. They are optional, but they make `/operator`
+more useful when someone needs to confirm what code is running.
+
 The intended self-hosting baseline is still Docker Compose with:
 
 - Laravel web process,
