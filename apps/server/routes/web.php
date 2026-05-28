@@ -17,8 +17,10 @@ use App\Http\Controllers\AgentTicketExternalIssueController;
 use App\Http\Controllers\AgentTicketExternalLinkController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\FirstRunSetupController;
+use App\Http\Controllers\OperatorDashboardController;
 use App\Http\Controllers\Widget\WidgetScriptController;
 use App\Http\Middleware\EnsureAgentIsActive;
+use App\Http\Middleware\EnsurePlatformOperator;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -121,3 +123,10 @@ Route::middleware(['auth', EnsureAgentIsActive::class])->group(function () {
         ->name('dashboard.conversations.cobrowse.end');
     Route::post('/logout', [SessionController::class, 'destroy'])->name('logout');
 });
+
+Route::middleware(['auth', EnsureAgentIsActive::class, EnsurePlatformOperator::class])
+    ->prefix('operator')
+    ->name('operator.')
+    ->group(function (): void {
+        Route::get('/', OperatorDashboardController::class)->name('dashboard');
+    });

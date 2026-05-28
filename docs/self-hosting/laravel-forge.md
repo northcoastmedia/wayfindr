@@ -219,10 +219,12 @@ public Reverb settings available to the application. Use the dashboard's
 `Add site` action when you need separate public keys for staging, production,
 or public dogfood sites.
 
-Open `/dashboard/readiness` after bootstrap to review the operator readiness
-checks. The page flags common self-hosting setup gaps such as missing app keys,
-database connectivity problems, queue worker configuration, Reverb settings,
-storage permissions, and scheduler setup.
+The first owner is also marked as the initial platform operator. Open
+`/operator` after bootstrap to review instance readiness checks. Account owners
+and admins can still use `/dashboard/readiness` for the same install checkup
+from the account dashboard. These pages flag common self-hosting setup gaps such
+as missing app keys, database connectivity problems, queue worker configuration,
+Reverb settings, storage permissions, and scheduler setup.
 
 The command refuses to run when bootstrap records already exist. Use `--force`
 only when you intentionally want to create or update the supplied account,
@@ -357,7 +359,7 @@ background process reloads the active release.
 16. Add the queue worker and scheduler.
 17. Add the Reverb process when switching `BROADCAST_CONNECTION` to `reverb`.
 18. Sign in with the generated first agent credentials.
-19. Review `/dashboard/readiness` and resolve any setup gaps.
+19. Review `/operator` or `/dashboard/readiness` and resolve any setup gaps.
 
 ## Smoke Test
 

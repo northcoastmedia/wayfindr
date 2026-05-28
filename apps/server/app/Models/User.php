@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\AccountRole;
+use App\Enums\PlatformRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['account_id', 'account_role', 'name', 'email', 'password', 'deactivated_at', 'alert_preferences'])]
+#[Fillable(['account_id', 'account_role', 'platform_role', 'name', 'email', 'password', 'deactivated_at', 'alert_preferences'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -37,6 +38,7 @@ class User extends Authenticatable
     {
         return [
             'account_role' => AccountRole::class,
+            'platform_role' => PlatformRole::class,
             'alert_preferences' => 'array',
             'deactivated_at' => 'datetime',
             'email_verified_at' => 'datetime',
@@ -79,6 +81,11 @@ class User extends Authenticatable
     public function isAgent(): bool
     {
         return $this->isAdmin() || $this->hasAccountRole(AccountRole::Agent);
+    }
+
+    public function isPlatformOperator(): bool
+    {
+        return $this->platform_role === PlatformRole::Operator;
     }
 
     public function isDeactivated(): bool

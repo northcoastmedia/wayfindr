@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PlatformRole;
 use App\Models\Account;
 use App\Models\Site;
 use App\Models\User;
@@ -30,6 +31,7 @@ test('it creates the first account agent and site', function (): void {
     expect($account->name)->toBe('Acme Support')
         ->and($account->slug)->toBe('acme-support')
         ->and($agent->account_id)->toBe($account->id)
+        ->and($agent->platform_role)->toBe(PlatformRole::Operator)
         ->and($agent->name)->toBe('Ada Agent')
         ->and(Hash::check('correct-horse-battery-staple', $agent->password))->toBeTrue()
         ->and($site->account_id)->toBe($account->id)

@@ -18,7 +18,7 @@ Those are different jobs. Wayfindr should model them that way before the product
 
 ### Self-Hosted Community Edition
 
-A self-hosted operator controls the server, database, backups, environment variables, logs, queues, Reverb process, mail transport, and deployment pipeline. The first Wayfindr user may also be the account owner, but the product should still treat instance operation and account support authority as separate concepts.
+A self-hosted operator controls the server, database, backups, environment variables, logs, queues, Reverb process, mail transport, and deployment pipeline. The first Wayfindr user is created as both account owner and platform operator, but the product should still treat instance operation and account support authority as separate concepts.
 
 Self-hosted operators remain responsible for local data handling, access policies, employment rules, privacy notices, and legal obligations. Wayfindr can provide guardrails and reminders, but it cannot decide the operator's compliance posture for them. See [Data Responsibility](../privacy/data-responsibility.md) for the broader self-hosting stance.
 
@@ -67,11 +67,11 @@ The first code scaffold should be small:
 - no full platform-admin UI yet;
 - no customer-data access;
 - no account-wide support visibility shortcut;
-- no schema change until an operator-only route needs it;
-- a future `/operator` route group can start with readiness and instance diagnostics;
-- bootstrap may mark the first local user as both account owner and platform operator only when a platform role exists.
+- `users.platform_role` is nullable and grants explicit operator access only when set to `operator`;
+- `/operator` starts with readiness and instance diagnostics;
+- browser and CLI bootstrap mark the first local user as both account owner and platform operator.
 
-Until that scaffold is implemented, account owners and admins remain account roles only. They do not become platform operators by implication.
+Other account owners and admins remain account roles only. They do not become platform operators by implication.
 
 ## Sanity Checks
 
