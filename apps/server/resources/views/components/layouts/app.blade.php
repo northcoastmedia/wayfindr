@@ -569,6 +569,24 @@
             margin-top: 8px;
         }
 
+        .notice-copy-bordered {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .notice-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .health-action {
+            display: block;
+            margin-top: 6px;
+            width: fit-content;
+        }
+
         .notice-list {
             display: grid;
             gap: 8px;

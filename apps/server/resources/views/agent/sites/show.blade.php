@@ -11,6 +11,12 @@
                 $latestVisitor = $site->latestVisitor;
                 $lastSeenAt = $latestVisitor?->last_seen_at;
                 $lastPageUrl = data_get($latestVisitor?->metadata, 'last_page_url');
+                $installHealth = \App\Support\SiteInstallHealth::fromVisitor($latestVisitor);
+                $installAttentionTarget = $site->domain ?? 'the site';
+                $installAttentionSiteUrl = $site->domain ? 'https://'.$site->domain : null;
+                $installAttentionGuidance = $installHealth['label'] === 'Not installed'
+                    ? "Finish the widget install by copying the snippet below, loading {$installAttentionTarget}, then using Verify again."
+                    : "Check whether the widget still loads on {$installAttentionTarget}. If it does, use Verify again. If it does not, revisit the snippet.";
                 $installVerificationRefreshUrl = route('dashboard.sites.show', [
                     'site' => $site,
                     'verify' => now()->timestamp,
@@ -43,6 +49,27 @@
                     ->map(fn ($capability) => (string) $capability)
                     ->all();
             @endphp
+
+            @if ($installHealth['needs_attention'])
+                <section class="section" aria-labelledby="setup-attention-heading">
+                    <div class="section-header">
+                        <h2 id="setup-attention-heading">Setup attention</h2>
+                        <span class="readiness-status" data-status="{{ $installHealth['tone'] }}">{{ $installHealth['label'] }}</span>
+                    </div>
+
+                    <div class="notice-copy">
+                        <p><strong>{{ $installVerification['message'] }}</strong></p>
+                        <p>{{ $installAttentionGuidance }}</p>
+                        <div class="notice-actions">
+                            @if ($installAttentionSiteUrl)
+                                <a class="button secondary" href="{{ $installAttentionSiteUrl }}" rel="noopener noreferrer" target="_blank">Open site</a>
+                            @endif
+                            <a class="button secondary" href="#install-snippet">Jump to snippet</a>
+                            <a class="button" href="{{ $installVerificationRefreshUrl }}">Verify again</a>
+                        </div>
+                    </div>
+                </section>
+            @endif
 
             <section class="section" aria-labelledby="site-context-heading">
                 <div class="section-header">

@@ -62,6 +62,9 @@ test('dashboard shows site widget connection status from latest visitor check in
         ->get('/dashboard')
         ->assertOk()
         ->assertSee('Install health')
+        ->assertSee('2 sites need setup attention.')
+        ->assertSee('Review site installs')
+        ->assertSee('/dashboard/sites#site-install-health', false)
         ->assertSee('Wayfindr Public Site')
         ->assertSee('Live')
         ->assertSee('Seen 5 minutes ago')
@@ -69,9 +72,13 @@ test('dashboard shows site widget connection status from latest visitor check in
         ->assertSee('Quiet Docs')
         ->assertSee('Needs check')
         ->assertSee('Seen 2 days ago')
+        ->assertSee('Review install')
+        ->assertSee("/dashboard/sites/{$staleSite->id}#install-verification", false)
         ->assertSee('Unused Smoke Site')
         ->assertSee('Not installed')
         ->assertSee('No check-in yet')
+        ->assertSee('Finish install')
+        ->assertSee("/dashboard/sites/{$quietSite->id}#install-verification", false)
         ->assertDontSee('https://wayfindr.cc/old')
         ->assertDontSee('Other Site')
         ->assertDontSee('https://other.example.test');
@@ -112,6 +119,7 @@ test('site index shows install health cues for visible sites', function (): void
     $this->actingAs($agent)
         ->get('/dashboard/sites')
         ->assertOk()
+        ->assertSee('id="site-install-health"', false)
         ->assertSee('Install health')
         ->assertSee('Wayfindr Public Site')
         ->assertSee('Live')
@@ -119,9 +127,13 @@ test('site index shows install health cues for visible sites', function (): void
         ->assertSee('Quiet Docs')
         ->assertSee('Needs check')
         ->assertSee('Seen 2 days ago')
+        ->assertSee('Review install')
+        ->assertSee("/dashboard/sites/{$staleSite->id}#install-verification", false)
         ->assertSee('Unused Smoke Site')
         ->assertSee('Not installed')
         ->assertSee('No check-in yet')
+        ->assertSee('Finish install')
+        ->assertSee("/dashboard/sites/{$quietSite->id}#install-verification", false)
         ->assertSee('https://wayfindr.cc/pricing')
         ->assertSee('https://quiet.example.test/help');
 });
@@ -152,6 +164,7 @@ test('site settings show the latest widget check in details', function (): void 
         ->assertSee('The widget has checked in recently.')
         ->assertSee('Last verified page')
         ->assertSee('Verify again')
+        ->assertDontSee('Setup attention')
         ->assertSee("/dashboard/sites/{$site->id}?verify=", false)
         ->assertDontSee("href=\"http://localhost/dashboard/sites/{$site->id}#install-verification\"", false);
 });
@@ -167,10 +180,14 @@ test('site settings guide agents when the widget has not checked in yet', functi
     $this->actingAs($agent)
         ->get("/dashboard/sites/{$site->id}")
         ->assertOk()
+        ->assertSee('Setup attention')
         ->assertSee('Install verification')
         ->assertSee('Not seen yet')
         ->assertSee('Wayfindr has not seen this widget check in yet.')
         ->assertSee('Copy the snippet, load the site, then refresh this page.')
+        ->assertSee('Finish the widget install by copying the snippet below, loading fresh.example.test, then using Verify again.')
+        ->assertSee('Jump to snippet')
+        ->assertSee('#install-snippet', false)
         ->assertSee('Verify again');
 });
 
@@ -193,10 +210,15 @@ test('site settings call out stale widget check ins', function (): void {
     $this->actingAs($agent)
         ->get("/dashboard/sites/{$site->id}")
         ->assertOk()
+        ->assertSee('Setup attention')
         ->assertSee('Install verification')
         ->assertSee('Last seen 2 days ago')
         ->assertSee('Wayfindr has seen this widget before, but not recently.')
         ->assertSee('Visit the site and refresh this page if it should still be active.')
+        ->assertSee('Check whether the widget still loads on quiet.example.test. If it does, use Verify again. If it does not, revisit the snippet.')
+        ->assertSee('Open site')
+        ->assertSee('https://quiet.example.test', false)
+        ->assertSee('Jump to snippet')
         ->assertSee('Last verified page')
         ->assertSee('https://quiet.example.test/help');
 });

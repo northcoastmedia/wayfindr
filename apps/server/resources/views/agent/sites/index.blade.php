@@ -14,7 +14,7 @@
                 <p class="status-message">{{ session('status') }}</p>
             @endif
 
-            <section class="section" aria-labelledby="sites-heading">
+            <section id="site-install-health" class="section" aria-labelledby="sites-heading">
                 <div class="section-header">
                     <h2 id="sites-heading">Connected sites</h2>
                     <span class="lede">Visible to your support role</span>
@@ -60,6 +60,11 @@
                                         <td>
                                             <span class="readiness-status" data-status="{{ $installHealth['tone'] }}">{{ $installHealth['label'] }}</span>
                                             <div class="lede">{{ $installHealth['detail'] }}</div>
+                                            @if ($installHealth['needs_attention'])
+                                                <a class="health-action text-link" href="{{ route('dashboard.sites.show', $site) }}#install-verification">
+                                                    {{ $installHealth['action_label'] }}
+                                                </a>
+                                            @endif
                                         </td>
                                         <td>{{ $lastPageUrl ?: 'Not reported' }}</td>
                                     </tr>
