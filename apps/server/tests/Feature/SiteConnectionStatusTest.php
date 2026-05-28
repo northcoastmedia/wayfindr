@@ -19,6 +19,10 @@ test('dashboard shows site widget connection status from latest visitor check in
         'name' => 'Unused Smoke Site',
         'domain' => 'smoke.example.test',
     ]);
+    $staleSite = Site::factory()->for($account)->create([
+        'name' => 'Quiet Docs',
+        'domain' => 'quiet.example.test',
+    ]);
     $otherAccount = Account::factory()->create();
     $otherSite = Site::factory()->for($otherAccount)->create(['name' => 'Other Site']);
 
@@ -38,6 +42,14 @@ test('dashboard shows site widget connection status from latest visitor check in
         ],
     ]);
 
+    Visitor::factory()->for($staleSite)->create([
+        'anonymous_id' => 'anon-stale',
+        'last_seen_at' => now()->subDays(2),
+        'metadata' => [
+            'last_page_url' => 'https://quiet.example.test/help',
+        ],
+    ]);
+
     Visitor::factory()->for($otherSite)->create([
         'anonymous_id' => 'anon-other',
         'last_seen_at' => now()->subMinute(),
@@ -49,15 +61,69 @@ test('dashboard shows site widget connection status from latest visitor check in
     $this->actingAs($agent)
         ->get('/dashboard')
         ->assertOk()
-        ->assertSee('Last check-in')
+        ->assertSee('Install health')
         ->assertSee('Wayfindr Public Site')
+        ->assertSee('Live')
         ->assertSee('Seen 5 minutes ago')
         ->assertSee('https://wayfindr.cc/pricing')
+        ->assertSee('Quiet Docs')
+        ->assertSee('Needs check')
+        ->assertSee('Seen 2 days ago')
         ->assertSee('Unused Smoke Site')
-        ->assertSee('Not seen yet')
+        ->assertSee('Not installed')
+        ->assertSee('No check-in yet')
         ->assertDontSee('https://wayfindr.cc/old')
         ->assertDontSee('Other Site')
         ->assertDontSee('https://other.example.test');
+});
+
+test('site index shows install health cues for visible sites', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create();
+    $connectedSite = Site::factory()->for($account)->create([
+        'name' => 'Wayfindr Public Site',
+        'domain' => 'wayfindr.cc',
+    ]);
+    $quietSite = Site::factory()->for($account)->create([
+        'name' => 'Unused Smoke Site',
+        'domain' => 'smoke.example.test',
+    ]);
+    $staleSite = Site::factory()->for($account)->create([
+        'name' => 'Quiet Docs',
+        'domain' => 'quiet.example.test',
+    ]);
+
+    Visitor::factory()->for($connectedSite)->create([
+        'anonymous_id' => 'anon-current',
+        'last_seen_at' => now()->subMinutes(5),
+        'metadata' => [
+            'last_page_url' => 'https://wayfindr.cc/pricing',
+        ],
+    ]);
+
+    Visitor::factory()->for($staleSite)->create([
+        'anonymous_id' => 'anon-stale',
+        'last_seen_at' => now()->subDays(2),
+        'metadata' => [
+            'last_page_url' => 'https://quiet.example.test/help',
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/sites')
+        ->assertOk()
+        ->assertSee('Install health')
+        ->assertSee('Wayfindr Public Site')
+        ->assertSee('Live')
+        ->assertSee('Seen 5 minutes ago')
+        ->assertSee('Quiet Docs')
+        ->assertSee('Needs check')
+        ->assertSee('Seen 2 days ago')
+        ->assertSee('Unused Smoke Site')
+        ->assertSee('Not installed')
+        ->assertSee('No check-in yet')
+        ->assertSee('https://wayfindr.cc/pricing')
+        ->assertSee('https://quiet.example.test/help');
 });
 
 test('site settings show the latest widget check in details', function (): void {
