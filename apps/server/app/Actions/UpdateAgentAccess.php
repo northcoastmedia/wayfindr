@@ -5,10 +5,10 @@ namespace App\Actions;
 use App\Enums\AccountRole;
 use App\Models\AuditEvent;
 use App\Models\User;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class UpdateAgentAccess
@@ -18,7 +18,7 @@ class UpdateAgentAccess
         return DB::transaction(function () use ($actor, $target): User {
             [$actor, $target] = $this->lockedUsers($actor, $target);
 
-            $this->authorize($actor, $target);
+            Gate::forUser($actor)->authorize('deactivate', $target);
 
             if ($target->isDeactivated()) {
                 return $target;
@@ -39,7 +39,7 @@ class UpdateAgentAccess
         return DB::transaction(function () use ($actor, $target): User {
             [$actor, $target] = $this->lockedUsers($actor, $target);
 
-            $this->authorize($actor, $target);
+            Gate::forUser($actor)->authorize('reactivate', $target);
 
             if (! $target->isDeactivated()) {
                 return $target;
@@ -91,32 +91,9 @@ class UpdateAgentAccess
         return $lockedUser;
     }
 
-    private function authorize(User $actor, User $target): void
-    {
-        if ($actor->isDeactivated()) {
-            throw new AuthorizationException('Deactivated agents cannot manage account access.');
-        }
-
-        if (! $actor->isAdmin() || $actor->account_id === null) {
-            throw new AuthorizationException('Only account owners and admins can manage agent access.');
-        }
-
-        if ($target->account_id === null || $target->account_id !== $actor->account_id) {
-            throw new AuthorizationException('Agent access can only be changed inside the same account.');
-        }
-
-        if ($actor->is($target)) {
-            throw new AuthorizationException('Agents cannot deactivate themselves.');
-        }
-
-        if (! $actor->isOwner() && $target->account_role !== AccountRole::Agent) {
-            throw new AuthorizationException('Only account owners can manage owner or admin access.');
-        }
-    }
-
     private function preventLastActiveOwnerDeactivation(User $target): void
     {
-        if ($target->account_role !== AccountRole::Owner) {
+        if (! $target->isOwner()) {
             return;
         }
 

@@ -55,10 +55,10 @@ See [Platform Operator Boundary](platform-operator-boundary.md) for the product 
 - RBAC should be implemented through Laravel policies and gates instead of scattered controller conditionals.
 - Role checks should build on explicit account membership and site access, not replace them.
 - Platform operator authority should stay separate from account roles and must not bypass site access in account support workflows.
-- New agents should start as `agent`; role elevation remains an owner-only action.
-- Role changes start owner-only, with same-account boundaries, self-change denial, last-owner protection, and audit events behind the dashboard role controls.
+- New agents should start as `agent`; `UserPolicy` keeps dashboard agent creation limited to active owners and admins.
+- Role changes start owner-only, with same-account boundaries in `UserPolicy`, plus self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Agent password changes are self-service from the profile screen and should be audited without exposing password material.
-- Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account, and create audit events for deactivation/reactivation.
+- Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account through `UserPolicy`, and create audit events for deactivation/reactivation.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.
 - Agent alert preferences can narrow or suppress new unread alerts without changing the underlying site access or assignment rules.
