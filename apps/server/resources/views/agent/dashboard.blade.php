@@ -4,7 +4,7 @@
 
             <section class="section" aria-labelledby="manage-heading">
                 <div class="section-header">
-                    <h2 id="manage-heading">Manage</h2>
+                    <h2 id="manage-heading">Workspace shortcuts</h2>
                     <span class="lede">Common workspace paths</span>
                 </div>
 
@@ -30,17 +30,29 @@
                         </span>
                         <span class="management-action">Open</span>
                     </a>
-                    @if ($agent->isAdmin())
-                        <a class="management-link" href="{{ route('dashboard.readiness.show') }}">
-                            <span>
-                                <strong>Operator readiness</strong>
-                                <span class="lede">Check app key, database, queues, realtime, storage, and scheduler setup.</span>
-                            </span>
-                            <span class="management-action">Open</span>
-                        </a>
-                    @endif
                 </div>
             </section>
+
+            @if ($adminShortcuts !== [])
+                <section class="section" aria-labelledby="admin-command-center-heading">
+                    <div class="section-header">
+                        <h2 id="admin-command-center-heading">Admin command center</h2>
+                        <span class="lede">Account controls for people with keys</span>
+                    </div>
+
+                    <div class="management-list">
+                        @foreach ($adminShortcuts as $adminShortcut)
+                            <a class="management-link" href="{{ $adminShortcut['href'] }}">
+                                <span>
+                                    <strong>{{ $adminShortcut['label'] }}</strong>
+                                    <span class="lede">{{ $adminShortcut['description'] }}</span>
+                                </span>
+                                <span class="management-action">{{ $adminShortcut['action'] }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
 
             <section class="section" aria-labelledby="data-responsibility-heading">
                 <div class="section-header">
@@ -149,7 +161,6 @@
                     </table>
                 </div>
             </section>
-
             <section id="sites" class="section" aria-labelledby="sites-heading">
                 @php
                     $sitesNeedingInstallAttention = $sites
