@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Enums\AccountRole;
 use App\Models\Account;
+use App\Models\AuditEvent;
 use App\Models\Site;
 use App\Models\User;
 use App\Support\ExternalIssueCapability;
 use App\Support\ExternalIssueProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -101,6 +104,7 @@ class AgentSiteController extends Controller
             'account' => $account,
             'accountAgents' => $accountAgents,
             'agent' => $agent,
+            'canViewSiteActivity' => $agent->isAdmin(),
             'canManageIntegrations' => Gate::forUser($agent)->allows('manageIntegrations', $site),
             'canManageSiteAccess' => Gate::forUser($agent)->allows('manageAccess', $site),
             'canUpdatePrivacy' => Gate::forUser($agent)->allows('updatePrivacy', $site),
@@ -110,12 +114,45 @@ class AgentSiteController extends Controller
             'externalIssueProviders' => ExternalIssueProvider::options(),
             'maskSelectors' => $this->maskSelectors($site),
             'site' => $site,
+            'siteActivity' => $this->siteActivityItems($site, $agent),
+            'siteActivityAuditUrl' => $agent->isAdmin()
+                ? route('dashboard.account.audit.index', [
+                    'audit_action' => 'site_access.updated',
+                    'audit_search' => $site->name,
+                ])
+                : null,
             'siteExternalIssueProjects' => $site->externalIssueProjects,
             'siteHasExplicitSupportAgents' => $site->hasExplicitSupportAgents(),
             'supportAgentIds' => $supportAgentIds,
             'supportAgents' => $accountAgents->whereIn('id', $supportAgentIds)->values(),
             'widgetInstallSnippet' => $this->widgetInstallSnippet($site),
         ]);
+    }
+
+    /**
+     * @return Collection<int, array{label: string, actor: string, subject: string, body: string, occurred_at: Carbon|null}>
+     */
+    private function siteActivityItems(Site $site, User $agent): Collection
+    {
+        if (! $agent->isAdmin()) {
+            return collect();
+        }
+
+        return $site->auditEvents()
+            ->with(['actor', 'subject'])
+            ->where('account_id', $site->account_id)
+            ->where('action', 'site_access.updated')
+            ->latest('occurred_at')
+            ->latest('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (AuditEvent $event): array => [
+                'label' => 'Site access updated',
+                'actor' => $event->actor instanceof User ? $event->actor->name : 'System',
+                'subject' => $event->subject instanceof Site ? $event->subject->name : $site->name,
+                'body' => 'Updated support access',
+                'occurred_at' => $event->occurred_at,
+            ]);
     }
 
     public function update(Request $request, Site $site): RedirectResponse

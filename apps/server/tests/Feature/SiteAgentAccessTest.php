@@ -505,6 +505,84 @@ test('plain agents can see site access context but cannot manage it', function (
         ->toBe([$agent->id, $teammate->id]);
 });
 
+test('admins can review recent site access activity from the site settings page', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $agent = User::factory()->for($account)->create([
+        'name' => 'Bea Builder',
+    ]);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Acme Docs',
+        'domain' => 'docs.example.test',
+    ]);
+    $site->supportAgents()->attach([$admin->id, $agent->id]);
+
+    AuditEvent::factory()->for($account)->for($site)->create([
+        'actor_type' => $admin->getMorphClass(),
+        'actor_id' => $admin->id,
+        'subject_type' => $site->getMorphClass(),
+        'subject_id' => $site->id,
+        'action' => 'site_access.updated',
+        'metadata' => [
+            'before_agent_ids' => [$admin->id],
+            'after_agent_ids' => [$admin->id, $agent->id],
+            'added_agent_ids' => [$agent->id],
+            'removed_agent_ids' => [],
+            'api_token' => 'should-not-render',
+        ],
+        'occurred_at' => now()->subMinutes(3),
+    ]);
+
+    $this->actingAs($admin)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Recent site access activity')
+        ->assertSee('1 shown')
+        ->assertSee('Site access updated')
+        ->assertSee('Updated support access')
+        ->assertSee('Ada Admin')
+        ->assertSee('Acme Docs')
+        ->assertSee(route('dashboard.account.audit.index', [
+            'audit_action' => 'site_access.updated',
+            'audit_search' => 'Acme Docs',
+        ]))
+        ->assertDontSee('should-not-render');
+});
+
+test('plain agents do not see site access activity audit affordances', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $site->supportAgents()->attach([$admin->id, $agent->id]);
+
+    AuditEvent::factory()->for($account)->for($site)->create([
+        'actor_type' => $admin->getMorphClass(),
+        'actor_id' => $admin->id,
+        'subject_type' => $site->getMorphClass(),
+        'subject_id' => $site->id,
+        'action' => 'site_access.updated',
+        'metadata' => [],
+        'occurred_at' => now(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertDontSee('Recent site access activity')
+        ->assertDontSee('View full audit log')
+        ->assertDontSee('/dashboard/account/audit', false);
+});
+
 test('site access management rejects agents from another account', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $otherAccount = Account::factory()->create(['name' => 'Other Support']);
