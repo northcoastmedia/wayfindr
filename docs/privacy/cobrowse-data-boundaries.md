@@ -37,6 +37,27 @@ After consent, the widget may send:
 Those payloads should remain compact, bounded, and recoverable. They should not
 be treated as a permanent recording of the visitor's browser.
 
+## Payload Budget Boundary
+
+Wayfindr treats cobrowse payload budgets as a product contract, not incidental
+validation. Current server-side limits are:
+
+- snapshot HTML: 65,535 characters,
+- snapshot text: 10,000 characters,
+- mutation batch: 50 mutation records,
+- mutation text: 5,000 characters per record,
+- mutation HTML: 10,000 characters per record,
+- retained mutation batches: 20 recent batches,
+- telemetry payload sample: 10,485,760 bytes.
+
+The widget may send smaller payloads than these limits. The server remains the
+source of truth because older widgets, custom integrations, and hostile clients
+cannot be trusted to self-report their size honestly.
+
+Under pressure, Wayfindr should prefer dropping or skipping lower-value mutation
+details over sending raw sensitive values, unbounded snapshots, or oversized
+session metadata.
+
 ## Masking Boundary
 
 The widget masks explicit selectors and inferred sensitive elements before

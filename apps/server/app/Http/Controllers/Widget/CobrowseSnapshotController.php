@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\Site;
+use App\Support\CobrowsePayloadBudget;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,8 +22,8 @@ class CobrowseSnapshotController extends Controller
             'visitor_token' => ['nullable', 'string', 'max:4096'],
             'page_url' => ['required', 'string', 'max:2048'],
             'title' => ['nullable', 'string', 'max:255'],
-            'html' => ['required', 'string', 'max:65535'],
-            'text' => ['required', 'string', 'max:10000'],
+            'html' => ['required', 'string', 'max:'.CobrowsePayloadBudget::SNAPSHOT_HTML_MAX_CHARACTERS],
+            'text' => ['required', 'string', 'max:'.CobrowsePayloadBudget::SNAPSHOT_TEXT_MAX_CHARACTERS],
             'node_count' => ['required', 'integer', 'min:0', 'max:100000'],
             'masked_count' => ['required', 'integer', 'min:0', 'max:100000'],
         ]);
@@ -68,6 +69,7 @@ class CobrowseSnapshotController extends Controller
 
         $metadata = $cobrowseSession->metadata ?? [];
         $metadata['snapshot'] = $snapshot;
+        $metadata['payload_budget'] = CobrowsePayloadBudget::limits();
 
         $cobrowseSession->forceFill([
             'metadata' => $metadata,
@@ -83,6 +85,7 @@ class CobrowseSnapshotController extends Controller
                 'cobrowse' => [
                     'status' => $cobrowseSession->status,
                 ],
+                'payload_budget' => CobrowsePayloadBudget::limits(),
                 'snapshot' => $snapshot,
             ],
         ]);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\Site;
+use App\Support\CobrowsePayloadBudget;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class CobrowseTelemetryController extends Controller
             'anonymous_id' => ['required', 'string', 'max:255'],
             'visitor_token' => ['nullable', 'string', 'max:4096'],
             'rtt_ms' => ['nullable', 'integer', 'min:0', 'max:600000'],
-            'payload_bytes' => ['nullable', 'integer', 'min:0', 'max:10485760'],
+            'payload_bytes' => ['nullable', 'integer', 'min:0', 'max:'.CobrowsePayloadBudget::TELEMETRY_PAYLOAD_MAX_BYTES],
             'dropped_batches' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'reconnects' => ['nullable', 'integer', 'min:0', 'max:1000000'],
         ]);
@@ -72,6 +73,7 @@ class CobrowseTelemetryController extends Controller
         ];
 
         $metadata['telemetry'] = $telemetry;
+        $metadata['payload_budget'] = CobrowsePayloadBudget::limits();
 
         $cobrowseSession->forceFill([
             'metadata' => $metadata,
@@ -85,6 +87,7 @@ class CobrowseTelemetryController extends Controller
                 'cobrowse' => [
                     'status' => $cobrowseSession->status,
                 ],
+                'payload_budget' => CobrowsePayloadBudget::limits(),
                 'telemetry' => $telemetry,
             ],
         ]);

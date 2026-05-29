@@ -9,7 +9,7 @@ class CobrowseConsentState
     public function __construct(private readonly CobrowseReplayPreview $replayPreview) {}
 
     /**
-     * @return array{label: string, message: string, status: string, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null, mutation_stream: array<string, string>|null, replay_preview: array<string, string>|null}
+     * @return array{label: string, message: string, status: string, payload_budget: array<string, string>|null, telemetry: array<string, string>|null, page_state: array<string, string>|null, snapshot: array<string, string>|null, mutation_stream: array<string, string>|null, replay_preview: array<string, string>|null}
      */
     public function forConversation(Conversation $conversation): array
     {
@@ -22,6 +22,7 @@ class CobrowseConsentState
                 'label' => 'Unavailable',
                 'message' => 'Visitor has not granted cobrowse consent.',
                 'status' => 'unavailable',
+                'payload_budget' => null,
                 'telemetry' => null,
                 'page_state' => null,
                 'snapshot' => null,
@@ -58,6 +59,7 @@ class CobrowseConsentState
             ],
         };
 
+        $state['payload_budget'] = $this->formatPayloadBudget($session->metadata['payload_budget'] ?? CobrowsePayloadBudget::limits());
         $state['telemetry'] = $this->formatTelemetry($session->metadata['telemetry'] ?? null);
         $state['page_state'] = $this->formatPageState($session->metadata['page_state'] ?? null);
         $state['snapshot'] = $this->formatSnapshot($session->metadata['snapshot'] ?? null);
@@ -65,6 +67,26 @@ class CobrowseConsentState
         $state['replay_preview'] = $this->replayPreview->fromMetadata($session->metadata ?? []);
 
         return $state;
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function formatPayloadBudget(mixed $payloadBudget): ?array
+    {
+        if (! is_array($payloadBudget)) {
+            return null;
+        }
+
+        return [
+            'snapshot_html' => $this->formatCharacters($payloadBudget['snapshot_html_max_characters'] ?? null),
+            'snapshot_text' => $this->formatCharacters($payloadBudget['snapshot_text_max_characters'] ?? null),
+            'mutation_batch' => $this->formatItems($payloadBudget['mutation_batch_max_items'] ?? null),
+            'mutation_text' => $this->formatCharacters($payloadBudget['mutation_text_max_characters'] ?? null),
+            'mutation_html' => $this->formatCharacters($payloadBudget['mutation_html_max_characters'] ?? null),
+            'recent_batches' => $this->formatRetained($payloadBudget['mutation_recent_batches_retained'] ?? null),
+            'telemetry_payload' => $this->formatBytes($payloadBudget['telemetry_payload_max_bytes'] ?? null),
+        ];
     }
 
     /**
@@ -168,6 +190,33 @@ class CobrowseConsentState
         }
 
         return number_format((int) $value).' ms';
+    }
+
+    private function formatCharacters(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return 'Not reported';
+        }
+
+        return number_format((int) $value).' characters';
+    }
+
+    private function formatItems(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return 'Not reported';
+        }
+
+        return number_format((int) $value).' items';
+    }
+
+    private function formatRetained(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return 'Not reported';
+        }
+
+        return number_format((int) $value).' retained';
     }
 
     private function formatBytes(mixed $value): string
