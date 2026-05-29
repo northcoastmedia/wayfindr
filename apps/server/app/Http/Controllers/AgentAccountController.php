@@ -3,7 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountRole;
+use App\Models\Account;
+use App\Models\AuditEvent;
+use App\Models\Site;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class AgentAccountController extends Controller
@@ -68,6 +74,7 @@ class AgentAccountController extends Controller
 
         return view('agent.account.show', [
             'account' => $account,
+            'accountActivity' => $this->accountActivityItems($account, $visibleSiteIds),
             'agent' => $agent,
             'agents' => $agents,
             'agentSupportScopes' => $agentSupportScopes,
@@ -83,6 +90,118 @@ class AgentAccountController extends Controller
             'visibleSites' => $visibleSites,
             'visibleSiteCount' => count($visibleSiteIds),
         ]);
+    }
+
+    /**
+     * @return Collection<int, array{label: string, actor: string, subject: string, body: string, occurred_at: Carbon|null}>
+     */
+    private function accountActivityItems(Account $account, array $visibleSiteIds): Collection
+    {
+        return $account->auditEvents()
+            ->with(['actor', 'subject'])
+            ->whereIn('action', $this->accountActivityActions())
+            ->where(function ($query) use ($visibleSiteIds): void {
+                $query->where('action', '!=', 'site_access.updated');
+
+                if ($visibleSiteIds !== []) {
+                    $query->orWhere(function ($siteAccessQuery) use ($visibleSiteIds): void {
+                        $siteAccessQuery
+                            ->where('action', 'site_access.updated')
+                            ->whereIn('site_id', $visibleSiteIds);
+                    });
+                }
+            })
+            ->latest('occurred_at')
+            ->latest('id')
+            ->limit(8)
+            ->get()
+            ->map(fn (AuditEvent $event): array => [
+                'label' => $this->accountActivityLabel($event),
+                'actor' => $this->accountActivityActor($event),
+                'subject' => $this->accountActivitySubject($event),
+                'body' => $this->accountActivityBody($event),
+                'occurred_at' => $event->occurred_at,
+            ]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function accountActivityActions(): array
+    {
+        return [
+            'agent.created',
+            'agent.deactivated',
+            'agent.password_updated',
+            'agent.reactivated',
+            'agent.role_changed',
+            'site_access.updated',
+        ];
+    }
+
+    private function accountActivityLabel(AuditEvent $event): string
+    {
+        return match ($event->action) {
+            'agent.created' => 'Agent created',
+            'agent.deactivated' => 'Agent deactivated',
+            'agent.password_updated' => 'Password changed',
+            'agent.reactivated' => 'Agent reactivated',
+            'agent.role_changed' => 'Agent role changed',
+            'site_access.updated' => 'Site access updated',
+            default => 'Account activity',
+        };
+    }
+
+    private function accountActivityActor(AuditEvent $event): string
+    {
+        if ($event->actor instanceof User) {
+            return $event->actor->name;
+        }
+
+        return 'System';
+    }
+
+    private function accountActivitySubject(AuditEvent $event): string
+    {
+        if ($event->subject instanceof User) {
+            return $event->subject->name;
+        }
+
+        if ($event->subject instanceof Site) {
+            return $event->subject->name;
+        }
+
+        return 'Account';
+    }
+
+    private function accountActivityBody(AuditEvent $event): string
+    {
+        return match ($event->action) {
+            'agent.created' => 'Created agent account',
+            'agent.deactivated' => 'Suspended agent access',
+            'agent.password_updated' => 'Changed password',
+            'agent.reactivated' => 'Restored agent access',
+            'agent.role_changed' => $this->accountRoleChangeBody($event),
+            'site_access.updated' => 'Updated support access',
+            default => 'Recorded account activity',
+        };
+    }
+
+    private function accountRoleChangeBody(AuditEvent $event): string
+    {
+        $oldRole = data_get($event->metadata, 'old_role');
+        $newRole = data_get($event->metadata, 'new_role');
+        $roleLabels = $this->roleLabels();
+
+        if (is_string($oldRole) && is_string($newRole)) {
+            return sprintf(
+                'Changed role from %s to %s',
+                $roleLabels[$oldRole] ?? str($oldRole)->headline()->toString(),
+                $roleLabels[$newRole] ?? str($newRole)->headline()->toString(),
+            );
+        }
+
+        return 'Changed account role';
     }
 
     /**

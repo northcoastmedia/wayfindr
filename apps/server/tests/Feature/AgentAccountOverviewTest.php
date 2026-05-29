@@ -2,6 +2,7 @@
 
 use App\Enums\AccountRole;
 use App\Models\Account;
+use App\Models\AuditEvent;
 use App\Models\Conversation;
 use App\Models\Site;
 use App\Models\Ticket;
@@ -174,4 +175,135 @@ test('agent roster summarizes explicit and fallback site scope', function (): vo
         ])
         ->assertSee(route('dashboard.sites.show', $fallbackSite), false)
         ->assertSee(route('dashboard.sites.show', $explicitSite), false);
+});
+
+test('agent can review recent account access activity from the account overview', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $owner = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Owner,
+        'name' => 'Olive Owner',
+    ]);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $restrictedSite = Site::factory()->for($account)->create(['name' => 'Restricted Store']);
+    $restrictedSite->supportAgents()->attach($owner);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $outsideAgent = User::factory()->for($otherAccount)->create(['name' => 'Mallory Elsewhere']);
+
+    AuditEvent::factory()->for($account)->create([
+        'actor_type' => $owner->getMorphClass(),
+        'actor_id' => $owner->id,
+        'subject_type' => $agent->getMorphClass(),
+        'subject_id' => $agent->id,
+        'action' => 'agent.created',
+        'metadata' => ['role' => AccountRole::Agent->value],
+        'occurred_at' => now()->subMinutes(12),
+    ]);
+
+    AuditEvent::factory()->for($account)->for($site)->create([
+        'actor_type' => $owner->getMorphClass(),
+        'actor_id' => $owner->id,
+        'subject_type' => $site->getMorphClass(),
+        'subject_id' => $site->id,
+        'action' => 'site_access.updated',
+        'metadata' => [
+            'before_agent_ids' => [],
+            'after_agent_ids' => [$owner->id, $agent->id],
+            'added_agent_ids' => [$owner->id, $agent->id],
+            'removed_agent_ids' => [],
+            'token' => 'should-not-render',
+        ],
+        'occurred_at' => now()->subMinutes(8),
+    ]);
+
+    AuditEvent::factory()->for($account)->create([
+        'actor_type' => $owner->getMorphClass(),
+        'actor_id' => $owner->id,
+        'subject_type' => $agent->getMorphClass(),
+        'subject_id' => $agent->id,
+        'action' => 'agent.role_changed',
+        'metadata' => [
+            'old_role' => AccountRole::Agent->value,
+            'new_role' => AccountRole::Admin->value,
+            'password' => 'should-not-render',
+        ],
+        'occurred_at' => now()->subMinutes(4),
+    ]);
+
+    AuditEvent::factory()->for($account)->create([
+        'actor_type' => $owner->getMorphClass(),
+        'actor_id' => $owner->id,
+        'subject_type' => $agent->getMorphClass(),
+        'subject_id' => $agent->id,
+        'action' => 'agent.password_updated',
+        'metadata' => [],
+        'occurred_at' => now()->subMinutes(2),
+    ]);
+
+    AuditEvent::factory()->for($account)->for($restrictedSite)->create([
+        'actor_type' => $owner->getMorphClass(),
+        'actor_id' => $owner->id,
+        'subject_type' => $restrictedSite->getMorphClass(),
+        'subject_id' => $restrictedSite->id,
+        'action' => 'site_access.updated',
+        'metadata' => [
+            'before_agent_ids' => [],
+            'after_agent_ids' => [$owner->id],
+            'added_agent_ids' => [$owner->id],
+            'removed_agent_ids' => [],
+        ],
+        'occurred_at' => now()->subMinute(),
+    ]);
+
+    AuditEvent::factory()->for($otherAccount)->create([
+        'actor_type' => $outsideAgent->getMorphClass(),
+        'actor_id' => $outsideAgent->id,
+        'subject_type' => $outsideAgent->getMorphClass(),
+        'subject_id' => $outsideAgent->id,
+        'action' => 'agent.created',
+        'metadata' => [],
+        'occurred_at' => now(),
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Recent account activity')
+        ->assertSee('4 shown')
+        ->assertSee('Password changed')
+        ->assertSee('Agent role changed')
+        ->assertSee('Changed role from Agent to Admin')
+        ->assertSee('Site access updated')
+        ->assertSee('Updated support access')
+        ->assertSee('Agent created')
+        ->assertSee('Created agent account')
+        ->assertSee('Olive Owner')
+        ->assertSee('Bea Builder')
+        ->assertSee('Acme Docs')
+        ->assertSeeInOrder([
+            'Password changed',
+            'Agent role changed',
+            'Site access updated',
+            'Agent created',
+        ])
+        ->assertDontSee('Other Support')
+        ->assertDontSee('Mallory Elsewhere')
+        ->assertDontSee('Restricted Store')
+        ->assertDontSee('should-not-render');
+});
+
+test('account overview explains when there is no account activity yet', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Recent account activity')
+        ->assertSee('No account activity yet.');
 });
