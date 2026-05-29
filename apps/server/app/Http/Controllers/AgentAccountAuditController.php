@@ -55,14 +55,7 @@ class AgentAccountAuditController extends Controller
             fputcsv($stream, ['occurred_at', 'action', 'label', 'actor', 'subject', 'site']);
 
             foreach ($auditEvents as $event) {
-                fputcsv($stream, [
-                    $event['occurred_at'],
-                    $event['action'],
-                    $event['label'],
-                    $event['actor'],
-                    $event['subject'],
-                    $event['site'],
-                ]);
+                fputcsv($stream, $this->auditCsvRow($event));
             }
 
             fclose($stream);
@@ -163,6 +156,31 @@ class AgentAccountAuditController extends Controller
                 'subject' => $this->auditSubject($event),
                 'site' => $event->site?->name ?? 'Account',
             ]);
+    }
+
+    /**
+     * @param  array{occurred_at: string, action: string, label: string, actor: string, subject: string, site: string}  $event
+     * @return array<int, string>
+     */
+    private function auditCsvRow(array $event): array
+    {
+        return [
+            $this->spreadsheetSafeCsvValue($event['occurred_at']),
+            $this->spreadsheetSafeCsvValue($event['action']),
+            $this->spreadsheetSafeCsvValue($event['label']),
+            $this->spreadsheetSafeCsvValue($event['actor']),
+            $this->spreadsheetSafeCsvValue($event['subject']),
+            $this->spreadsheetSafeCsvValue($event['site']),
+        ];
+    }
+
+    private function spreadsheetSafeCsvValue(string $value): string
+    {
+        if (preg_match('/^\s*[=+\-@]/u', $value) === 1) {
+            return "'".$value;
+        }
+
+        return $value;
     }
 
     /**

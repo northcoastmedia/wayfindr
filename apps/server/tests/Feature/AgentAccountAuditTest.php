@@ -153,3 +153,35 @@ test('account audit export includes scoped safe fields without raw metadata', fu
         ->not->toContain('Restricted Store')
         ->not->toContain('should-not-render');
 });
+
+test('account audit export neutralizes spreadsheet formula values', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+    ]);
+    $actor = User::factory()->for($account)->create(['name' => '=HYPERLINK("https://bad.test","click")']);
+    $subject = User::factory()->for($account)->create(['name' => '+SUM(1,1)']);
+    $site = Site::factory()->for($account)->create(['name' => '@Bad Site']);
+    $site->supportAgents()->attach($admin);
+
+    AuditEvent::factory()->for($account)->for($site)->create([
+        'actor_type' => $actor->getMorphClass(),
+        'actor_id' => $actor->id,
+        'subject_type' => $subject->getMorphClass(),
+        'subject_id' => $subject->id,
+        'action' => 'agent.created',
+        'metadata' => [],
+    ]);
+
+    $content = $this->actingAs($admin)
+        ->get('/dashboard/account/audit/export')
+        ->streamedContent();
+
+    $rows = collect(explode("\n", trim($content)))
+        ->map(fn (string $row): array => str_getcsv($row))
+        ->all();
+
+    expect($rows[1][3])->toBe('\'=HYPERLINK("https://bad.test","click")')
+        ->and($rows[1][4])->toBe('\'+SUM(1,1)')
+        ->and($rows[1][5])->toBe('\'@Bad Site');
+});
