@@ -35,5 +35,6 @@ See [data-model.md](data-model.md) for the initial Laravel-owned domain records.
 - Measure cobrowse latency and payload pressure before adding heavier transport.
 - Keep mutation streams bounded while agent-side replay proves the event shape.
 - Use Reverb for early cobrowse update notices before attempting in-place live DOM replay.
+- Keep visitor messaging calm when realtime is unavailable; polling and manual refresh remain the degraded-mode path.
 - Keep public APIs stable only after the prototype proves them.
 - Avoid microservices until operational pressure justifies them.

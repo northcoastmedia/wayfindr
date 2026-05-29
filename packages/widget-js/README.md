@@ -27,8 +27,11 @@ plain HTML sites:
 ```
 
 The Pusher script is only required for live Reverb updates. Without it, the
-widget falls back to light message polling and the manual refresh button. The
-Reverb app key is public client configuration; never expose
+widget falls back to light message polling and the manual refresh button. When
+live updates are connected, unavailable, or reconnecting, the widget shows a
+small calm status note so visitors know refresh is still available without
+turning transport hiccups into a scary error state. The Reverb app key is
+public client configuration; never expose
 `REVERB_APP_SECRET` in browser code.
 
 Classic script tags can also use data attributes:
