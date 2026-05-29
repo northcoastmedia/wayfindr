@@ -547,7 +547,7 @@ test('admins can review recent site access activity from the site settings page'
         ->assertSee('Acme Docs')
         ->assertSee(route('dashboard.account.audit.index', [
             'audit_action' => 'site_access.updated',
-            'audit_search' => 'Acme Docs',
+            'audit_site' => $site->id,
         ]))
         ->assertDontSee('should-not-render');
 });

@@ -118,7 +118,7 @@ class AgentSiteController extends Controller
             'siteActivityAuditUrl' => $agent->isAdmin()
                 ? route('dashboard.account.audit.index', [
                     'audit_action' => 'site_access.updated',
-                    'audit_search' => $site->name,
+                    'audit_site' => $site->id,
                 ])
                 : null,
             'siteExternalIssueProjects' => $site->externalIssueProjects,

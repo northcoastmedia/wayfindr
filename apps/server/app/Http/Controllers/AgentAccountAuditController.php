@@ -18,12 +18,13 @@ class AgentAccountAuditController extends Controller
     {
         $agent = $this->accountAdmin($request);
         $account = $agent->account()->firstOrFail();
-        $visibleSiteIds = $this->visibleSiteIds($account, $agent);
+        $visibleSites = $this->visibleSites($account, $agent);
+        $visibleSiteIds = $this->siteIds($visibleSites);
         $baseQuery = $this->baseAuditQuery($account, $visibleSiteIds);
         $availableActions = $this->availableActions($baseQuery);
-        [$auditAction, $auditSearch] = $this->filters($request, $availableActions);
-        $auditQuery = $this->auditQueryParams($auditAction, $auditSearch);
-        $auditEvents = $this->auditItems($baseQuery, $auditAction, $auditSearch, 50);
+        [$auditAction, $auditSearch, $auditSiteId] = $this->filters($request, $availableActions, $visibleSiteIds);
+        $auditQuery = $this->auditQueryParams($auditAction, $auditSearch, $auditSiteId);
+        $auditEvents = $this->auditItems($baseQuery, $auditAction, $auditSearch, $auditSiteId, 50);
 
         return view('agent.account.audit', [
             'account' => $account,
@@ -33,6 +34,8 @@ class AgentAccountAuditController extends Controller
             'auditEvents' => $auditEvents,
             'auditQuery' => $auditQuery,
             'auditSearch' => $auditSearch,
+            'auditSiteId' => $auditSiteId,
+            'auditSites' => $visibleSites,
         ]);
     }
 
@@ -40,10 +43,10 @@ class AgentAccountAuditController extends Controller
     {
         $agent = $this->accountAdmin($request);
         $account = $agent->account()->firstOrFail();
-        $visibleSiteIds = $this->visibleSiteIds($account, $agent);
+        $visibleSiteIds = $this->siteIds($this->visibleSites($account, $agent));
         $baseQuery = $this->baseAuditQuery($account, $visibleSiteIds);
-        [$auditAction, $auditSearch] = $this->filters($request, $this->availableActions($baseQuery));
-        $auditEvents = $this->auditItems($baseQuery, $auditAction, $auditSearch, 500);
+        [$auditAction, $auditSearch, $auditSiteId] = $this->filters($request, $this->availableActions($baseQuery), $visibleSiteIds);
+        $auditEvents = $this->auditItems($baseQuery, $auditAction, $auditSearch, $auditSiteId, 500);
 
         return response()->streamDownload(function () use ($auditEvents): void {
             $stream = fopen('php://output', 'w');
@@ -74,13 +77,25 @@ class AgentAccountAuditController extends Controller
     }
 
     /**
-     * @return array<int, int>
+     * @return Collection<int, Site>
      */
-    private function visibleSiteIds(Account $account, User $agent): array
+    private function visibleSites(Account $account, User $agent): Collection
     {
         return $account->sites()
             ->visibleToAgent($agent)
-            ->pluck('sites.id')
+            ->orderBy('name')
+            ->orderBy('domain')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, Site>  $sites
+     * @return array<int, int>
+     */
+    private function siteIds(Collection $sites): array
+    {
+        return $sites
+            ->pluck('id')
             ->map(fn (int|string $siteId): int => (int) $siteId)
             ->all();
     }
@@ -121,9 +136,10 @@ class AgentAccountAuditController extends Controller
 
     /**
      * @param  array<string, string>  $availableActions
-     * @return array{0: string, 1: string}
+     * @param  array<int, int>  $visibleSiteIds
+     * @return array{0: string, 1: string, 2: int|null}
      */
-    private function filters(Request $request, array $availableActions): array
+    private function filters(Request $request, array $availableActions, array $visibleSiteIds): array
     {
         $auditAction = $request->query('audit_action', '');
         $auditAction = is_string($auditAction) && array_key_exists($auditAction, $availableActions)
@@ -133,17 +149,24 @@ class AgentAccountAuditController extends Controller
         $auditSearch = is_string($auditSearch)
             ? mb_substr(trim($auditSearch), 0, 120)
             : '';
+        $auditSite = $request->query('audit_site', '');
+        $auditSiteId = is_string($auditSite) && ctype_digit($auditSite)
+            ? (int) $auditSite
+            : null;
+        $auditSiteId = $auditSiteId !== null && in_array($auditSiteId, $visibleSiteIds, true)
+            ? $auditSiteId
+            : null;
 
-        return [$auditAction, $auditSearch];
+        return [$auditAction, $auditSearch, $auditSiteId];
     }
 
     /**
      * @param  Builder<AuditEvent>  $baseQuery
      * @return Collection<int, array{occurred_at: string, action: string, label: string, actor: string, subject: string, site: string}>
      */
-    private function auditItems(Builder $baseQuery, string $auditAction, string $auditSearch, int $limit): Collection
+    private function auditItems(Builder $baseQuery, string $auditAction, string $auditSearch, ?int $auditSiteId, int $limit): Collection
     {
-        return $this->applyAuditFilters(clone $baseQuery, $auditAction, $auditSearch)
+        return $this->applyAuditFilters(clone $baseQuery, $auditAction, $auditSearch, $auditSiteId)
             ->latest('occurred_at')
             ->latest('id')
             ->limit($limit)
@@ -187,10 +210,11 @@ class AgentAccountAuditController extends Controller
      * @param  Builder<AuditEvent>  $query
      * @return Builder<AuditEvent>
      */
-    private function applyAuditFilters(Builder $query, string $auditAction, string $auditSearch): Builder
+    private function applyAuditFilters(Builder $query, string $auditAction, string $auditSearch, ?int $auditSiteId): Builder
     {
         return $query
             ->when($auditAction !== '', fn (Builder $query) => $query->where('action', $auditAction))
+            ->when($auditSiteId !== null, fn (Builder $query) => $query->where('site_id', $auditSiteId))
             ->when($auditSearch !== '', function (Builder $query) use ($auditSearch): void {
                 $searchPattern = '%'.$auditSearch.'%';
 
@@ -216,11 +240,12 @@ class AgentAccountAuditController extends Controller
     /**
      * @return array<string, string>
      */
-    private function auditQueryParams(string $auditAction, string $auditSearch): array
+    private function auditQueryParams(string $auditAction, string $auditSearch, ?int $auditSiteId): array
     {
         return array_filter([
             'audit_action' => $auditAction,
             'audit_search' => $auditSearch,
+            'audit_site' => $auditSiteId !== null ? (string) $auditSiteId : '',
         ], fn (string $value): bool => $value !== '');
     }
 

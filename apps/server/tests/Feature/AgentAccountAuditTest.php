@@ -154,6 +154,46 @@ test('account audit export includes scoped safe fields without raw metadata', fu
         ->not->toContain('should-not-render');
 });
 
+test('account audit export can be scoped to an exact visible site', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $targetSite = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $similarSite = Site::factory()->for($account)->create(['name' => 'Acme Docs Canada']);
+    $targetSite->supportAgents()->attach($admin);
+    $similarSite->supportAgents()->attach($admin);
+
+    AuditEvent::factory()->for($account)->for($targetSite)->create([
+        'actor_type' => $admin->getMorphClass(),
+        'actor_id' => $admin->id,
+        'subject_type' => $targetSite->getMorphClass(),
+        'subject_id' => $targetSite->id,
+        'action' => 'site_access.updated',
+        'metadata' => [],
+        'occurred_at' => now()->subMinute(),
+    ]);
+
+    AuditEvent::factory()->for($account)->for($similarSite)->create([
+        'actor_type' => $admin->getMorphClass(),
+        'actor_id' => $admin->id,
+        'subject_type' => $similarSite->getMorphClass(),
+        'subject_id' => $similarSite->id,
+        'action' => 'site_access.updated',
+        'metadata' => [],
+        'occurred_at' => now(),
+    ]);
+
+    $content = $this->actingAs($admin)
+        ->get('/dashboard/account/audit/export?audit_action=site_access.updated&audit_site='.$targetSite->id)
+        ->streamedContent();
+
+    expect($content)
+        ->toContain('Acme Docs')
+        ->not->toContain('Acme Docs Canada');
+});
+
 test('account audit export neutralizes spreadsheet formula values', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $admin = User::factory()->for($account)->create([
