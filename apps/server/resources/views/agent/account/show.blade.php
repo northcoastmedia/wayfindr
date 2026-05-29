@@ -126,7 +126,12 @@
             <section class="section" aria-labelledby="account-activity-heading">
                 <div class="section-header">
                     <h2 id="account-activity-heading">Recent account activity</h2>
-                    <span class="lede">{{ $accountActivity->count() }} shown</span>
+                    <div class="section-actions">
+                        <span class="lede">{{ $accountActivity->count() }} shown</span>
+                        @if ($canViewAudit)
+                            <a class="button secondary" href="{{ route('dashboard.account.audit.index') }}">View audit log</a>
+                        @endif
+                    </div>
                 </div>
                 @if ($accountActivity->isEmpty())
                     <p class="empty">No account activity yet.</p>
