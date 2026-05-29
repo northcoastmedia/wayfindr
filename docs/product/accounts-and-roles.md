@@ -30,6 +30,8 @@ Account owners and admins can manage site support access from the site settings 
 
 The account overview includes a site access matrix for the sites visible to the signed-in agent. It shows whether each site is still using the account-wide fallback or explicit support-agent assignments, lists the active assigned agents for explicit sites, and links back to the site settings screen for management. The agent roster also summarizes each visible agent's active support scope so account operators can spot explicit assignments, fallback coverage, and deactivated agents without opening every site.
 
+The account overview also surfaces recent account activity for access-related audit events such as agent creation, role changes, password updates, deactivation/reactivation, and site access updates. This feed should use curated labels and summaries instead of rendering raw audit metadata so secrets or operational payloads do not leak into the dashboard. Site-backed activity still follows the signed-in agent's visible site boundary.
+
 Deactivated agents are not assignable from site access management. Stale historical assignments may remain in the database for audit/history, but they do not count as eligible support agents or site managers.
 
 ## Account Roles
@@ -65,6 +67,7 @@ See [Platform Operator Boundary](platform-operator-boundary.md) for the product 
 - Role changes start owner-only, with same-account boundaries in `UserPolicy`, plus self-change denial, last-owner protection, and audit events behind the dashboard role controls.
 - Agent password changes are self-service from the profile screen and should be audited without exposing password material.
 - Agent deactivation should preserve history, block sign-in, clear stale dashboard sessions, deny self-deactivation, stay inside the account through `UserPolicy`, and create audit events for deactivation/reactivation.
+- Account activity visibility should stay metadata-only and access-focused until Wayfindr has a deliberate audit export/search workflow.
 - Support policies should deny deactivated agents even when stale assignments still reference them.
 - Ticket assignment should only target agents who can support the ticket's site.
 - Alerts should notify the smallest useful group: assigned agent first, otherwise agents assigned to the site, otherwise the account-wide fallback.

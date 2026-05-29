@@ -123,6 +123,35 @@
                 @endif
             </section>
 
+            <section class="section" aria-labelledby="account-activity-heading">
+                <div class="section-header">
+                    <h2 id="account-activity-heading">Recent account activity</h2>
+                    <span class="lede">{{ $accountActivity->count() }} shown</span>
+                </div>
+                @if ($accountActivity->isEmpty())
+                    <p class="empty">No account activity yet.</p>
+                @else
+                    <div class="timeline-list">
+                        @foreach ($accountActivity as $activity)
+                            <article class="timeline-item ticket-activity">
+                                <div class="timeline-content">
+                                    <div class="message-meta">
+                                        <strong>{{ $activity['label'] }}</strong>
+                                        <span>{{ $activity['occurred_at']?->diffForHumans() }}</span>
+                                    </div>
+                                    <div class="timeline-meta">
+                                        <span>{{ $activity['actor'] }}</span>
+                                        <span>{{ $activity['subject'] }}</span>
+                                        <span>Account access</span>
+                                    </div>
+                                    <p class="message-body">{{ $activity['body'] }}</p>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+
             @if ($canCreateAgents)
                 <section class="section" aria-labelledby="add-agent-heading">
                     <div class="section-header">

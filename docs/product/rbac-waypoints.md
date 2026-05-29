@@ -79,6 +79,8 @@ The first `manage_site_access` implementation requires owner/admin authority plu
 
 The account overview now provides a read-only site access matrix for the signed-in agent's visible sites. This keeps current fallback-versus-explicit support scope easy to inspect without adding an elevated site-access bypass or exposing support content from sites the agent cannot work.
 
+The account overview also exposes a small recent account activity feed for access-related audit events. It should stay curated and metadata-only: show who acted, which agent or site was affected, and a plain-language summary, but do not dump raw audit payloads into the UI. Site-backed activity still follows the signed-in agent's visible site boundary.
+
 Site privacy settings require owner/admin authority plus site access. Plain agents can still view install and public masking context for sites they support, but they cannot edit privacy configuration.
 
 ## Platform Operator Boundary
@@ -134,6 +136,8 @@ Audit-worthy RBAC actions include:
 - cobrowse consent lifecycle events,
 - ticket assignment changes.
 
+Account-level audit visibility should start narrow. The account overview can show recent access/account events, but broader audit search, export, retention, and customer-data access logs should be separate product surfaces with their own authorization and privacy review.
+
 ## Bootstrap Rules
 
 Self-hosted setup should remain hard to lock yourself out of:
@@ -176,8 +180,9 @@ Every RBAC implementation slice should include tests for:
 10. Add agent deactivation. Owners can suspend or restore another same-account user. Admins can suspend or restore non-owner agents. Deactivated users cannot sign in or continue using existing dashboard sessions, and historical records remain attached to the deactivated user. `UserPolicy` now owns the same-account and role-boundary checks for deactivation and reactivation while the action still protects the last active owner.
 11. Keep site access assignment active-only. The site settings picker and update validation now exclude deactivated same-account agents so suspended users cannot be reintroduced as support agents or counted as the required site manager.
 12. Add read-only account-level visibility for current site access. The account overview now shows visible sites, their fallback-or-explicit access model, active support-agent assignments, each rostered agent's visible support scope, and a management link back to each site.
-13. Add owner/admin elevated behavior only when the product decision is explicit.
-14. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, safe system identity, documentation links, and readiness diagnostics.
+13. Add a curated recent account activity feed for access/account audit events. The account overview now shows agent creation, role changes, password updates, deactivation/reactivation, and site access updates without rendering raw audit metadata.
+14. Add owner/admin elevated behavior only when the product decision is explicit.
+15. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, safe system identity, documentation links, and readiness diagnostics.
 
 ## Role Management Guardrails
 
