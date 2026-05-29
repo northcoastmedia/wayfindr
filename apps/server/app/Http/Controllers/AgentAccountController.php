@@ -42,10 +42,25 @@ class AgentAccountController extends Controller
             ->orderBy('email')
             ->get();
 
+        $visibleSites = $account->sites()
+            ->visibleToAgent($agent)
+            ->with(['supportAgents' => fn ($query) => $query
+                ->where('users.account_id', $account->id)
+                ->whereNull('users.deactivated_at')
+                ->orderByRaw(
+                    'case account_role when ? then 0 when ? then 1 else 2 end',
+                    [AccountRole::Owner->value, AccountRole::Admin->value],
+                )
+                ->orderBy('name')
+                ->orderBy('email')])
+            ->orderBy('name')
+            ->get();
+
         return view('agent.account.show', [
             'account' => $account,
             'agent' => $agent,
             'agents' => $agents,
+            'activeAgentCount' => $agents->reject->isDeactivated()->count(),
             'canCreateAgents' => $agent->isAdmin(),
             'canManageAgentAccess' => $agent->isAdmin(),
             'canManageRoles' => $agent->isOwner(),
@@ -53,6 +68,7 @@ class AgentAccountController extends Controller
             'roleOptions' => $this->roleLabels(),
             'siteCount' => $account->sites()->count(),
             'supportAssignmentCount' => $agents->sum('explicit_site_access_count'),
+            'visibleSites' => $visibleSites,
             'visibleSiteCount' => count($visibleSiteIds),
         ]);
     }
