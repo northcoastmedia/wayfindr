@@ -59,6 +59,11 @@ serialized payload budget before sending them. Operators can tune that browser
 budget with the widget `mutationPayloadMaxBytes` option, but server-side
 validation remains the final enforcement boundary.
 
+The widget also caps the pending mutation queue at 250 records between flushes.
+When a page changes faster than the widget can report, older queued records are
+skipped and newer page state is preferred. That keeps noisy pages from building
+an unbounded browser backlog while still reporting skipped-count diagnostics.
+
 Under pressure, Wayfindr should prefer dropping or skipping lower-value mutation
 details over sending raw sensitive values, unbounded snapshots, or oversized
 session metadata.

@@ -15,6 +15,7 @@
   var STYLE_ID = 'wayfindr-widget-styles';
   var DEFAULT_COBROWSE_PAYLOAD_BUDGET = {
     mutationBatchMaxBytes: 60000,
+    mutationQueueMaxRecords: 250,
   };
   var DEFAULT_MASK_SELECTORS = [
     'input[type="password"]',
@@ -384,6 +385,7 @@
     var cobrowseRequestedBy = null;
     var mutationObserver = null;
     var pendingMutationRecords = [];
+    var skippedMutationRecords = 0;
     var mutationFlushTimer = null;
     var mutationSequence = 0;
     var droppedMutationBatches = 0;
@@ -391,6 +393,9 @@
     var mutationPayloadMaxBytes = typeof options.mutationPayloadMaxBytes === 'number'
       ? Math.max(0, options.mutationPayloadMaxBytes)
       : DEFAULT_COBROWSE_PAYLOAD_BUDGET.mutationBatchMaxBytes;
+    var mutationQueueMaxRecords = typeof options.mutationQueueMaxRecords === 'number'
+      ? Math.max(0, options.mutationQueueMaxRecords)
+      : DEFAULT_COBROWSE_PAYLOAD_BUDGET.mutationQueueMaxRecords;
     var messagePollMs = typeof options.messagePollMs === 'number' ? Math.max(0, options.messagePollMs) : 5000;
     var messagePollTimer = null;
     var cobrowseStatusPollMs = typeof options.cobrowseStatusPollMs === 'number' ? Math.max(0, options.cobrowseStatusPollMs) : 5000;
@@ -594,6 +599,13 @@
 
       mutationObserver = new Observer(function (records) {
         pendingMutationRecords = pendingMutationRecords.concat(Array.prototype.slice.call(records || []));
+
+        if (pendingMutationRecords.length > mutationQueueMaxRecords) {
+          var overflow = pendingMutationRecords.length - mutationQueueMaxRecords;
+          pendingMutationRecords = pendingMutationRecords.slice(overflow);
+          skippedMutationRecords += overflow;
+        }
+
         scheduleMutationFlush();
       });
 
@@ -617,6 +629,7 @@
       }
 
       pendingMutationRecords = [];
+      skippedMutationRecords = 0;
     }
 
     function scheduleMutationFlush() {
@@ -634,16 +647,18 @@
       var records = pendingMutationRecords;
       pendingMutationRecords = [];
 
-      if (!supportCode || records.length === 0) {
+      if (!supportCode || (records.length === 0 && skippedMutationRecords === 0 && droppedMutationBatches === 0)) {
         return;
       }
 
+      var queuedSkippedCount = skippedMutationRecords;
       var batch = createCobrowseMutationBatch(records, {
         document: doc,
         location: location,
         maskSelectors: client.getMaskSelectors(),
         sequence: mutationSequence + 1,
         droppedCount: droppedMutationBatches,
+        skippedCount: queuedSkippedCount,
         maxPayloadBytes: mutationPayloadMaxBytes,
       });
 
@@ -656,6 +671,7 @@
       try {
         await client.reportCobrowseMutations(supportCode, batch);
         droppedMutationBatches = 0;
+        skippedMutationRecords = Math.max(0, skippedMutationRecords - queuedSkippedCount);
       } catch (error) {
         droppedMutationBatches += 1;
       }
@@ -1031,7 +1047,7 @@
     var maskSelectors = DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []);
     var maxMutations = options.maxMutations || 50;
     var mutations = [];
-    var skippedCount = 0;
+    var skippedCount = Number(options.skippedCount || 0);
 
     Array.prototype.slice.call(records || []).forEach(function (record) {
       if (mutations.length >= maxMutations) {

@@ -1816,6 +1816,293 @@ test('reports skipped-only widget mutation batches when the client payload budge
   widget.destroy();
 });
 
+test('caps queued widget mutation records before flushing under pressure', async () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Install Guide</title></head><body>',
+    '<main>',
+    '  <p id="first-copy">First section.</p>',
+    '  <p id="second-copy">Second section.</p>',
+    '</main>',
+    '<div id="support"></div>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/install',
+  });
+  const calls = [];
+  let cobrowseStatus = {
+    status: 'requested',
+    consent: 'requested',
+    requested_by: { name: 'Ada Agent' },
+  };
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    cobrowseStatusPollMs: 0,
+    mutationQueueMaxRecords: 1,
+    storage: memoryStorage(),
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/conversations/WF-TEST123/cobrowse?')) {
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent')) {
+        cobrowseStatus = {
+          status: 'granted',
+          consent: 'granted',
+          requested_by: { name: 'Ada Agent' },
+        };
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      return jsonResponse(200, {
+        data: {
+          conversation: { support_code: 'WF-TEST123', status: 'open' },
+          messages: [],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+  await widget.refreshCobrowseStatus();
+  await settle();
+
+  widget.root
+    .querySelector('.wayfindr-widget__cobrowse-allow')
+    .dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  dom.window.document.querySelector('#first-copy').textContent = 'First noisy update.';
+  dom.window.document.querySelector('#second-copy').textContent = 'Second useful update.';
+
+  await settle();
+  await wait(100);
+
+  const mutationCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-mutations'));
+  const mutationPayload = JSON.parse(mutationCall.options.body);
+
+  assert.equal(mutationPayload.mutations.length, 1);
+  assert.equal(mutationPayload.mutations[0].text, 'Second useful update.');
+  assert.equal(mutationPayload.skipped_count >= 1, true);
+  assert.equal(JSON.stringify(mutationPayload).includes('First noisy update'), false);
+
+  widget.destroy();
+});
+
+test('preserves skipped mutation counts that arrive while a report is in flight', async () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Install Guide</title></head><body>',
+    '<main>',
+    '  <p id="first-copy">First section.</p>',
+    '  <p id="second-copy">Second section.</p>',
+    '  <p id="third-copy">Third section.</p>',
+    '  <p id="fourth-copy">Fourth section.</p>',
+    '</main>',
+    '<div id="support"></div>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/install',
+  });
+  const mutationPayloads = [];
+  let resolveFirstReport = null;
+  let cobrowseStatus = {
+    status: 'requested',
+    consent: 'requested',
+    requested_by: { name: 'Ada Agent' },
+  };
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    cobrowseStatusPollMs: 0,
+    mutationFlushMs: 50,
+    mutationQueueMaxRecords: 1,
+    storage: memoryStorage(),
+    fetch: async (url, options) => {
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/conversations/WF-TEST123/cobrowse?')) {
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent')) {
+        cobrowseStatus = {
+          status: 'granted',
+          consent: 'granted',
+          requested_by: { name: 'Ada Agent' },
+        };
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-mutations')) {
+        const payload = JSON.parse(options.body);
+        mutationPayloads.push(payload);
+
+        if (mutationPayloads.length === 1) {
+          return new Promise((resolve) => {
+            resolveFirstReport = () => resolve(jsonResponse(200, { data: {} }));
+          });
+        }
+
+        return jsonResponse(200, { data: {} });
+      }
+
+      return jsonResponse(200, {
+        data: {
+          conversation: { support_code: 'WF-TEST123', status: 'open' },
+          messages: [],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+  await widget.refreshCobrowseStatus();
+  await settle();
+
+  widget.root
+    .querySelector('.wayfindr-widget__cobrowse-allow')
+    .dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  dom.window.document.querySelector('#first-copy').textContent = 'First noisy update.';
+  dom.window.document.querySelector('#second-copy').textContent = 'Second useful update.';
+
+  await wait(80);
+  await settle();
+
+  assert.equal(mutationPayloads.length, 1);
+  assert.equal(mutationPayloads[0].mutations[0].text, 'Second useful update.');
+  assert.equal(mutationPayloads[0].skipped_count >= 1, true);
+
+  dom.window.document.querySelector('#third-copy').textContent = 'Third noisy update.';
+  dom.window.document.querySelector('#fourth-copy').textContent = 'Fourth useful update.';
+
+  await settle();
+  resolveFirstReport();
+  await wait(80);
+  await settle();
+
+  assert.equal(mutationPayloads.length, 2);
+  assert.equal(mutationPayloads[1].mutations[0].text, 'Fourth useful update.');
+  assert.equal(mutationPayloads[1].skipped_count >= 1, true);
+
+  widget.destroy();
+});
+
 test('declines a widget cobrowse request without starting page sharing', async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="support"></div></body></html>', {
     url: 'https://docs.example.test/install',
