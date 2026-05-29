@@ -86,6 +86,7 @@ class AgentSiteController extends Controller
         ]);
         $account = $agent->account()->firstOrFail();
         $accountAgents = $account->agents()
+            ->whereNull('deactivated_at')
             ->orderBy('name')
             ->orderBy('email')
             ->get();
@@ -144,6 +145,7 @@ class AgentSiteController extends Controller
         $accountAgentIds = $site->account()
             ->firstOrFail()
             ->agents()
+            ->whereNull('deactivated_at')
             ->pluck('users.id')
             ->map(fn (int|string $id): int => (int) $id)
             ->values()
@@ -251,6 +253,7 @@ class AgentSiteController extends Controller
             ->firstOrFail()
             ->agents()
             ->whereIn('users.id', $agentIds)
+            ->whereNull('deactivated_at')
             ->whereIn('account_role', [
                 AccountRole::Owner->value,
                 AccountRole::Admin->value,

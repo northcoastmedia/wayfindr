@@ -525,6 +525,44 @@ test('site access management rejects agents from another account', function (): 
         ->and(AuditEvent::query()->where('action', 'site_access.updated')->exists())->toBeFalse();
 });
 
+test('site access management rejects deactivated same-account agents', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $activeAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $deactivatedAdmin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Doug Dormant',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $site->supportAgents()->attach($admin);
+
+    $this->actingAs($admin)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertOk()
+        ->assertSee('Ada Admin')
+        ->assertSee('Bea Builder')
+        ->assertDontSee('Doug Dormant');
+
+    $this->actingAs($admin)
+        ->from("/dashboard/sites/{$site->id}")
+        ->put("/dashboard/sites/{$site->id}/support-agents", [
+            'support_agent_ids' => [$deactivatedAdmin->id],
+        ])
+        ->assertRedirect("/dashboard/sites/{$site->id}")
+        ->assertSessionHasErrors('support_agent_ids.0');
+
+    expect($site->fresh()->eligibleSupportAgents()->pluck('users.id')->all())->toBe([$admin->id])
+        ->and(AuditEvent::query()->where('action', 'site_access.updated')->exists())->toBeFalse();
+
+    $this->actingAs($activeAgent)
+        ->get("/dashboard/sites/{$site->id}")
+        ->assertNotFound();
+});
+
 test('site access management requires at least one assigned support agent', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $admin = User::factory()->for($account)->create(['account_role' => AccountRole::Admin]);
