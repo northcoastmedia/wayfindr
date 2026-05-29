@@ -3204,6 +3204,84 @@ test('agent can see cobrowse telemetry on a conversation', function (): void {
         ->assertSee('5');
 });
 
+test('agent can see cobrowse payload budget guardrails on a conversation', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BUDGET',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [
+            'payload_budget' => [
+                'snapshot_html_max_characters' => 65535,
+                'snapshot_text_max_characters' => 10000,
+                'mutation_batch_max_items' => 50,
+                'mutation_text_max_characters' => 5000,
+                'mutation_html_max_characters' => 10000,
+                'mutation_recent_batches_retained' => 20,
+                'telemetry_payload_max_bytes' => 10485760,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-BUDGET')
+        ->assertOk()
+        ->assertSee('Payload budget')
+        ->assertSee('Snapshot HTML')
+        ->assertSee('65,535 characters')
+        ->assertSee('Snapshot text')
+        ->assertSee('10,000 characters')
+        ->assertSee('Mutation batch')
+        ->assertSee('50 items')
+        ->assertSee('Mutation text')
+        ->assertSee('5,000 characters')
+        ->assertSee('Mutation HTML')
+        ->assertSee('10,000 characters')
+        ->assertSee('Recent batches')
+        ->assertSee('20 retained')
+        ->assertSee('Telemetry payload')
+        ->assertSee('10,485,760 bytes');
+});
+
+test('agent can see cobrowse payload budget guardrails before intake metadata exists', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-BUDGET-FALLBACK',
+        'subject' => 'Oversized first payload',
+        'status' => 'open',
+    ]);
+
+    CobrowseSession::factory()->for($conversation)->for($site)->for($visitor)->create([
+        'status' => 'granted',
+        'consented_at' => now()->subMinute(),
+        'ended_at' => null,
+        'metadata' => [],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-BUDGET-FALLBACK')
+        ->assertOk()
+        ->assertSee('Payload budget')
+        ->assertSee('Snapshot HTML')
+        ->assertSee('65,535 characters')
+        ->assertSee('Mutation batch')
+        ->assertSee('50 items')
+        ->assertSee('Telemetry payload')
+        ->assertSee('10,485,760 bytes');
+});
+
 test('agent can see cobrowse page state on a conversation', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

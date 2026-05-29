@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CobrowseSession;
 use App\Models\Conversation;
 use App\Models\Site;
+use App\Support\CobrowsePayloadBudget;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,13 +24,13 @@ class CobrowseMutationController extends Controller
             'sequence' => ['required', 'integer', 'min:0', 'max:1000000000'],
             'dropped_count' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'skipped_count' => ['nullable', 'integer', 'min:0', 'max:1000000'],
-            'mutations' => ['required', 'array', 'max:50'],
+            'mutations' => ['required', 'array', 'max:'.CobrowsePayloadBudget::MUTATION_BATCH_MAX_ITEMS],
             'mutations.*.type' => ['required', 'string', 'in:text,attribute,added,removed'],
             'mutations.*.path' => ['required', 'string', 'max:1024'],
-            'mutations.*.text' => ['nullable', 'string', 'max:5000'],
-            'mutations.*.html' => ['nullable', 'string', 'max:10000'],
+            'mutations.*.text' => ['nullable', 'string', 'max:'.CobrowsePayloadBudget::MUTATION_TEXT_MAX_CHARACTERS],
+            'mutations.*.html' => ['nullable', 'string', 'max:'.CobrowsePayloadBudget::MUTATION_HTML_MAX_CHARACTERS],
             'mutations.*.attribute_name' => ['nullable', 'string', 'max:128'],
-            'mutations.*.attribute_value' => ['nullable', 'string', 'max:2048'],
+            'mutations.*.attribute_value' => ['nullable', 'string', 'max:'.CobrowsePayloadBudget::MUTATION_ATTRIBUTE_VALUE_MAX_CHARACTERS],
             'mutations.*.node_name' => ['nullable', 'string', 'max:64'],
             'mutations.*.node_count' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'mutations.*.masked_count' => ['nullable', 'integer', 'min:0', 'max:100000'],
@@ -66,6 +67,7 @@ class CobrowseMutationController extends Controller
 
         $metadata = $cobrowseSession->metadata ?? [];
         $metadata['mutations'] = $mutationSummary;
+        $metadata['payload_budget'] = CobrowsePayloadBudget::limits();
 
         $cobrowseSession->forceFill([
             'metadata' => $metadata,
@@ -81,6 +83,7 @@ class CobrowseMutationController extends Controller
                 'cobrowse' => [
                     'status' => $cobrowseSession->status,
                 ],
+                'payload_budget' => CobrowsePayloadBudget::limits(),
                 'mutations' => [
                     'last_sequence' => $mutationSummary['last_sequence'],
                     'batch_count' => $mutationSummary['batch_count'],
@@ -119,7 +122,7 @@ class CobrowseMutationController extends Controller
             : [];
 
         $recentBatches[] = $batch;
-        $recentBatches = array_slice($recentBatches, -20);
+        $recentBatches = array_slice($recentBatches, -CobrowsePayloadBudget::MUTATION_RECENT_BATCHES_RETAINED);
 
         return [
             'last_sequence' => $batch['sequence'],

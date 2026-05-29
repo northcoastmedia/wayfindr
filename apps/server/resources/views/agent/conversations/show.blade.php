@@ -441,6 +441,43 @@
                     <p class="empty realtime-note">No replay preview yet.</p>
                 @endif
 
+                @if ($cobrowseConsent['payload_budget'])
+                    <div class="section-header">
+                        <strong>Payload budget</strong>
+                    </div>
+
+                    <div class="meta-grid realtime-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Snapshot HTML</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['snapshot_html'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Snapshot text</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['snapshot_text'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Mutation batch</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['mutation_batch'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Mutation text</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['mutation_text'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Mutation HTML</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['mutation_html'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Recent batches</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['recent_batches'] }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Telemetry payload</span>
+                            <span class="meta-value">{{ $cobrowseConsent['payload_budget']['telemetry_payload'] }}</span>
+                        </div>
+                    </div>
+                @endif
+
                 @if ($cobrowseConsent['telemetry'])
                     <div class="section-header">
                         <strong>Connection telemetry</strong>
