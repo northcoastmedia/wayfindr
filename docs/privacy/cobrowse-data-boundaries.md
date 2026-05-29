@@ -54,6 +54,11 @@ The widget may send smaller payloads than these limits. The server remains the
 source of truth because older widgets, custom integrations, and hostile clients
 cannot be trusted to self-report their size honestly.
 
+The stock JavaScript widget also trims mutation batches to a 60,000-byte
+serialized payload budget before sending them. Operators can tune that browser
+budget with the widget `mutationPayloadMaxBytes` option, but server-side
+validation remains the final enforcement boundary.
+
 Under pressure, Wayfindr should prefer dropping or skipping lower-value mutation
 details over sending raw sensitive values, unbounded snapshots, or oversized
 session metadata.
