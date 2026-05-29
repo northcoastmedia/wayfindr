@@ -13,6 +13,9 @@
 
   var VERSION = '0.0.0';
   var STYLE_ID = 'wayfindr-widget-styles';
+  var DEFAULT_COBROWSE_PAYLOAD_BUDGET = {
+    mutationBatchMaxBytes: 60000,
+  };
   var DEFAULT_MASK_SELECTORS = [
     'input[type="password"]',
     'input[type="hidden"]',
@@ -382,6 +385,9 @@
     var mutationSequence = 0;
     var droppedMutationBatches = 0;
     var mutationFlushMs = typeof options.mutationFlushMs === 'number' ? options.mutationFlushMs : 50;
+    var mutationPayloadMaxBytes = typeof options.mutationPayloadMaxBytes === 'number'
+      ? Math.max(0, options.mutationPayloadMaxBytes)
+      : DEFAULT_COBROWSE_PAYLOAD_BUDGET.mutationBatchMaxBytes;
     var messagePollMs = typeof options.messagePollMs === 'number' ? Math.max(0, options.messagePollMs) : 5000;
     var messagePollTimer = null;
     var cobrowseStatusPollMs = typeof options.cobrowseStatusPollMs === 'number' ? Math.max(0, options.cobrowseStatusPollMs) : 5000;
@@ -523,20 +529,6 @@
       cobrowseStatusTimer = null;
     }
 
-    function estimatePayloadBytes(payload) {
-      try {
-        var serialized = JSON.stringify(payload || {});
-
-        if (root.TextEncoder) {
-          return new root.TextEncoder().encode(serialized).length;
-        }
-
-        return serialized.length;
-      } catch (error) {
-        return 0;
-      }
-    }
-
     function collectPageState() {
       var view = doc.defaultView || root;
       var docElement = doc.documentElement || {};
@@ -614,9 +606,10 @@
         maskSelectors: client.getMaskSelectors(),
         sequence: mutationSequence + 1,
         droppedCount: droppedMutationBatches,
+        maxPayloadBytes: mutationPayloadMaxBytes,
       });
 
-      if (batch.mutations.length === 0 && batch.droppedCount === 0) {
+      if (batch.mutations.length === 0 && batch.droppedCount === 0 && batch.skippedCount === 0) {
         return;
       }
 
@@ -654,7 +647,7 @@
           try {
             await client.reportCobrowseTelemetry(supportCode, {
               rttMs: Date.now() - startedAt,
-              payloadBytes: estimatePayloadBytes(result),
+              payloadBytes: estimateJsonBytes(result),
               droppedBatches: 0,
               reconnects: 0,
             });
@@ -999,13 +992,26 @@
       mutations.push(mutation);
     });
 
-    return {
+    return fitMutationBatchToBudget({
       pageUrl: location ? String(location.href || '') : '',
       sequence: Number(options.sequence || 1),
       droppedCount: Number(options.droppedCount || 0),
       skippedCount: skippedCount,
       mutations: mutations,
-    };
+    }, options.maxPayloadBytes);
+  }
+
+  function fitMutationBatchToBudget(batch, maxPayloadBytes) {
+    if (typeof maxPayloadBytes !== 'number' || maxPayloadBytes <= 0) {
+      return batch;
+    }
+
+    while (batch.mutations.length > 0 && estimateJsonBytes(batch) > maxPayloadBytes) {
+      batch.mutations.pop();
+      batch.skippedCount += 1;
+    }
+
+    return batch;
   }
 
   function mutationPayload(mutation) {
@@ -1419,6 +1425,20 @@
     }
 
     return value.slice(0, maxLength);
+  }
+
+  function estimateJsonBytes(payload) {
+    try {
+      var serialized = JSON.stringify(payload || {});
+
+      if (root.TextEncoder) {
+        return new root.TextEncoder().encode(serialized).length;
+      }
+
+      return serialized.length;
+    } catch (error) {
+      return 0;
+    }
   }
 
   function withoutNullValues(values) {

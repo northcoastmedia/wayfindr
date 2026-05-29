@@ -103,6 +103,9 @@ when authorizing the channel.
 `reportCobrowsePageState`, `reportCobrowseSnapshot`, and
 `reportCobrowseMutations` prepare the consent, measurement, initial snapshot,
 and bounded mutation path for shared page-state cobrowsing.
+Widget mutation batches are also capped client-side before they leave the
+browser. The default cap is 60,000 serialized bytes, and host pages can lower
+or raise it with `mutationPayloadMaxBytes` when calling `Wayfindr.init`.
 `createCobrowseSnapshot` masks password fields, hidden fields, configured mask
 selectors, and common sensitive-looking fields before snapshot data leaves the
 visitor browser. Host pages can mark sensitive regions with
