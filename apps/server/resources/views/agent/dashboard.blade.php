@@ -366,6 +366,24 @@
                     </div>
                 </form>
 
+                @if ($ticketActiveFilters !== [])
+                    <div class="filter-summary" aria-label="Active ticket filters">
+                        <div>
+                            <strong>Active ticket filters</strong>
+                            <p class="lede">Queue narrowed to what matches this view.</p>
+                        </div>
+                        <div class="filter-chips">
+                            @foreach ($ticketActiveFilters as $activeFilter)
+                                <a class="filter-chip" href="{{ $activeFilter['href'] }}">
+                                    {{ $activeFilter['label'] }}
+                                    <span aria-hidden="true">x</span>
+                                </a>
+                            @endforeach
+                            <a class="filter-chip filter-chip-clear" href="{{ route('dashboard') }}#tickets">Clear all ticket filters</a>
+                        </div>
+                    </div>
+                @endif
+
                 @if ($tickets->isEmpty())
                     <p class="empty">{{ $ticketEmptyMessage }}</p>
                 @else
