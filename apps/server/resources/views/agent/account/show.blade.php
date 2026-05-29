@@ -63,7 +63,7 @@
                 </div>
             </section>
 
-            <section class="section" aria-labelledby="site-access-matrix-heading">
+            <section id="site-access-matrix" class="section" aria-labelledby="site-access-matrix-heading">
                 <div class="section-header">
                     <h2 id="site-access-matrix-heading">Site access matrix</h2>
                     <span class="lede">{{ $visibleSites->count() }} visible {{ \Illuminate\Support\Str::plural('site', $visibleSites->count()) }}</span>
@@ -185,7 +185,7 @@
                 </section>
             @endif
 
-            <section class="section" aria-labelledby="agents-heading">
+            <section id="agents" class="section" aria-labelledby="agents-heading">
                 <div class="section-header">
                     <h2 id="agents-heading">Agents</h2>
                     <span class="lede">{{ $agents->count() }} total</span>

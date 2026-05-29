@@ -169,6 +169,7 @@ class AgentDashboardController extends Controller
             'account' => $account,
             'agent' => $agent,
             'agents' => $agents,
+            'adminShortcuts' => $this->adminShortcuts($agent),
             'conversationFilter' => $conversationFilter,
             'conversationFilters' => $conversationFilters,
             'conversations' => $conversations,
@@ -215,6 +216,49 @@ class AgentDashboardController extends Controller
             ->get()
             ->filter(fn (DatabaseNotification $notification): bool => Gate::forUser($agent)->allows('view', $notification))
             ->values();
+    }
+
+    /**
+     * @return array<int, array{label: string, description: string, href: string, action: string}>
+     */
+    private function adminShortcuts(User $agent): array
+    {
+        if (! $agent->isAdmin()) {
+            return [];
+        }
+
+        return [
+            [
+                'label' => 'Team and roles',
+                'description' => 'Create agents, adjust roles, and suspend or restore account access.',
+                'href' => route('dashboard.account.show').'#agents',
+                'action' => 'Manage',
+            ],
+            [
+                'label' => 'Site access',
+                'description' => 'Scope which agents can support each connected site.',
+                'href' => route('dashboard.account.show').'#site-access-matrix',
+                'action' => 'Review',
+            ],
+            [
+                'label' => 'Audit log',
+                'description' => 'Search account activity and export safe audit records.',
+                'href' => route('dashboard.account.audit.index'),
+                'action' => 'Open',
+            ],
+            [
+                'label' => 'Readiness checks',
+                'description' => 'Check app key, database, queues, realtime, storage, and scheduler setup.',
+                'href' => route('dashboard.readiness.show'),
+                'action' => 'Check',
+            ],
+            [
+                'label' => 'Add site',
+                'description' => 'Connect another website and prepare its widget install.',
+                'href' => route('dashboard.sites.create'),
+                'action' => 'Add',
+            ],
+        ];
     }
 
     /**
