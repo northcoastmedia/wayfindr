@@ -10,6 +10,7 @@ use App\Models\Visitor;
 use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 
 uses(RefreshDatabase::class);
 
@@ -197,6 +198,33 @@ test('unassigned conversation alerts honor agent alert preferences', function ()
     expect($allAlertsAgent->fresh()->unreadNotifications)->toHaveCount(1)
         ->and($assignedOnlyAgent->fresh()->unreadNotifications)->toHaveCount(0)
         ->and($quietAgent->fresh()->unreadNotifications)->toHaveCount(0)
+        ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
+});
+
+test('unassigned conversation alerts fall back when only deactivated agents are assigned to the site', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $fallbackAgent = User::factory()->for($account)->create(['name' => 'Ada Active']);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Dee Dormant',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $site->supportAgents()->attach($deactivatedAgent);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-FALLBACK1',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'Can an active agent still see this?',
+    ])->assertCreated();
+
+    expect($fallbackAgent->fresh()->unreadNotifications)->toHaveCount(1)
         ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
 });
 
@@ -572,6 +600,31 @@ test('agent cannot mark a stale conversation alert read after losing site access
         ->assertNotFound();
 
     expect($notification->fresh()->unread())->toBeTrue();
+});
+
+test('deactivated agents cannot view stale support alerts', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'name' => 'Ada Agent',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $site->supportAgents()->attach($agent);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => $agent->id,
+        'support_code' => 'WF-STALE2',
+    ]);
+    $message = ConversationMessage::factory()->for($conversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'This alert should be stale after deactivation.',
+    ]);
+    $agent->notify(new ConversationNeedsReply($message));
+    $notification = $agent->unreadNotifications()->firstOrFail();
+
+    expect(Gate::forUser($agent)->allows('view', $notification))->toBeFalse()
+        ->and(Gate::forUser($agent)->allows('markRead', $notification))->toBeFalse();
 });
 
 test('agent mark all read skips stale alerts after losing site access', function (): void {

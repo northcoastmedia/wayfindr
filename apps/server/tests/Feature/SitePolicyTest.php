@@ -49,3 +49,23 @@ test('site policy allows account owners and admins to manage access only for sit
         ->and(Gate::forUser($agent)->allows('manageAccess', $site))->toBeFalse()
         ->and(Gate::forUser($unsupportedAdmin)->allows('manageAccess', $site))->toBeFalse();
 });
+
+test('site policy denies deactivated agents even when stale assignments remain', function (): void {
+    $account = Account::factory()->create();
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'deactivated_at' => now(),
+    ]);
+    $deactivatedAdmin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create();
+    $site->supportAgents()->attach([$deactivatedAgent->id, $deactivatedAdmin->id]);
+
+    expect(Gate::forUser($deactivatedAgent)->allows('view', $site))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAgent)->allows('updatePrivacy', $site))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAdmin)->allows('view', $site))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAdmin)->allows('manageAccess', $site))->toBeFalse()
+        ->and(Gate::forUser($deactivatedAdmin)->allows('manageIntegrations', $site))->toBeFalse();
+});

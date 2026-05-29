@@ -9,7 +9,8 @@ class SitePolicy
 {
     public function view(User $user, Site $site): bool
     {
-        return $site->supportsAgent($user);
+        return ! $user->isDeactivated()
+            && $site->supportsAgent($user);
     }
 
     public function updatePrivacy(User $user, Site $site): bool

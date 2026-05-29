@@ -150,6 +150,7 @@ Every RBAC implementation slice should include tests for:
 - role denial,
 - owner/admin/agent differences,
 - stale assignment behavior,
+- deactivated-agent stale assignment denial,
 - stale alert visibility,
 - role escalation denial,
 - last-owner protection,
@@ -164,7 +165,7 @@ Every RBAC implementation slice should include tests for:
 1. Document the vocabulary, permissions, and role matrix.
 2. Introduce `users.account_role` as the starter role field.
 3. Add role helpers without changing behavior.
-4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`; agent conversation detail, reply, status, assignment, ticket creation, cobrowse request, and realtime channel access now use `ConversationPolicy`; ticket detail, notes, edits, status changes, and assignment now use `TicketPolicy`; support alert visibility and mark-read actions now use `AlertPolicy`.
+4. Move one support surface at a time behind policies. Site settings now use `SitePolicy` for `view`, `updatePrivacy`, and `manageAccess`; agent conversation detail, reply, status, assignment, ticket creation, cobrowse request, and realtime channel access now use `ConversationPolicy`; ticket detail, notes, edits, status changes, and assignment now use `TicketPolicy`; support alert visibility and mark-read actions now use `AlertPolicy`. These support policies now deny deactivated agents even when old site, conversation, ticket, or alert assignments remain.
 5. Tighten site privacy settings behind owner/admin authority plus site access. Site privacy settings now follow this rule.
 6. Add role management UI only after policies exist. The account overview now exposes owner-only role changes backed by `UserPolicy` for account-boundary checks plus action-level self-change denial, last-owner protection, and audit events.
 7. Add audit events for role and site-access changes. Site-access updates and role changes now create audit events.

@@ -115,6 +115,47 @@ test('site index scopes management links to sites assigned to the agent', functi
         ->assertDontSee('Restricted Store');
 });
 
+test('sites with only deactivated support assignments fall back to account-wide access', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Ada Active',
+    ]);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Dee Dormant',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create([
+        'name' => 'Dormant Assignment Docs',
+        'domain' => 'dormant.example.test',
+    ]);
+    $site->supportAgents()->attach($deactivatedAgent);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-dormant']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-DORMANT',
+        'subject' => 'Dormant assignment conversation',
+        'status' => 'open',
+    ]);
+
+    expect($site->fresh()->hasExplicitSupportAgents())->toBeFalse()
+        ->and($site->fresh()->supportsAgent($agent))->toBeTrue()
+        ->and($site->fresh()->eligibleSupportAgents()->pluck('users.id')->all())->toBe([]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/sites')
+        ->assertOk()
+        ->assertSee('Dormant Assignment Docs')
+        ->assertSee('Account-wide fallback')
+        ->assertSee('All account agents');
+
+    $this->actingAs($agent)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('Dormant Assignment Docs')
+        ->assertSee('Dormant assignment conversation');
+});
+
 test('agent cannot view conversations or tickets for a site they do not support', function (): void {
     $account = Account::factory()->create();
     $agent = User::factory()->for($account)->create();

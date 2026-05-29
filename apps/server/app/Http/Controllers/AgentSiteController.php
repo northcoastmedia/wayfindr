@@ -27,7 +27,8 @@ class AgentSiteController extends Controller
             ->with('latestVisitor')
             ->withCount([
                 'supportAgents as support_agents_count' => fn ($query) => $query
-                    ->where('users.account_id', $account->id),
+                    ->where('users.account_id', $account->id)
+                    ->whereNull('users.deactivated_at'),
             ])
             ->orderBy('name')
             ->get();
@@ -100,7 +101,7 @@ class AgentSiteController extends Controller
             'accountAgents' => $accountAgents,
             'agent' => $agent,
             'canManageIntegrations' => Gate::forUser($agent)->allows('manageIntegrations', $site),
-            'canManageSiteAccess' => $agent->isAdmin(),
+            'canManageSiteAccess' => Gate::forUser($agent)->allows('manageAccess', $site),
             'canUpdatePrivacy' => Gate::forUser($agent)->allows('updatePrivacy', $site),
             'dataResponsibility' => config('wayfindr.data_responsibility'),
             'externalIssueCapabilities' => ExternalIssueCapability::options(),
