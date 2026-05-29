@@ -824,12 +824,22 @@ test('authorizes built-in Pusher subscriptions through the widget endpoint', asy
   let pusherOptions = null;
   let subscribedChannel = null;
   let unbound = false;
+  const connectionHandlers = {};
+  const unboundConnectionHandlers = {};
   let unsubscribed = false;
   let disconnected = false;
 
   function FakePusher(key, options) {
     appKey = key;
     pusherOptions = options;
+    this.connection = {
+      bind: (eventName, handler) => {
+        connectionHandlers[eventName] = handler;
+      },
+      unbind: (eventName, handler) => {
+        unboundConnectionHandlers[eventName] = handler;
+      },
+    };
 
     this.subscribe = (channelName) => {
       subscribedChannel = channelName;
@@ -870,7 +880,10 @@ test('authorizes built-in Pusher subscriptions through the widget endpoint', asy
     },
   });
 
-  const subscription = client.subscribeToConversation('WF-TEST123', () => {});
+  const connectionStates = [];
+  const subscription = client.subscribeToConversation('WF-TEST123', () => {}, (state) => {
+    connectionStates.push(state);
+  });
   const authPayload = await new Promise((resolve, reject) => {
     pusherOptions.channelAuthorization.customHandler({
       socketId: '1234.5678',
@@ -904,10 +917,19 @@ test('authorizes built-in Pusher subscriptions through the widget endpoint', asy
   assert.deepEqual(authPayload, {
     auth: 'reverb-key:signed-channel',
   });
+  assert.equal(typeof connectionHandlers.state_change, 'function');
+  assert.equal(typeof connectionHandlers.error, 'function');
+
+  connectionHandlers.state_change({ current: 'connected' });
+  connectionHandlers.error();
+
+  assert.deepEqual(connectionStates, ['connected', 'unavailable']);
 
   subscription.unsubscribe();
 
   assert.equal(unbound, true);
+  assert.equal(unboundConnectionHandlers.state_change, connectionHandlers.state_change);
+  assert.equal(unboundConnectionHandlers.error, connectionHandlers.error);
   assert.equal(unsubscribed, true);
   assert.equal(disconnected, true);
 });
@@ -1205,6 +1227,10 @@ test('polls active conversations so agent replies appear when realtime is unavai
     [...widget.root.querySelectorAll('.wayfindr-widget__message')].map((message) => message.textContent),
     ['VisitorCan you help me?', 'Ada AgentFallback hello.'],
   );
+  assert.match(
+    widget.root.querySelector('.wayfindr-widget__connection').textContent,
+    /Using periodic refresh for updates/,
+  );
 
   widget.destroy();
 });
@@ -1214,6 +1240,7 @@ test('appends live agent messages from the realtime subscription', async () => {
     url: 'https://docs.example.test/install',
   });
   let liveMessage = null;
+  let setRealtimeState = null;
   let unsubscribed = false;
 
   const widget = Wayfindr.init({
@@ -1225,8 +1252,9 @@ test('appends live agent messages from the realtime subscription', async () => {
     anonymousId: 'anon-browser-123',
     storage: memoryStorage(),
     realtime: {
-      subscribe: ({ onMessage }) => {
+      subscribe: ({ onMessage, onConnectionState }) => {
         liveMessage = onMessage;
+        setRealtimeState = onConnectionState;
 
         return {
           unsubscribe: () => {
@@ -1297,6 +1325,18 @@ test('appends live agent messages from the realtime subscription', async () => {
   );
 
   await settle();
+
+  assert.match(
+    widget.root.querySelector('.wayfindr-widget__connection').textContent,
+    /Live updates connected/,
+  );
+
+  setRealtimeState('unavailable');
+
+  assert.match(
+    widget.root.querySelector('.wayfindr-widget__connection').textContent,
+    /Using periodic refresh for updates/,
+  );
 
   liveMessage({
     conversation: { support_code: 'WF-TEST123' },

@@ -267,7 +267,7 @@
       getMaskSelectors: function () {
         return maskSelectors.slice();
       },
-      subscribeToConversation: function (supportCode, onMessage) {
+      subscribeToConversation: function (supportCode, onMessage, onConnectionState) {
         if (!realtime) {
           return null;
         }
@@ -283,6 +283,7 @@
             visitor_token: requireVisitorToken(visitorToken),
           },
           onMessage: onMessage,
+          onConnectionState: onConnectionState,
         });
       },
       sendFirstMessage: async function (body, details) {
@@ -338,6 +339,7 @@
       '    <button class="wayfindr-widget__close" type="button" aria-label="Close support chat">&times;</button>',
       '  </header>',
       '  <div class="wayfindr-widget__timeline" role="log" aria-live="polite" aria-label="Conversation messages" hidden></div>',
+      '  <p class="wayfindr-widget__connection" hidden></p>',
       '  <form class="wayfindr-widget__form">',
       '    <label class="wayfindr-widget__label" for="wayfindr-message">How can we help?</label>',
       '    <textarea id="wayfindr-message" class="wayfindr-widget__textarea" name="message" rows="4" required placeholder="' + escapeHtml(options.placeholder || 'Type your message...') + '"></textarea>',
@@ -364,6 +366,7 @@
     var close = rootEl.querySelector('.wayfindr-widget__close');
     var form = rootEl.querySelector('.wayfindr-widget__form');
     var timeline = rootEl.querySelector('.wayfindr-widget__timeline');
+    var connection = rootEl.querySelector('.wayfindr-widget__connection');
     var textarea = rootEl.querySelector('.wayfindr-widget__textarea');
     var status = rootEl.querySelector('.wayfindr-widget__status');
     var send = rootEl.querySelector('.wayfindr-widget__send');
@@ -439,6 +442,7 @@
         return;
       }
 
+      var sawConnectionState = false;
       realtimeSubscription = client.subscribeToConversation(supportCode, function (event) {
         var eventSupportCode = event && event.conversation ? event.conversation.support_code : supportCode;
 
@@ -447,7 +451,41 @@
         }
 
         appendMessage(event.message);
+      }, function (state) {
+        sawConnectionState = true;
+        renderConnectionState(state);
       });
+
+      if (!realtimeSubscription) {
+        renderConnectionState('polling');
+
+        return;
+      }
+
+      if (!sawConnectionState) {
+        renderConnectionState('connected');
+      }
+    }
+
+    function renderConnectionState(state) {
+      if (!supportCode) {
+        connection.hidden = true;
+        connection.textContent = '';
+
+        return;
+      }
+
+      var normalized = String(state || '').toLowerCase();
+
+      if (normalized === 'connected' || normalized === 'live') {
+        connection.textContent = 'Live updates connected.';
+      } else if (normalized === 'connecting' || normalized === 'reconnecting') {
+        connection.textContent = 'Live updates reconnecting. Refresh still works.';
+      } else {
+        connection.textContent = 'Using periodic refresh for updates.';
+      }
+
+      connection.hidden = false;
     }
 
     function scheduleMessagePoll() {
@@ -870,15 +908,38 @@
         });
         var channel = pusher.subscribe(config.channelName);
         var eventNames = pusherBroadcastEventNames(config.eventName);
+        var connectionBindings = [];
 
         eventNames.forEach(function (eventName) {
           channel.bind(eventName, config.onMessage);
         });
 
+        if (config.onConnectionState && pusher.connection && typeof pusher.connection.bind === 'function') {
+          bindPusherConnectionState(pusher.connection, 'state_change', function (change) {
+            config.onConnectionState((change && (change.current || change.state)) || 'connecting');
+          });
+          bindPusherConnectionState(pusher.connection, 'error', function () {
+            config.onConnectionState('unavailable');
+          });
+        }
+
+        function bindPusherConnectionState(connection, eventName, handler) {
+          connection.bind(eventName, handler);
+          connectionBindings.push({
+            eventName: eventName,
+            handler: handler,
+          });
+        }
+
         return {
           unsubscribe: function () {
             eventNames.forEach(function (eventName) {
               channel.unbind(eventName, config.onMessage);
+            });
+            connectionBindings.forEach(function (binding) {
+              if (pusher.connection && typeof pusher.connection.unbind === 'function') {
+                pusher.connection.unbind(binding.eventName, binding.handler);
+              }
             });
             pusher.unsubscribe(config.channelName);
 
@@ -1619,6 +1680,7 @@
       '.wayfindr-widget__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #d8dfdc;background:#f7f7f3}',
       '.wayfindr-widget__close{border:0;background:transparent;color:#62706b;cursor:pointer;font:700 24px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:0}',
       '.wayfindr-widget__timeline{display:grid;gap:10px;max-height:280px;overflow:auto;padding:14px 16px;border-bottom:1px solid #eef1ef;background:#fbfbf8}',
+      '.wayfindr-widget__connection{margin:0;padding:10px 16px 0;color:#62706b;font-size:12px;line-height:1.35}',
       '.wayfindr-widget__message{display:grid;gap:4px;width:88%;border:1px solid #d8dfdc;border-radius:8px;padding:9px 10px;background:#fff}',
       '.wayfindr-widget__message--agent{justify-self:end;background:#eef6f3;border-color:#cfe1dc}',
       '.wayfindr-widget__message-name{color:#62706b;font-size:12px;line-height:1.2}',
