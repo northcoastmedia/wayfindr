@@ -76,3 +76,61 @@ test('agent can inspect their account role and same-account roster', function ()
         ->assertDontSee('Other Support')
         ->assertDontSee('Restricted Store');
 });
+
+test('agent can inspect visible site access from the account overview', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $owner = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Owner,
+        'name' => 'Olive Owner',
+        'email' => 'olive@example.test',
+    ]);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+        'email' => 'ada@example.test',
+    ]);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+        'email' => 'bea@example.test',
+    ]);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Doug Dormant',
+        'email' => 'doug@example.test',
+        'deactivated_at' => now(),
+    ]);
+
+    $fallbackSite = Site::factory()->for($account)->create([
+        'name' => 'Public Docs',
+        'domain' => 'docs.example.test',
+    ]);
+    $explicitSite = Site::factory()->for($account)->create([
+        'name' => 'VIP Portal',
+        'domain' => 'vip.example.test',
+    ]);
+    $explicitSite->supportAgents()->attach([$owner->id, $agent->id, $deactivatedAgent->id]);
+
+    $restrictedSite = Site::factory()->for($account)->create([
+        'name' => 'Restricted Store',
+        'domain' => 'store.example.test',
+    ]);
+    $restrictedSite->supportAgents()->attach($admin);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Site access matrix')
+        ->assertSee('Public Docs')
+        ->assertSee('docs.example.test')
+        ->assertSee('Account-wide fallback')
+        ->assertSee('All active account agents')
+        ->assertSee('VIP Portal')
+        ->assertSee('vip.example.test')
+        ->assertSee('Explicit access')
+        ->assertSee('2 assigned active agents')
+        ->assertSee('Olive Owner')
+        ->assertSee('Bea Builder')
+        ->assertSee(route('dashboard.sites.show', $fallbackSite), false)
+        ->assertSee(route('dashboard.sites.show', $explicitSite), false)
+        ->assertDontSee('Restricted Store');
+});

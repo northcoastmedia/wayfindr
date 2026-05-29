@@ -63,6 +63,66 @@
                 </div>
             </section>
 
+            <section class="section" aria-labelledby="site-access-matrix-heading">
+                <div class="section-header">
+                    <h2 id="site-access-matrix-heading">Site access matrix</h2>
+                    <span class="lede">{{ $visibleSites->count() }} visible {{ \Illuminate\Support\Str::plural('site', $visibleSites->count()) }}</span>
+                </div>
+
+                @if ($visibleSites->isEmpty())
+                    <p class="empty">No support sites are visible to your account yet.</p>
+                @else
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Site</th>
+                                    <th scope="col">Access model</th>
+                                    <th scope="col">Active support agents</th>
+                                    <th scope="col">Manage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($visibleSites as $site)
+                                    @php
+                                        $assignedAgents = $site->supportAgents;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <strong>{{ $site->name }}</strong>
+                                            <span class="lede">{{ $site->domain ?? 'Domain not set' }}</span>
+                                        </td>
+                                        <td>
+                                            @if ($assignedAgents->isEmpty())
+                                                Account-wide fallback
+                                            @else
+                                                Explicit access
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($assignedAgents->isEmpty())
+                                                <strong>All active account agents</strong>
+                                                <span class="lede">{{ $activeAgentCount }} eligible until assignments are saved</span>
+                                            @else
+                                                <strong>{{ $assignedAgents->count() }} assigned active {{ \Illuminate\Support\Str::plural('agent', $assignedAgents->count()) }}</strong>
+                                                <span class="lede">
+                                                    {{ $assignedAgents
+                                                        ->map(fn ($supportAgent) => $supportAgent->name.' ('.($roleLabels[$supportAgent->account_role?->value] ?? 'Agent').')')
+                                                        ->join(', ') }}
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <a class="text-link" href="{{ route('dashboard.sites.show', $site) }}">Manage access</a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </section>
+
             @if ($canCreateAgents)
                 <section class="section" aria-labelledby="add-agent-heading">
                     <div class="section-header">

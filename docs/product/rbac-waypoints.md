@@ -77,6 +77,8 @@ Until that explicit decision is made, owner/admin support queue access still fol
 
 The first `manage_site_access` implementation requires owner/admin authority plus support access to the site, matching the current site settings screen. A later metadata-only account administration surface may allow admins to assign agents to sites they do not personally support, but that should be a separate product decision with tests for cross-account denial, cross-site denial, self-assignment behavior, and attempts to assign agents outside the account.
 
+The account overview now provides a read-only site access matrix for the signed-in agent's visible sites. This keeps current fallback-versus-explicit support scope easy to inspect without adding an elevated site-access bypass or exposing support content from sites the agent cannot work.
+
 Site privacy settings require owner/admin authority plus site access. Plain agents can still view install and public masking context for sites they support, but they cannot edit privacy configuration.
 
 ## Platform Operator Boundary
@@ -172,8 +174,9 @@ Every RBAC implementation slice should include tests for:
 8. Add agent creation from the account overview. Owners and admins can create default `agent` users with one-time generated passwords while email invitations remain a later setup/readiness feature. `UserPolicy` now owns the create-agent authority check.
 9. Add agent self-service profile basics. Agents can update their display name, change their password, and choose their alert preference from the dashboard profile screen, with password changes recorded as audit events.
 10. Add agent deactivation. Owners can suspend or restore another same-account user. Admins can suspend or restore non-owner agents. Deactivated users cannot sign in or continue using existing dashboard sessions, and historical records remain attached to the deactivated user. `UserPolicy` now owns the same-account and role-boundary checks for deactivation and reactivation while the action still protects the last active owner.
-11. Add owner/admin elevated behavior only when the product decision is explicit.
-12. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, safe system identity, documentation links, and readiness diagnostics.
+11. Add read-only account-level visibility for current site access. The account overview now shows visible sites, their fallback-or-explicit access model, active support-agent assignments, and a management link back to each site.
+12. Add owner/admin elevated behavior only when the product decision is explicit.
+13. Add platform operator scaffolding only when the first operator-only workflow exists, keeping it separate from account roles and support data access. The first scaffold adds `users.platform_role`, `/operator`, safe system identity, documentation links, and readiness diagnostics.
 
 ## Role Management Guardrails
 
