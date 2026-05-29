@@ -23,9 +23,6 @@ class AgentAccountController extends Controller
 
         $agents = $account->agents()
             ->withCount([
-                'supportedSites as explicit_site_access_count' => fn ($query) => $query
-                    ->where('sites.account_id', $account->id)
-                    ->whereIn('sites.id', $visibleSiteIds),
                 'assignedConversations as visible_open_conversations_count' => fn ($query) => $query
                     ->where('status', 'open')
                     ->whereIn('site_id', $visibleSiteIds),
@@ -56,10 +53,24 @@ class AgentAccountController extends Controller
             ->orderBy('name')
             ->get();
 
+        $fallbackSites = $visibleSites
+            ->filter(fn ($site): bool => $site->supportAgents->isEmpty())
+            ->values();
+
+        $agentSupportScopes = $agents->mapWithKeys(fn ($accountAgent): array => [
+            $accountAgent->id => [
+                'explicitSites' => $visibleSites
+                    ->filter(fn ($site): bool => $site->supportAgents->contains('id', $accountAgent->id))
+                    ->values(),
+                'fallbackSites' => $accountAgent->isDeactivated() ? collect() : $fallbackSites,
+            ],
+        ]);
+
         return view('agent.account.show', [
             'account' => $account,
             'agent' => $agent,
             'agents' => $agents,
+            'agentSupportScopes' => $agentSupportScopes,
             'activeAgentCount' => $agents->reject->isDeactivated()->count(),
             'canCreateAgents' => $agent->isAdmin(),
             'canManageAgentAccess' => $agent->isAdmin(),
@@ -67,7 +78,8 @@ class AgentAccountController extends Controller
             'roleLabels' => $this->roleLabels(),
             'roleOptions' => $this->roleLabels(),
             'siteCount' => $account->sites()->count(),
-            'supportAssignmentCount' => $agents->sum('explicit_site_access_count'),
+            'supportAssignmentCount' => $agentSupportScopes
+                ->sum(fn (array $scope): int => $scope['explicitSites']->count()),
             'visibleSites' => $visibleSites,
             'visibleSiteCount' => count($visibleSiteIds),
         ]);

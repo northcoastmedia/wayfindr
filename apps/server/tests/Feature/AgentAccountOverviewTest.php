@@ -134,3 +134,44 @@ test('agent can inspect visible site access from the account overview', function
         ->assertSee(route('dashboard.sites.show', $explicitSite), false)
         ->assertDontSee('Restricted Store');
 });
+
+test('agent roster summarizes explicit and fallback site scope', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $owner = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Owner,
+        'name' => 'Olive Owner',
+        'email' => 'olive@example.test',
+    ]);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+        'email' => 'bea@example.test',
+    ]);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Doug Dormant',
+        'email' => 'doug@example.test',
+        'deactivated_at' => now(),
+    ]);
+
+    $fallbackSite = Site::factory()->for($account)->create(['name' => 'Public Docs']);
+    $explicitSite = Site::factory()->for($account)->create(['name' => 'VIP Portal']);
+    $explicitSite->supportAgents()->attach([$owner->id, $agent->id, $deactivatedAgent->id]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Support scope')
+        ->assertSeeInOrder([
+            'Bea Builder',
+            'bea@example.test',
+            'Explicit: VIP Portal',
+            'Fallback: Public Docs',
+        ])
+        ->assertSeeInOrder([
+            'Doug Dormant',
+            'doug@example.test',
+            'No active support scope',
+        ])
+        ->assertSee(route('dashboard.sites.show', $fallbackSite), false)
+        ->assertSee(route('dashboard.sites.show', $explicitSite), false);
+});

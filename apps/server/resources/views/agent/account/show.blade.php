@@ -169,7 +169,7 @@
                                 @if ($canManageAgentAccess)
                                     <th scope="col">Manage access</th>
                                 @endif
-                                <th scope="col">Site access</th>
+                                <th scope="col">Support scope</th>
                                 <th scope="col">Open conversations</th>
                                 <th scope="col">Open tickets</th>
                             </tr>
@@ -180,6 +180,12 @@
                                     $canManageThisAgentAccess = $canManageAgentAccess
                                         && ! $accountAgent->is($agent)
                                         && ($agent->isOwner() || $accountAgent->account_role === \App\Enums\AccountRole::Agent);
+                                    $supportScope = $agentSupportScopes[$accountAgent->id] ?? [
+                                        'explicitSites' => collect(),
+                                        'fallbackSites' => collect(),
+                                    ];
+                                    $explicitSites = $supportScope['explicitSites'];
+                                    $fallbackSites = $supportScope['fallbackSites'];
                                 @endphp
                                 <tr>
                                     <td>
@@ -226,7 +232,19 @@
                                             @endif
                                         </td>
                                     @endif
-                                    <td>{{ $accountAgent->explicit_site_access_count }} {{ \Illuminate\Support\Str::plural('support assignment', $accountAgent->explicit_site_access_count) }}</td>
+                                    <td>
+                                        @if ($explicitSites->isEmpty() && $fallbackSites->isEmpty())
+                                            <span class="lede">No active support scope</span>
+                                        @else
+                                            @if ($explicitSites->isNotEmpty())
+                                                <strong>{{ $explicitSites->count() }} explicit {{ \Illuminate\Support\Str::plural('site', $explicitSites->count()) }}</strong>
+                                                <span class="lede">Explicit: {{ $explicitSites->pluck('name')->join(', ') }}</span>
+                                            @endif
+                                            @if ($fallbackSites->isNotEmpty())
+                                                <span class="lede">Fallback: {{ $fallbackSites->pluck('name')->join(', ') }}</span>
+                                            @endif
+                                        @endif
+                                    </td>
                                     <td>{{ $accountAgent->visible_open_conversations_count }} {{ \Illuminate\Support\Str::plural('open conversation', $accountAgent->visible_open_conversations_count) }}</td>
                                     <td>{{ $accountAgent->visible_open_tickets_count }} {{ \Illuminate\Support\Str::plural('open ticket', $accountAgent->visible_open_tickets_count) }}</td>
                                 </tr>

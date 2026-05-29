@@ -28,7 +28,9 @@ If a site has no assigned support agents yet, Wayfindr treats it as account-wide
 
 Account owners and admins can manage site support access from the site settings screen when they also have access to that site. The UI requires at least one assigned support agent and at least one assigned owner or admin so an operator does not accidentally reopen a configured site to the account-wide fallback or remove every person who can manage access later.
 
-The account overview includes a site access matrix for the sites visible to the signed-in agent. It shows whether each site is still using the account-wide fallback or explicit support-agent assignments, lists the active assigned agents for explicit sites, and links back to the site settings screen for management.
+The account overview includes a site access matrix for the sites visible to the signed-in agent. It shows whether each site is still using the account-wide fallback or explicit support-agent assignments, lists the active assigned agents for explicit sites, and links back to the site settings screen for management. The agent roster also summarizes each visible agent's active support scope so account operators can spot explicit assignments, fallback coverage, and deactivated agents without opening every site.
+
+Deactivated agents are not assignable from site access management. Stale historical assignments may remain in the database for audit/history, but they do not count as eligible support agents or site managers.
 
 ## Account Roles
 
