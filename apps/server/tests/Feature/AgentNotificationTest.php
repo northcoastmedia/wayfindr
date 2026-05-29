@@ -201,6 +201,33 @@ test('unassigned conversation alerts honor agent alert preferences', function ()
         ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
 });
 
+test('unassigned conversation alerts fall back when only deactivated agents are assigned to the site', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $fallbackAgent = User::factory()->for($account)->create(['name' => 'Ada Active']);
+    $deactivatedAgent = User::factory()->for($account)->create([
+        'name' => 'Dee Dormant',
+        'deactivated_at' => now(),
+    ]);
+    $site = Site::factory()->for($account)->create(['public_key' => 'site_public_docs']);
+    $site->supportAgents()->attach($deactivatedAgent);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-docs']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'assigned_agent_id' => null,
+        'support_code' => 'WF-FALLBACK1',
+    ]);
+    $token = notificationVisitorToken($this, 'site_public_docs', 'anon-docs');
+
+    $this->postJson("/api/conversations/{$conversation->support_code}/messages", [
+        'site_public_key' => 'site_public_docs',
+        'anonymous_id' => 'anon-docs',
+        'visitor_token' => $token,
+        'body' => 'Can an active agent still see this?',
+    ])->assertCreated();
+
+    expect($fallbackAgent->fresh()->unreadNotifications)->toHaveCount(1)
+        ->and($deactivatedAgent->fresh()->unreadNotifications)->toHaveCount(0);
+});
+
 test('assigned only agents still receive alerts for conversations assigned to them', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $assignedAgent = User::factory()->for($account)->create([

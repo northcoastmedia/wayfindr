@@ -27,7 +27,8 @@ class AgentSiteController extends Controller
             ->with('latestVisitor')
             ->withCount([
                 'supportAgents as support_agents_count' => fn ($query) => $query
-                    ->where('users.account_id', $account->id),
+                    ->where('users.account_id', $account->id)
+                    ->whereNull('users.deactivated_at'),
             ])
             ->orderBy('name')
             ->get();

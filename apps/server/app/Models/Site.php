@@ -38,7 +38,8 @@ class Site extends Model
     public function eligibleSupportAgents(): BelongsToMany
     {
         return $this->supportAgents()
-            ->where('users.account_id', $this->account_id);
+            ->where('users.account_id', $this->account_id)
+            ->whereNull('users.deactivated_at');
     }
 
     public function hasExplicitSupportAgents(): bool
@@ -72,9 +73,12 @@ class Site extends Model
             ->where('account_id', $agent->account_id)
             ->where(function (Builder $query) use ($agent): void {
                 $query
-                    ->whereDoesntHave('supportAgents', fn (Builder $query) => $query->where('users.account_id', $agent->account_id))
+                    ->whereDoesntHave('supportAgents', fn (Builder $query) => $query
+                        ->where('users.account_id', $agent->account_id)
+                        ->whereNull('users.deactivated_at'))
                     ->orWhereHas('supportAgents', fn (Builder $query) => $query
                         ->where('users.account_id', $agent->account_id)
+                        ->whereNull('users.deactivated_at')
                         ->whereKey($agent->id));
             });
     }
