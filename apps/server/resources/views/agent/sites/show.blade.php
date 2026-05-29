@@ -269,6 +269,42 @@
                 @endif
             </section>
 
+            @if ($canViewSiteActivity)
+                <section id="site-access-activity" class="section" aria-labelledby="site-access-activity-heading">
+                    <div class="section-header">
+                        <h2 id="site-access-activity-heading">Recent site access activity</h2>
+                        <div class="section-actions">
+                            <span class="lede">{{ $siteActivity->count() }} shown</span>
+                            @if ($siteActivityAuditUrl)
+                                <a class="button secondary" href="{{ $siteActivityAuditUrl }}">View full audit log</a>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if ($siteActivity->isEmpty())
+                        <p class="empty">No site access changes have been recorded yet.</p>
+                    @else
+                        <div class="timeline-list">
+                            @foreach ($siteActivity as $activity)
+                                <article class="timeline-item internal-note">
+                                    <div class="timeline-content">
+                                        <strong>{{ $activity['label'] }}</strong>
+                                        <p class="message-body">{{ $activity['body'] }}</p>
+                                        <div class="timeline-meta">
+                                            <span>{{ $activity['actor'] }}</span>
+                                            <span>{{ $activity['subject'] }}</span>
+                                            @if ($activity['occurred_at'])
+                                                <span>{{ $activity['occurred_at']->diffForHumans() }}</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </article>
+                            @endforeach
+                        </div>
+                    @endif
+                </section>
+            @endif
+
             <section class="section" aria-labelledby="external-issue-routing-heading">
                 <div class="section-header">
                     <h2 id="external-issue-routing-heading">External issue routing</h2>

@@ -25,7 +25,7 @@
             <section class="section" aria-labelledby="audit-filters-heading">
                 <div class="section-header">
                     <h2 id="audit-filters-heading">Filters</h2>
-                    <span class="lede">{{ $auditAction || $auditSearch ? 'Filtered' : 'All visible activity' }}</span>
+                    <span class="lede">{{ $auditAction || $auditSearch || $auditSiteId ? 'Filtered' : 'All visible activity' }}</span>
                 </div>
                 <form class="section-form" method="GET" action="{{ route('dashboard.account.audit.index') }}">
                     <div class="meta-grid">
@@ -35,6 +35,15 @@
                                 <option value="">Any action</option>
                                 @foreach ($auditActions as $actionValue => $actionLabel)
                                     <option value="{{ $actionValue }}" @selected($auditAction === $actionValue)>{{ $actionLabel }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="meta-item">
+                            <label class="meta-label" for="audit_site">Site</label>
+                            <select id="audit_site" name="audit_site">
+                                <option value="">Any visible site</option>
+                                @foreach ($auditSites as $site)
+                                    <option value="{{ $site->id }}" @selected($auditSiteId === $site->id)>{{ $site->name }}</option>
                                 @endforeach
                             </select>
                         </div>
