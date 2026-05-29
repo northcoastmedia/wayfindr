@@ -604,6 +604,58 @@ test('dashboard searches tickets by subject description and support code', funct
         ->assertDontSee('Password reset request');
 });
 
+test('dashboard summarizes active ticket filters', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Store']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->for($agent, 'assignee')
+        ->create([
+            'category' => 'bug',
+            'priority' => 'urgent',
+            'status' => 'pending',
+            'subject' => 'Checkout outage',
+        ]);
+
+    $this->actingAs($agent)
+        ->get("/dashboard?ticket_status=pending&ticket_filter=assigned_to_me&ticket_site={$site->id}&ticket_priority=urgent&ticket_category=bug&ticket_search=checkout")
+        ->assertOk()
+        ->assertSee('Active ticket filters')
+        ->assertSee('Status: Pending')
+        ->assertSee('Assignee: Assigned to me')
+        ->assertSee('Site: Acme Store')
+        ->assertSee('Priority: Urgent')
+        ->assertSee('Category: Bug')
+        ->assertSee('Search: checkout')
+        ->assertSee('Clear all ticket filters')
+        ->assertSee('/dashboard#tickets', false);
+});
+
+test('dashboard explains when ticket filters have no matches', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+
+    Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'priority' => 'low',
+            'status' => 'open',
+            'subject' => 'Docs typo',
+        ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard?ticket_priority=urgent')
+        ->assertOk()
+        ->assertSee('No tickets match those filters.')
+        ->assertSee('Clear all ticket filters')
+        ->assertDontSee('No open tickets yet.');
+});
+
 test('dashboard surfaces ticket attention signals', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);

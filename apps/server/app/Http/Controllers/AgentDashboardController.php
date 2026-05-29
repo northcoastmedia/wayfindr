@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Models\Site;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\RealtimeHealth;
@@ -99,12 +100,19 @@ class AgentDashboardController extends Controller
             'all' => 'total',
             default => $ticketStatus,
         };
-        $ticketEmptyMessage = match ($ticketStatus) {
-            'all' => 'No tickets yet.',
-            'pending' => 'No pending tickets yet.',
-            'closed' => 'No closed tickets yet.',
-            default => 'No open tickets yet.',
-        };
+        $ticketHasActiveRefinement = $ticketFilter !== 'all'
+            || $ticketSite
+            || $ticketPriority !== 'all'
+            || $ticketCategory !== 'all'
+            || $ticketSearch !== '';
+        $ticketEmptyMessage = $ticketHasActiveRefinement
+            ? 'No tickets match those filters.'
+            : match ($ticketStatus) {
+                'all' => 'No tickets yet.',
+                'pending' => 'No pending tickets yet.',
+                'closed' => 'No closed tickets yet.',
+                default => 'No open tickets yet.',
+            };
 
         $conversations = Conversation::query()
             ->with(['assignedAgent', 'latestMessage', 'site', 'visitor'])
@@ -155,6 +163,8 @@ class AgentDashboardController extends Controller
         $unreadNotificationCount = $visibleUnreadNotifications->count();
         $unreadNotifications = $visibleUnreadNotifications->take(5);
 
+        $ticketQuery = $this->ticketQueryParams($ticketStatus, $ticketFilter, $ticketSite, $ticketPriority, $ticketCategory, $ticketSearch);
+
         return view('agent.dashboard', [
             'account' => $account,
             'agent' => $agent,
@@ -172,7 +182,21 @@ class AgentDashboardController extends Controller
             'ticketFilters' => $ticketFilters,
             'ticketPriority' => $ticketPriority,
             'ticketPriorityFilters' => $ticketPriorityFilters,
-            'ticketQuery' => $this->ticketQueryParams($ticketStatus, $ticketFilter, $ticketSite, $ticketPriority, $ticketCategory, $ticketSearch),
+            'ticketActiveFilters' => $this->activeTicketFilters(
+                $ticketQuery,
+                $ticketStatus,
+                $ticketStatusFilters,
+                $ticketFilter,
+                $ticketFilters,
+                $ticketSite,
+                $sites,
+                $ticketPriority,
+                $ticketPriorityFilters,
+                $ticketCategory,
+                $ticketCategoryFilters,
+                $ticketSearch,
+            ),
+            'ticketQuery' => $ticketQuery,
             'ticketSearch' => $ticketSearch,
             'ticketSite' => $ticketSite,
             'ticketStatus' => $ticketStatus,
@@ -225,5 +249,75 @@ class AgentDashboardController extends Controller
         }
 
         return $params;
+    }
+
+    /**
+     * @param  array<string, string|int>  $ticketQuery
+     * @param  array<string, string>  $ticketStatusFilters
+     * @param  array<string, string>  $ticketFilters
+     * @param  Collection<int, Site>  $sites
+     * @param  array<string, string>  $ticketPriorityFilters
+     * @param  array<string, string>  $ticketCategoryFilters
+     * @return array<int, array{label: string, href: string}>
+     */
+    private function activeTicketFilters(
+        array $ticketQuery,
+        string $ticketStatus,
+        array $ticketStatusFilters,
+        string $ticketFilter,
+        array $ticketFilters,
+        ?int $ticketSite,
+        Collection $sites,
+        string $ticketPriority,
+        array $ticketPriorityFilters,
+        string $ticketCategory,
+        array $ticketCategoryFilters,
+        string $ticketSearch,
+    ): array {
+        $filters = [];
+
+        if ($ticketStatus !== 'open') {
+            $filters[] = $this->ticketFilterChip('ticket_status', 'Status: '.$ticketStatusFilters[$ticketStatus], $ticketQuery);
+        }
+
+        if ($ticketFilter !== 'all') {
+            $filters[] = $this->ticketFilterChip('ticket_filter', 'Assignee: '.$ticketFilters[$ticketFilter], $ticketQuery);
+        }
+
+        if ($ticketSite) {
+            $site = $sites->firstWhere('id', $ticketSite);
+
+            if ($site) {
+                $filters[] = $this->ticketFilterChip('ticket_site', 'Site: '.$site->name, $ticketQuery);
+            }
+        }
+
+        if ($ticketPriority !== 'all') {
+            $filters[] = $this->ticketFilterChip('ticket_priority', 'Priority: '.$ticketPriorityFilters[$ticketPriority], $ticketQuery);
+        }
+
+        if ($ticketCategory !== 'all') {
+            $filters[] = $this->ticketFilterChip('ticket_category', 'Category: '.$ticketCategoryFilters[$ticketCategory], $ticketQuery);
+        }
+
+        if ($ticketSearch !== '') {
+            $filters[] = $this->ticketFilterChip('ticket_search', 'Search: '.$ticketSearch, $ticketQuery);
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @param  array<string, string|int>  $ticketQuery
+     * @return array{label: string, href: string}
+     */
+    private function ticketFilterChip(string $queryKey, string $label, array $ticketQuery): array
+    {
+        unset($ticketQuery[$queryKey]);
+
+        return [
+            'label' => $label,
+            'href' => route('dashboard', $ticketQuery).'#tickets',
+        ];
     }
 }
