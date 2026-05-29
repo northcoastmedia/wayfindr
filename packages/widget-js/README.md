@@ -108,7 +108,9 @@ when authorizing the channel.
 and bounded mutation path for shared page-state cobrowsing.
 Widget mutation batches are also capped client-side before they leave the
 browser. The default cap is 60,000 serialized bytes, and host pages can lower
-or raise it with `mutationPayloadMaxBytes` when calling `Wayfindr.init`.
+or raise it with `mutationPayloadMaxBytes` when calling `Wayfindr.init`. The
+widget keeps at most 250 pending mutation records between flushes by default;
+`mutationQueueMaxRecords` can tune that queue for especially noisy pages.
 `createCobrowseSnapshot` masks password fields, hidden fields, configured mask
 selectors, and common sensitive-looking fields before snapshot data leaves the
 visitor browser. Host pages can mark sensitive regions with
