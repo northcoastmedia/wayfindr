@@ -87,6 +87,89 @@ test('account admins can create reusable ticket labels from management', functio
         ->assertSee('Delete unused');
 });
 
+test('managed ticket labels link to the all-status ticket queue filter', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $label = TicketLabel::factory()->for($account)->create([
+        'name' => 'Needs Dev',
+        'slug' => 'needs-dev',
+    ]);
+    $otherAccountLabel = TicketLabel::factory()->create([
+        'name' => 'Other Label',
+        'slug' => 'other-label',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'subject' => 'Closed checkout investigation',
+            'status' => 'closed',
+        ]);
+    $ticket->labels()->attach($label);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account/labels')
+        ->assertOk()
+        ->assertSee('Needs Dev')
+        ->assertSee(route('dashboard', [
+            'ticket_status' => 'all',
+            'ticket_label' => 'needs-dev',
+        ]).'#tickets')
+        ->assertDontSee(route('dashboard', [
+            'ticket_status' => 'all',
+            'ticket_label' => $otherAccountLabel->slug,
+        ]).'#tickets');
+
+    $this->actingAs($admin)
+        ->get(route('dashboard', [
+            'ticket_status' => 'all',
+            'ticket_label' => 'needs-dev',
+        ]))
+        ->assertOk()
+        ->assertSee('Closed checkout investigation');
+});
+
+test('managed ticket label drill-in links only count tickets visible to the admin', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $siteAgent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+    ]);
+    $scopedSite = Site::factory()->for($account)->create(['name' => 'Scoped Docs']);
+    $scopedSite->supportAgents()->attach($siteAgent);
+    $label = TicketLabel::factory()->for($account)->create([
+        'name' => 'Needs Dev',
+        'slug' => 'needs-dev',
+    ]);
+    $ticket = Ticket::factory()
+        ->for($account)
+        ->for($scopedSite)
+        ->create([
+            'subject' => 'Hidden implementation ticket',
+            'status' => 'open',
+        ]);
+    $ticket->labels()->attach($label);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account/labels')
+        ->assertOk()
+        ->assertSee('Needs Dev')
+        ->assertSee('1 ticket')
+        ->assertSee('No visible tickets')
+        ->assertDontSee(route('dashboard', [
+            'ticket_status' => 'all',
+            'ticket_label' => 'needs-dev',
+        ]).'#tickets');
+});
+
 test('ticket label creation rejects reserved and duplicate account slugs', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $admin = User::factory()->for($account)->create([
