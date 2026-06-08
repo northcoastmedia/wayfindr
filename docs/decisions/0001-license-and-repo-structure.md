@@ -17,7 +17,7 @@ Wayfindr will start as a public monorepo with a mixed license structure:
 
 ## Rationale
 
-Wayfindr is a customer-facing support platform, not merely a library. A permissive license for the full product would make it easy for closed hosted competitors to take the code, resell it, and avoid contributing changes back.
+Wayfindr is a customer-facing support platform, not merely a library. A permissive license for the full product would make it easy for closed hosted services to take the code, resell it, and avoid contributing changes back.
 
 AGPL is the intended license for the core product because it addresses network use of modified server software while remaining an OSI-approved open source license.
 

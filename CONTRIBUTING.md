@@ -161,6 +161,16 @@ The suite has three layers, and contributions should keep all three green:
 See [docs/development/testing.md](docs/development/testing.md) for the current
 testing posture.
 
+Before opening a pull request, also run the repository boundary guard from the
+root:
+
+```bash
+make public-info-check
+```
+
+You can opt in to the committed pre-commit hook template with
+`git config core.hooksPath .githooks`.
+
 ### Tests That Security- and Privacy-Sensitive Changes Should Include
 
 Wayfindr's authority and privacy boundaries are part of the product contract,

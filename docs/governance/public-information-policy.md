@@ -1,6 +1,6 @@
 # Public Information Policy
 
-This repository is public. Assume every committed file will be read by users, contributors, competitors, customers, vendors, and people with unusual amounts of free time.
+This repository is public. Assume every committed file will be read by users, contributors, customers, vendors, and people with unusual amounts of free time.
 
 ## Public Repository Scope
 
@@ -37,7 +37,7 @@ Do not commit:
 - vendor credentials,
 - AI provider API keys or account identifiers,
 - tokens or secrets,
-- competitive strategy,
+- commercially sensitive strategy,
 - internal-only launch plans.
 
 ## Business-Adjacent Public Decisions

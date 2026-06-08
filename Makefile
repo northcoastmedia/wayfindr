@@ -1,15 +1,23 @@
 SERVER_DIR := apps/server
 
-.PHONY: help services-up services-down server-install server-migrate server-serve server-test
+.PHONY: help public-info-check public-info-test services-up services-down server-install server-migrate server-serve server-test
 
 help:
 	@printf '%s\n' 'Wayfindr development commands:'
+	@printf '%s\n' '  make public-info-check  Check tracked files for sensitive markers'
+	@printf '%s\n' '  make public-info-test   Test the public-info boundary guard'
 	@printf '%s\n' '  make services-up      Start Postgres and Redis'
 	@printf '%s\n' '  make services-down    Stop local services'
 	@printf '%s\n' '  make server-install   Install Laravel dependencies and create .env'
 	@printf '%s\n' '  make server-migrate   Run Laravel migrations'
 	@printf '%s\n' '  make server-test      Run the Laravel Pest suite'
 	@printf '%s\n' '  make server-serve     Serve Laravel on http://localhost:8000'
+
+public-info-check:
+	scripts/check-public-info-boundary.sh
+
+public-info-test:
+	scripts/test-public-info-boundary.sh
 
 services-up:
 	docker compose up -d postgres redis
