@@ -7,6 +7,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\ConversationNeedsReply;
 use App\Notifications\TicketAssigned;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Gate;
 
 class AlertDigestCandidateCollector
 {
+    public const DIGEST_QUEUED_AT_KEY = 'digest_queued_at';
+
     /**
      * @return Collection<int, array{
      *     kind: string,
@@ -66,11 +69,17 @@ class AlertDigestCandidateCollector
      */
     private function candidateFor(User $agent, DatabaseNotification $notification): ?array
     {
-        return match ($notification->type) {
+        $candidate = match ($notification->type) {
             ConversationNeedsReply::class => $this->conversationCandidate($agent, $notification),
             TicketAssigned::class => $this->ticketCandidate($agent, $notification),
             default => null,
         };
+
+        if (! $candidate || $this->candidateWasQueuedAfterLastActivity($notification, $candidate['last_activity_at'])) {
+            return null;
+        }
+
+        return $candidate;
     }
 
     /**
@@ -155,5 +164,20 @@ class AlertDigestCandidateCollector
     private function timestamp(?CarbonInterface $timestamp): ?string
     {
         return $timestamp?->toISOString();
+    }
+
+    private function candidateWasQueuedAfterLastActivity(DatabaseNotification $notification, ?string $lastActivityAt): bool
+    {
+        $queuedAt = data_get($notification->data, self::DIGEST_QUEUED_AT_KEY);
+
+        if (! is_string($queuedAt) || trim($queuedAt) === '') {
+            return false;
+        }
+
+        if (! is_string($lastActivityAt) || trim($lastActivityAt) === '') {
+            return true;
+        }
+
+        return CarbonImmutable::parse($queuedAt)->greaterThanOrEqualTo(CarbonImmutable::parse($lastActivityAt));
     }
 }
