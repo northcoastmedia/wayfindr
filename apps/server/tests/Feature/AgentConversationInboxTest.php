@@ -288,7 +288,9 @@ test('dashboard shows only fresh visitor typing state', function (): void {
             ->assertOk()
             ->assertSee('Visitor typing')
             ->assertSee('Typing now')
-            ->assertSee('Updated 10 seconds ago');
+            ->assertSee('Updated 10 seconds ago')
+            ->assertSee('data-visitor-typing-label', false)
+            ->assertSee('data-visitor-typing-detail', false);
     } finally {
         Carbon::setTestNow();
     }
@@ -4035,9 +4037,40 @@ test('agent conversation page exposes live cobrowse update readiness when reverb
         ->assertSee('Waiting for live cobrowse updates.')
         ->assertSee('data-cobrowse-update-status', false)
         ->assertSee('conversation.cobrowse.updated')
+        ->assertSee('conversation.typing.updated')
         ->assertSee('private-conversations.WF-LIVECOBROWSE')
         ->assertSee('"appKey":"reverb-key"', false)
         ->assertSee('"host":"wayfindr.test"', false);
+});
+
+test('agent conversation page expires live visitor typing hints locally', function (): void {
+    config()->set('broadcasting.default', 'reverb');
+    config()->set('broadcasting.connections.reverb.key', 'reverb-key');
+    config()->set('broadcasting.connections.reverb.secret', 'reverb-secret');
+    config()->set('broadcasting.connections.reverb.app_id', 'reverb-app');
+    config()->set('broadcasting.connections.reverb.options.host', 'wayfindr.test');
+    config()->set('broadcasting.connections.reverb.options.port', 443);
+    config()->set('broadcasting.connections.reverb.options.scheme', 'https');
+
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-TYPEEXPIRE',
+        'subject' => 'Typing should not stick',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/conversations/WF-TYPEEXPIRE')
+        ->assertOk()
+        ->assertSee('data-visitor-typing-label', false)
+        ->assertSee('data-visitor-typing-detail', false)
+        ->assertSee('"visitorTypingFreshMs":20000', false)
+        ->assertSee('clearVisitorTypingExpiry')
+        ->assertSee('scheduleVisitorTypingExpiry')
+        ->assertSee('visitorTypingExpiryTimer');
 });
 
 test('agent can see cobrowse consent state on a conversation', function (?array $sessionAttributes, string $label, string $message): void {

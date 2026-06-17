@@ -699,8 +699,8 @@
                             </div>
                             <div class="reply-context-item">
                                 <span class="meta-label">Visitor typing</span>
-                                <span class="meta-value">{{ $conversation->visitorTypingLabel() }}</span>
-                                <span class="lede">{{ $conversation->visitorTypingDetail() }}</span>
+                                <span class="meta-value" data-visitor-typing-label aria-live="polite">{{ $conversation->visitorTypingLabel() }}</span>
+                                <span class="lede" data-visitor-typing-detail>{{ $conversation->visitorTypingDetail() }}</span>
                             </div>
                             <div class="reply-context-item">
                                 <span class="meta-label">Visitor read</span>
@@ -784,9 +784,15 @@
                 var panel = document.querySelector('[data-cobrowse-update-panel]');
                 var status = document.querySelector('[data-cobrowse-update-status]');
                 var refresh = document.querySelector('[data-cobrowse-refresh]');
+                var visitorTypingLabel = document.querySelector('[data-visitor-typing-label]');
+                var visitorTypingDetail = document.querySelector('[data-visitor-typing-detail]');
                 var csrf = document.querySelector('meta[name="csrf-token"]');
+                var hasCobrowseTargets = Boolean(panel && status);
+                var hasTypingTargets = Boolean(visitorTypingLabel && visitorTypingDetail);
+                var visitorTypingExpiryTimer = null;
+                var visitorTypingFreshMs = Number(config.visitorTypingFreshMs || 20000);
 
-                if (!config || !panel || !status || !window.WebSocket) {
+                if (!config || (!hasCobrowseTargets && !hasTypingTargets) || !window.WebSocket) {
                     if (status) {
                         status.textContent = 'Live cobrowse updates are unavailable in this browser.';
                     }
@@ -801,8 +807,72 @@
                 }
 
                 function setStatus(message, state) {
+                    if (!hasCobrowseTargets) {
+                        return;
+                    }
+
                     status.textContent = message;
                     panel.dataset.state = state || 'idle';
+                }
+
+                function clearVisitorTypingExpiry() {
+                    if (!visitorTypingExpiryTimer) {
+                        return;
+                    }
+
+                    window.clearTimeout(visitorTypingExpiryTimer);
+                    visitorTypingExpiryTimer = null;
+                }
+
+                function expireVisitorTyping() {
+                    if (!hasTypingTargets) {
+                        return;
+                    }
+
+                    visitorTypingLabel.textContent = 'Not typing';
+                    visitorTypingDetail.textContent = 'Visitor paused.';
+                    visitorTypingExpiryTimer = null;
+                }
+
+                function scheduleVisitorTypingExpiry(visitorTyping) {
+                    clearVisitorTypingExpiry();
+
+                    if (!hasTypingTargets || !visitorTyping || visitorTyping.state !== 'typing') {
+                        return;
+                    }
+
+                    var typingAt = Date.parse(visitorTyping.updated_at || '');
+                    var ageMs = Number.isNaN(typingAt) ? 0 : Date.now() - typingAt;
+                    var remainingMs = Math.max(0, visitorTypingFreshMs - ageMs);
+
+                    if (remainingMs === 0) {
+                        expireVisitorTyping();
+
+                        return;
+                    }
+
+                    visitorTypingExpiryTimer = window.setTimeout(expireVisitorTyping, remainingMs);
+                }
+
+                function updateVisitorTyping(visitorTyping) {
+                    if (!hasTypingTargets || !visitorTyping) {
+                        return;
+                    }
+
+                    visitorTypingLabel.textContent = visitorTyping.label || 'Not typing';
+
+                    if (visitorTyping.state === 'typing') {
+                        visitorTypingDetail.textContent = 'Typing now';
+                        scheduleVisitorTypingExpiry(visitorTyping);
+
+                        return;
+                    }
+
+                    clearVisitorTypingExpiry();
+
+                    visitorTypingDetail.textContent = visitorTyping.updated_at
+                        ? 'Visitor paused.'
+                        : 'No typing signal reported.';
                 }
 
                 function parsePayload(payload) {
@@ -848,7 +918,7 @@
                         })
                         .then(function (data) {
                             subscribe(socket, data.auth);
-                            setStatus('Listening for live cobrowse updates.', 'listening');
+                            setStatus('Listening for live conversation updates.', 'listening');
                         })
                         .catch(function () {
                             setStatus('Live cobrowse updates could not connect.', 'warning');
@@ -881,16 +951,20 @@
                             refresh.hidden = false;
                         }
                     }
+
+                    if (event.event === config.typingEventName) {
+                        updateVisitorTyping(parsePayload(event.data).visitor_typing);
+                    }
                 });
 
                 socket.addEventListener('close', function () {
-                    if (panel.dataset.state !== 'available') {
+                    if (hasCobrowseTargets && panel.dataset.state !== 'available') {
                         setStatus('Live cobrowse updates disconnected.', 'warning');
                     }
                 });
 
                 socket.addEventListener('error', function () {
-                    if (panel.dataset.state !== 'available') {
+                    if (hasCobrowseTargets && panel.dataset.state !== 'available') {
                         setStatus('Live cobrowse updates could not connect.', 'warning');
                     }
                 });

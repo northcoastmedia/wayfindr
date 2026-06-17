@@ -34,6 +34,11 @@ class Conversation extends Model
 
     private const VISITOR_TYPING_FRESH_SECONDS = 20;
 
+    public static function visitorTypingFreshMilliseconds(): int
+    {
+        return self::VISITOR_TYPING_FRESH_SECONDS * 1000;
+    }
+
     protected function casts(): array
     {
         return [
@@ -222,6 +227,20 @@ class Conversation extends Model
         }
 
         return 'Last typing signal '.$typingAt->diffForHumans().'.';
+    }
+
+    /**
+     * @return array{state: string, label: string, updated_at: string|null}
+     */
+    public function visitorTypingPayload(): array
+    {
+        $typingAt = $this->visitorTypingAt();
+
+        return [
+            'state' => $this->visitorTypingState(),
+            'label' => $this->visitorTypingLabel(),
+            'updated_at' => $typingAt?->toJSON(),
+        ];
     }
 
     /**
