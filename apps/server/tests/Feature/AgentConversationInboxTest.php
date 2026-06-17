@@ -293,6 +293,58 @@ test('dashboard shows only fresh visitor typing state', function (): void {
     }
 });
 
+test('agent can report a fresh typing signal for a conversation they can reply to', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
+
+    try {
+        $account = Account::factory()->create(['name' => 'Acme Support']);
+        $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+        $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+        $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+        $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+            'support_code' => 'WF-AGENTTYPE',
+            'subject' => 'Visitor needs a reply',
+            'status' => 'open',
+        ]);
+
+        $this->actingAs($agent)
+            ->postJson('/dashboard/conversations/WF-AGENTTYPE/typing', [
+                'is_typing' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.conversation.support_code', 'WF-AGENTTYPE')
+            ->assertJsonPath('data.agent_typing.state', 'typing')
+            ->assertJsonPath('data.agent_typing.label', 'Support is typing...');
+
+        $typing = $conversation->fresh()->metadata['agent_typing'][(string) $agent->id] ?? null;
+
+        expect($typing['at'] ?? null)->toBe(now()->toJSON())
+            ->and($typing['name'] ?? null)->toBe('Ada Agent');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('agent typing signal cannot cross account boundaries', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($otherAccount)->create(['name' => 'Other Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-other']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-OTHERTYPE',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($agent)
+        ->postJson('/dashboard/conversations/WF-OTHERTYPE/typing', [
+            'is_typing' => true,
+        ])
+        ->assertNotFound();
+
+    expect($conversation->fresh()->metadata ?? [])->not->toHaveKey('agent_typing');
+});
+
 test('dashboard filters conversations by attention state', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
@@ -1829,6 +1881,44 @@ test('agent reply reopens a closed conversation', function (): void {
     expect($conversation->status)->toBe('open')
         ->and($conversation->closed_at)->toBeNull()
         ->and($conversation->last_message_at)->not->toBeNull();
+});
+
+test('agent reply clears that agents typing signal', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $otherAgent = User::factory()->for($account)->create(['name' => 'Bea Builder']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $visitor = Visitor::factory()->for($site)->create(['anonymous_id' => 'anon-acme']);
+    $conversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-REPLYTYPE',
+        'subject' => 'Checkout trouble',
+        'status' => 'open',
+        'metadata' => [
+            'agent_typing' => [
+                (string) $agent->id => [
+                    'at' => now()->toJSON(),
+                    'name' => 'Ada Agent',
+                ],
+                (string) $otherAgent->id => [
+                    'at' => now()->toJSON(),
+                    'name' => 'Bea Builder',
+                ],
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->from('/dashboard/conversations/WF-REPLYTYPE')
+        ->post('/dashboard/conversations/WF-REPLYTYPE/messages', [
+            'body' => 'I can help with that.',
+        ])
+        ->assertRedirect('/dashboard/conversations/WF-REPLYTYPE')
+        ->assertSessionHas('status', 'Reply sent.');
+
+    $typingSignals = $conversation->fresh()->metadata['agent_typing'] ?? [];
+
+    expect($typingSignals)->not->toHaveKey((string) $agent->id)
+        ->and($typingSignals)->toHaveKey((string) $otherAgent->id);
 });
 
 test('agent can claim an unassigned conversation', function (): void {
