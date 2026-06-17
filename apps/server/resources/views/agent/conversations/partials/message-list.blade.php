@@ -32,9 +32,14 @@
                     <span class="message-status-line">
                         <time class="message-time" datetime="{{ $transcriptMessage->created_at->toJSON() }}">{{ $transcriptMessage->created_at->diffForHumans() }}</time>
                         @if ($isAgent && $transcriptMessage->seen_at)
-                            <span class="message-seen">Seen by visitor {{ $transcriptMessage->seen_at->diffForHumans() }}</span>
+                            <span
+                                class="message-seen"
+                                @if ((string) $transcriptMessage->id === (string) $latestAgentMessageId) data-agent-message-seen-id="{{ $transcriptMessage->id }}" @endif
+                            >
+                                Seen by visitor {{ $transcriptMessage->seen_at->diffForHumans() }}
+                            </span>
                         @elseif ($isAgent && (string) $transcriptMessage->id === (string) $latestAgentMessageId)
-                            <span class="message-seen">Not seen yet</span>
+                            <span class="message-seen" data-agent-message-seen-id="{{ $transcriptMessage->id }}">Not seen yet</span>
                         @endif
                     </span>
                 </div>

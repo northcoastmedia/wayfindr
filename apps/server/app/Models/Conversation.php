@@ -194,6 +194,23 @@ class Conversation extends Model
         return 'Latest agent reply has not been seen.';
     }
 
+    /**
+     * @return array{message_id: int|null, state: string, label: string, detail: string, seen_at: string|null, seen_label: string|null}
+     */
+    public function visitorReadPayload(): array
+    {
+        $message = $this->latestAgentMessageForReadReceipt();
+
+        return [
+            'message_id' => $message?->id,
+            'state' => $this->visitorReadState(),
+            'label' => $this->visitorReadLabel(),
+            'detail' => $this->visitorReadDetail(),
+            'seen_at' => $message?->seen_at?->toJSON(),
+            'seen_label' => $message?->seen_at?->diffForHumans(),
+        ];
+    }
+
     public function visitorTypingState(): string
     {
         $typingAt = $this->visitorTypingAt();
