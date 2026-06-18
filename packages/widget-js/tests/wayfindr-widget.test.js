@@ -684,6 +684,7 @@ test('reports cobrowse snapshots through the public visitor API', async () => {
     text: 'Hello visitor. [masked]',
     nodeCount: 4,
     maskedCount: 1,
+    mutationSequence: 7,
   });
 
   assert.equal(calls.length, 1);
@@ -698,6 +699,7 @@ test('reports cobrowse snapshots through the public visitor API', async () => {
     text: 'Hello visitor. [masked]',
     node_count: 4,
     masked_count: 1,
+    mutation_sequence: 7,
   });
   assert.equal(result.snapshot.masked_count, 1);
 });
@@ -3954,6 +3956,140 @@ test('reports skipped-only widget mutation batches when the client payload budge
   assert.equal(mutationPayload.skipped_count >= 1, true);
   assert(Buffer.byteLength(JSON.stringify(mutationPayload), 'utf8') <= 500);
   assert.equal(JSON.stringify(mutationPayload).includes('Huge public update'), false);
+
+  widget.destroy();
+});
+
+test('resyncs a sanitized cobrowse snapshot after skipped mutation pressure', async () => {
+  const dom = new JSDOM([
+    '<!doctype html><html><head><title>Install Guide</title></head><body>',
+    '<main>',
+    '  <p id="large-copy">Large section.</p>',
+    '  <input id="password" type="password" value="secret-password">',
+    '</main>',
+    '<div id="support"></div>',
+    '</body></html>',
+  ].join(''), {
+    url: 'https://docs.example.test/install',
+  });
+  const calls = [];
+  let cobrowseStatus = {
+    status: 'requested',
+    consent: 'requested',
+    requested_by: { name: 'Ada Agent' },
+  };
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    cobrowseStatusPollMs: 0,
+    mutationPayloadMaxBytes: 500,
+    storage: memoryStorage(),
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+
+      if (url.endsWith('/api/widget/bootstrap')) {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations')) {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/messages')) {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            message: {
+              id: 1,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (url.includes('/api/conversations/WF-TEST123/cobrowse?')) {
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      if (url.endsWith('/api/conversations/WF-TEST123/cobrowse-consent')) {
+        cobrowseStatus = {
+          status: 'granted',
+          consent: 'granted',
+          requested_by: { name: 'Ada Agent' },
+        };
+
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: cobrowseStatus,
+          },
+        });
+      }
+
+      return jsonResponse(200, {
+        data: {
+          conversation: { support_code: 'WF-TEST123', status: 'open' },
+          messages: [],
+        },
+      });
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+  await widget.refreshCobrowseStatus();
+  await settle();
+
+  widget.root
+    .querySelector('.wayfindr-widget__cobrowse-allow')
+    .dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+
+  await settle();
+
+  dom.window.document.querySelector('#large-copy').textContent = 'Huge public update '.repeat(200);
+
+  await settle();
+  await wait(100);
+
+  const mutationCall = calls.find((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-mutations'));
+  const snapshotCalls = calls.filter((call) => call.url.endsWith('/api/conversations/WF-TEST123/cobrowse-snapshot'));
+  const resyncSnapshotPayload = JSON.parse(snapshotCalls[snapshotCalls.length - 1].options.body);
+
+  assert.equal(JSON.parse(mutationCall.options.body).skipped_count >= 1, true);
+  assert.equal(snapshotCalls.length, 2);
+  assert.equal(resyncSnapshotPayload.mutation_sequence, JSON.parse(mutationCall.options.body).sequence);
+  assert.match(resyncSnapshotPayload.html, /Huge public update/);
+  assert.match(resyncSnapshotPayload.html, /\[masked\]/);
+  assert.equal(resyncSnapshotPayload.html.includes('secret-password'), false);
 
   widget.destroy();
 });
