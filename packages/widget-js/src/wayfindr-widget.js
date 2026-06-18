@@ -367,6 +367,7 @@
 
     var mount = resolveMount(doc, options.mount);
     var panelId = 'wayfindr-support-panel-' + (++widgetInstanceCount);
+    var cobrowseCopyId = panelId + '-cobrowse-copy';
     var rootEl = doc.createElement('div');
     rootEl.className = 'wayfindr-widget';
     rootEl.innerHTML = [
@@ -391,8 +392,8 @@
       '      <button class="wayfindr-widget__refresh" type="button" hidden>Refresh</button>',
       '    </div>',
       '  </form>',
-      '  <div class="wayfindr-widget__cobrowse" hidden>',
-      '    <p class="wayfindr-widget__cobrowse-copy">Support wants to view this page with sensitive fields masked.</p>',
+      '  <div class="wayfindr-widget__cobrowse" role="group" aria-label="Cobrowse request" aria-describedby="' + escapeHtml(cobrowseCopyId) + '" hidden>',
+      '    <p id="' + escapeHtml(cobrowseCopyId) + '" class="wayfindr-widget__cobrowse-copy" role="status" aria-live="polite" aria-atomic="true">Support wants to view this page with sensitive fields masked.</p>',
       '    <div class="wayfindr-widget__cobrowse-actions">',
       '      <button class="wayfindr-widget__cobrowse-allow" type="button">Allow cobrowse</button>',
       '      <button class="wayfindr-widget__cobrowse-decline" type="button">Decline</button>',
@@ -430,6 +431,7 @@
     var cobrowseGranted = false;
     var cobrowseState = 'unavailable';
     var cobrowseRequestedBy = null;
+    var pendingCobrowseConsentFocus = false;
     var mutationObserver = null;
     var pendingMutationRecords = [];
     var skippedMutationRecords = 0;
@@ -785,6 +787,7 @@
       var requested = cobrowseState === 'requested';
       var granted = cobrowseState === 'granted';
       var requester = cobrowseRequestedBy || 'Support';
+      var wasHidden = cobrowse.hidden;
 
       cobrowse.hidden = !supportCode || (!requested && !granted);
       cobrowseAllow.textContent = granted ? 'Stop cobrowse' : 'Allow cobrowse';
@@ -792,6 +795,16 @@
       cobrowseCopy.textContent = granted
         ? 'Cobrowse is active. Sensitive fields stay masked.'
         : requester + ' wants to view this page with sensitive fields masked.';
+
+      if (requested && wasHidden && !cobrowse.hidden) {
+        if (isPanelReadable({ panel: panel, document: doc })) {
+          cobrowseAllow.focus();
+        } else {
+          pendingCobrowseConsentFocus = true;
+        }
+      } else if (!requested) {
+        pendingCobrowseConsentFocus = false;
+      }
     }
 
     function applyCobrowseStatus(nextCobrowse) {
@@ -1104,7 +1117,13 @@
       panel.hidden = false;
       launcher.hidden = true;
       launcher.setAttribute('aria-expanded', 'true');
-      textarea.focus();
+
+      if (pendingCobrowseConsentFocus && cobrowseState === 'requested' && !cobrowse.hidden) {
+        pendingCobrowseConsentFocus = false;
+        cobrowseAllow.focus();
+      } else {
+        textarea.focus();
+      }
 
       if (wasHidden && supportCode) {
         refreshMessages({ silent: true });
