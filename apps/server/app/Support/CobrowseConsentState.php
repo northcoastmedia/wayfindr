@@ -483,9 +483,10 @@ class CobrowseConsentState
         $requestedAt = $this->parseReportedAt($request['requested_at'] ?? null);
         $fulfilledAt = $this->parseReportedAt($request['fulfilled_at'] ?? null);
         $snapshotReportedAt = $this->parseReportedAt($request['fulfilled_snapshot_reported_at'] ?? null);
+        $attemptsExhaustedAt = $this->parseReportedAt($request['attempts_exhausted_at'] ?? null);
         $expiresAt = $this->resyncRequestPolicy->expiresAt($request);
         $retryAt = $this->resyncRequestPolicy->retryAt($request);
-        $timeline = $this->formatResyncRecoveryTimeline($request, $requestedAt, $fulfilledAt, $snapshotReportedAt, $expiresAt, $retryAt);
+        $timeline = $this->formatResyncRecoveryTimeline($request, $requestedAt, $fulfilledAt, $snapshotReportedAt, $attemptsExhaustedAt, $expiresAt, $retryAt);
 
         if ($fulfilledAt) {
             return [
@@ -496,6 +497,19 @@ class CobrowseConsentState
                 'requested_at' => $this->formatMoment($requestedAt, 'Request time unavailable'),
                 'fulfilled_at' => $this->formatMoment($fulfilledAt, 'Receipt time unavailable'),
                 'snapshot_reported_at' => $this->formatMoment($snapshotReportedAt, 'Snapshot report time unavailable'),
+                'recovery_timeline' => $timeline,
+            ];
+        }
+
+        if ($attemptsExhaustedAt) {
+            return [
+                'status' => 'exhausted',
+                'label' => 'Fresh snapshot retry limit reached',
+                'message' => 'The visitor widget tried to send a clean snapshot but could not complete it. Request another clean snapshot or confirm the page state through chat.',
+                'requested_by' => filled($request['requested_by_name'] ?? null) ? (string) $request['requested_by_name'] : 'Support',
+                'requested_at' => $this->formatMoment($requestedAt, 'Request time unavailable'),
+                'expires_at' => $this->formatMoment($expiresAt, 'Expiry unavailable'),
+                'attempts_exhausted_at' => $this->formatMoment($attemptsExhaustedAt, 'Retry limit time unavailable'),
                 'recovery_timeline' => $timeline,
             ];
         }
@@ -540,7 +554,7 @@ class CobrowseConsentState
      * @param  array<string, mixed>  $request
      * @return list<array{state: string, label: string, detail: string, occurred_at: string, badge: string}>
      */
-    private function formatResyncRecoveryTimeline(array $request, ?Carbon $requestedAt, ?Carbon $fulfilledAt, ?Carbon $snapshotReportedAt, ?Carbon $expiresAt, ?Carbon $retryAt): array
+    private function formatResyncRecoveryTimeline(array $request, ?Carbon $requestedAt, ?Carbon $fulfilledAt, ?Carbon $snapshotReportedAt, ?Carbon $attemptsExhaustedAt, ?Carbon $expiresAt, ?Carbon $retryAt): array
     {
         $requestedBy = filled($request['requested_by_name'] ?? null) ? (string) $request['requested_by_name'] : 'Support';
         $timeline = [
@@ -571,6 +585,18 @@ class CobrowseConsentState
                     'badge' => 'Preview updated',
                 ];
             }
+
+            return $this->appendIgnoredResyncResponses($timeline, $request);
+        }
+
+        if ($attemptsExhaustedAt) {
+            $timeline[] = [
+                'state' => 'exhausted',
+                'label' => 'Retry limit reached',
+                'detail' => 'The visitor widget stopped retrying this request ID after repeated failures.',
+                'occurred_at' => $this->formatMoment($attemptsExhaustedAt, 'Retry limit time unavailable'),
+                'badge' => 'Exhausted',
+            ];
 
             return $this->appendIgnoredResyncResponses($timeline, $request);
         }
