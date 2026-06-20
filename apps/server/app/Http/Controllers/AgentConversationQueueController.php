@@ -31,6 +31,8 @@ class AgentConversationQueueController extends Controller
      *     conversationEmptyMessage: string,
      *     conversationFilter: string,
      *     conversationFilters: array<string, string>,
+     *     conversationQuery: array<string, string>,
+     *     conversationSearch: string,
      *     conversations: Collection<int, Conversation>,
      *     newActivityConversationCount: int
      * }
@@ -50,13 +52,20 @@ class AgentConversationQueueController extends Controller
         $conversationFilter = is_string($conversationFilter) && array_key_exists($conversationFilter, $conversationFilters)
             ? $conversationFilter
             : 'all';
+        $conversationSearch = $request->query('conversation_search', '');
+        $conversationSearch = is_string($conversationSearch)
+            ? mb_substr(trim($conversationSearch), 0, 120)
+            : '';
         $conversationStatus = $conversationFilter === 'closed' ? 'closed' : 'open';
-        $conversationEmptyMessage = match ($conversationFilter) {
-            'new_activity' => 'No conversations need attention.',
-            'cobrowse_attention' => 'No active cobrowse sessions need attention.',
-            'closed' => 'No closed conversations yet.',
-            default => 'No active conversations yet.',
-        };
+        $conversationEmptyMessage = $conversationSearch !== ''
+            ? 'No conversations match that search.'
+            : match ($conversationFilter) {
+                'new_activity' => 'No conversations need attention.',
+                'cobrowse_attention' => 'No active cobrowse sessions need attention.',
+                'closed' => 'No closed conversations yet.',
+                default => 'No active conversations yet.',
+            };
+        $conversationQuery = $this->conversationQueryParams($conversationFilter, $conversationSearch);
         $newActivityConversationCount = Conversation::query()
             ->where('status', 'open')
             ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
@@ -84,6 +93,20 @@ class AgentConversationQueueController extends Controller
             ])
             ->where('status', $conversationStatus)
             ->whereHas('site', fn ($query) => $query->visibleToAgent($agent))
+            ->when($conversationSearch !== '', function ($query) use ($conversationSearch): void {
+                $searchPattern = $this->conversationSearchPattern($conversationSearch);
+
+                $query->where(function ($query) use ($searchPattern): void {
+                    $this->whereLiteralLike($query, 'subject', $searchPattern);
+                    $this->whereLiteralLike($query, 'support_code', $searchPattern, 'or');
+                    $query->orWhereHas('visitor', function ($query) use ($searchPattern): void {
+                        $this->whereLiteralLike($query, 'anonymous_id', $searchPattern);
+                        $this->whereLiteralLike($query, 'external_id', $searchPattern, 'or');
+                        $this->whereLiteralLike($query, 'name', $searchPattern, 'or');
+                        $this->whereLiteralLike($query, 'email', $searchPattern, 'or');
+                    });
+                });
+            })
             ->when($conversationFilter === 'new_activity', fn ($query) => $query->withNewActivityFor($agent))
             ->when($conversationFilter === 'needs_reply', function ($query): void {
                 $query->where(function ($query): void {
@@ -117,8 +140,44 @@ class AgentConversationQueueController extends Controller
             'conversationEmptyMessage' => $conversationEmptyMessage,
             'conversationFilter' => $conversationFilter,
             'conversationFilters' => $conversationFilters,
+            'conversationQuery' => $conversationQuery,
+            'conversationSearch' => $conversationSearch,
             'conversations' => $conversations,
             'newActivityConversationCount' => $newActivityConversationCount,
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function conversationQueryParams(string $conversationFilter, string $conversationSearch): array
+    {
+        $params = [];
+
+        if ($conversationFilter !== 'all') {
+            $params['conversation_filter'] = $conversationFilter;
+        }
+
+        if ($conversationSearch !== '') {
+            $params['conversation_search'] = $conversationSearch;
+        }
+
+        return $params;
+    }
+
+    private function conversationSearchPattern(string $conversationSearch): string
+    {
+        return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $conversationSearch).'%';
+    }
+
+    private function whereLiteralLike($query, string $column, string $pattern, string $boolean = 'and'): void
+    {
+        $wrappedColumn = $query->getQuery()->getGrammar()->wrap($column);
+
+        $query->whereRaw(
+            'LOWER('.$wrappedColumn.') LIKE LOWER(?) ESCAPE ?',
+            [$pattern, '\\'],
+            $boolean,
+        );
     }
 }
