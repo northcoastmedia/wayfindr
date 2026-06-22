@@ -330,9 +330,13 @@ test('visitor can add a message to their conversation', function (): void {
             ->assertCreated()
             ->assertJsonPath('data.conversation.support_code', 'WF-MESSAGE')
             ->assertJsonPath('data.message.type', 'text')
-            ->assertJsonPath('data.message.body', 'Can you help me with this checkout error?');
+            ->assertJsonPath('data.message.body', 'Can you help me with this checkout error?')
+            ->assertJsonPath('data.message.sender.kind', 'visitor')
+            ->assertJsonPath('data.message.sender.name', 'Visitor');
 
         $message = ConversationMessage::query()->firstOrFail();
+
+        $response->assertJsonPath('data.message.id', $message->id);
 
         expect($message->conversation_id)->toBe($conversation->id)
             ->and($message->sender_type)->toBe(Visitor::class)
