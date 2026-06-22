@@ -724,6 +724,158 @@ test('dashboard shows conversation attention state from the latest message', fun
         ->assertSeeInOrder(['Fresh conversation', 'Needs reply']);
 });
 
+test('conversation queue summarizes visible support lanes', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-06-21 14:00:00', 'UTC'));
+
+    try {
+        $account = Account::factory()->create(['name' => 'Acme Support']);
+        $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+        $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+        $activeVisitor = Visitor::factory()->for($site)->create([
+            'anonymous_id' => 'anon-active',
+            'last_seen_at' => now()->subMinute(),
+        ]);
+        $recentVisitor = Visitor::factory()->for($site)->create([
+            'anonymous_id' => 'anon-recent',
+            'last_seen_at' => now()->subMinutes(8),
+        ]);
+        $quietVisitor = Visitor::factory()->for($site)->create([
+            'anonymous_id' => 'anon-quiet',
+            'last_seen_at' => now()->subMinutes(30),
+        ]);
+
+        $needsReplyConversation = Conversation::factory()->for($site)->for($activeVisitor)->for($agent, 'assignedAgent')->create([
+            'support_code' => 'WF-SNAPSHOT1',
+            'subject' => 'Visitor is waiting',
+            'status' => 'open',
+            'last_message_at' => now()->subMinutes(2),
+        ]);
+        ConversationMessage::factory()->for($needsReplyConversation)->create([
+            'sender_type' => Visitor::class,
+            'sender_id' => $activeVisitor->id,
+            'body' => 'Can someone help?',
+            'created_at' => now()->subMinutes(2),
+        ]);
+
+        $waitingConversation = Conversation::factory()->for($site)->for($recentVisitor)->for($agent, 'assignedAgent')->create([
+            'support_code' => 'WF-SNAPSHOT2',
+            'subject' => 'Agent replied',
+            'status' => 'open',
+            'last_message_at' => now()->subMinute(),
+        ]);
+        ConversationMessage::factory()->for($waitingConversation)->create([
+            'sender_type' => User::class,
+            'sender_id' => $agent->id,
+            'body' => 'Try this next.',
+            'created_at' => now()->subMinute(),
+        ]);
+        $waitingConversation->markReadFor($agent, now());
+
+        Conversation::factory()->for($site)->for($quietVisitor)->create([
+            'support_code' => 'WF-SNAPSHOT3',
+            'subject' => 'Fresh unassigned chat',
+            'status' => 'open',
+        ]);
+
+        $this->actingAs($agent)
+            ->get('/dashboard/conversations')
+            ->assertOk()
+            ->assertSee('Queue snapshot')
+            ->assertSee('Needs attention: 2')
+            ->assertSee('Needs reply: 2')
+            ->assertSee('Assigned to me: 2')
+            ->assertSee('Unassigned: 1')
+            ->assertSee('Active visitors: 1')
+            ->assertSee('Recently active: 1')
+            ->assertSee('/dashboard/conversations?conversation_filter=new_activity', false)
+            ->assertSee('/dashboard/conversations?conversation_filter=needs_reply', false)
+            ->assertSee('/dashboard/conversations?conversation_filter=assigned_to_me', false)
+            ->assertSee('/dashboard/conversations?conversation_filter=unassigned', false)
+            ->assertSee('/dashboard/conversations?conversation_presence=active', false)
+            ->assertSee('/dashboard/conversations?conversation_presence=recent', false);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('conversation queue snapshot respects current site and search context', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create(['name' => 'Ada Agent']);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $otherSite = Site::factory()->for($account)->create(['name' => 'Other Docs']);
+    $visitor = Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-checkout',
+        'last_seen_at' => now()->subMinute(),
+    ]);
+    $profileVisitor = Visitor::factory()->for($site)->create([
+        'anonymous_id' => 'anon-profile',
+        'last_seen_at' => now()->subMinute(),
+    ]);
+    $otherVisitor = Visitor::factory()->for($otherSite)->create([
+        'anonymous_id' => 'anon-other',
+        'last_seen_at' => now()->subMinute(),
+    ]);
+
+    $matchingConversation = Conversation::factory()->for($site)->for($visitor)->create([
+        'support_code' => 'WF-CONTEXT1',
+        'subject' => 'Checkout question',
+        'status' => 'open',
+        'last_message_at' => now()->subMinute(),
+    ]);
+    ConversationMessage::factory()->for($matchingConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $visitor->id,
+        'body' => 'Checkout is stuck.',
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $sameSiteDifferentSearch = Conversation::factory()->for($site)->for($profileVisitor)->create([
+        'support_code' => 'WF-CONTEXT2',
+        'subject' => 'Profile question',
+        'status' => 'open',
+        'last_message_at' => now()->subMinutes(2),
+    ]);
+    ConversationMessage::factory()->for($sameSiteDifferentSearch)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $profileVisitor->id,
+        'body' => 'Profile is stuck.',
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    $otherSiteConversation = Conversation::factory()->for($otherSite)->for($otherVisitor)->create([
+        'support_code' => 'WF-CONTEXT3',
+        'subject' => 'Checkout from other site',
+        'status' => 'open',
+        'last_message_at' => now()->subMinutes(3),
+    ]);
+    ConversationMessage::factory()->for($otherSiteConversation)->create([
+        'sender_type' => Visitor::class,
+        'sender_id' => $otherVisitor->id,
+        'body' => 'Checkout is stuck elsewhere.',
+        'created_at' => now()->subMinutes(3),
+    ]);
+
+    $query = [
+        'conversation_site' => $site->id,
+        'conversation_search' => 'Checkout',
+    ];
+
+    $this->actingAs($agent)
+        ->get(route('dashboard.conversations.index', $query))
+        ->assertOk()
+        ->assertSee('Queue snapshot')
+        ->assertSee('Needs attention: 1')
+        ->assertSee('Needs reply: 1')
+        ->assertSee('Active visitors: 1')
+        ->assertSee(e(route('dashboard.conversations.index', [
+            'conversation_search' => 'Checkout',
+            'conversation_site' => $site->id,
+            'conversation_filter' => 'needs_reply',
+        ])), false)
+        ->assertDontSee('Profile question')
+        ->assertDontSee('Checkout from other site');
+});
+
 test('dashboard shows visitor presence state in the conversation queue', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
 
