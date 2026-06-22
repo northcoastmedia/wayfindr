@@ -111,6 +111,26 @@
                     </div>
                 @endif
 
+                @if (collect($conversationQueueSummary)->sum('count') > 0)
+                    <div class="filter-summary" aria-label="Conversation queue snapshot">
+                        <div>
+                            <strong>Queue snapshot</strong>
+                            <p class="lede">Support-lane counts respect the current site, search, and presence context before the table narrows further.</p>
+                        </div>
+                        <div class="filter-chips">
+                            @foreach ($conversationQueueSummary as $conversationSummary)
+                                <a
+                                    class="filter-chip"
+                                    href="{{ $conversationSummary['href'] }}"
+                                    @if ($conversationSummary['active']) aria-current="page" @endif
+                                >
+                                    {{ $conversationSummary['label'] }}: {{ $conversationSummary['count'] }}
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
                 @if ($conversations->isEmpty())
                     <p class="empty">{{ $conversationEmptyMessage }}</p>
                 @else

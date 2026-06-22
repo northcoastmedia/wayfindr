@@ -7,6 +7,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Support\CobrowseConsentState;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -44,6 +45,7 @@ class AgentConversationQueueController extends Controller
      *     conversationPresence: string,
      *     conversationPresenceFilters: array<string, string>,
      *     conversationQuery: array<string, string|int>,
+     *     conversationQueueSummary: array<int, array{state: string, label: string, count: int, href: string, active: bool}>,
      *     conversationSearch: string,
      *     conversationSite: int|null,
      *     conversations: Collection<int, Conversation>,
@@ -109,6 +111,14 @@ class AgentConversationQueueController extends Controller
             ->map(fn (Conversation $conversation): array => $cobrowseConsentState->queueTransportForConversation($conversation))
             ->filter(fn (array $transport): bool => $cobrowseConsentState->transportNeedsAttention($transport))
             ->count();
+        $conversationQueueSummary = $this->conversationQueueSummary(
+            $agent,
+            $conversationFilter,
+            $conversationPresence,
+            $conversationQuery,
+            $conversationSite,
+            $conversationSearch,
+        );
 
         $conversations = Conversation::query()
             ->with([
@@ -175,6 +185,7 @@ class AgentConversationQueueController extends Controller
             'conversationPresence' => $conversationPresence,
             'conversationPresenceFilters' => $conversationPresenceFilters,
             'conversationQuery' => $conversationQuery,
+            'conversationQueueSummary' => $conversationQueueSummary,
             'conversationSearch' => $conversationSearch,
             'conversationSite' => $conversationSite,
             'conversations' => $conversations,
@@ -248,6 +259,148 @@ class AgentConversationQueueController extends Controller
             'label' => $label,
             'href' => route('dashboard.conversations.index', $conversationQuery),
         ];
+    }
+
+    /**
+     * @param  array<string, string|int>  $conversationQuery
+     * @return array<int, array{state: string, label: string, count: int, href: string, active: bool}>
+     */
+    private function conversationQueueSummary(
+        User $agent,
+        string $conversationFilter,
+        string $conversationPresence,
+        array $conversationQuery,
+        ?int $conversationSite,
+        string $conversationSearch,
+    ): array {
+        if ($conversationFilter === 'closed') {
+            return [];
+        }
+
+        $laneQuery = function () use ($agent, $conversationPresence, $conversationSearch, $conversationSite): Builder {
+            $query = $this->visibleOpenConversationQuery($agent, $conversationSite, $conversationSearch);
+
+            if ($conversationPresence !== 'all') {
+                $this->applyConversationPresenceFilter($query, $conversationPresence);
+            }
+
+            return $query;
+        };
+        $presenceQuery = fn (): Builder => $this->visibleOpenConversationQuery($agent, $conversationSite, $conversationSearch);
+
+        $needsReplyQuery = $laneQuery();
+        $needsReplyQuery->where(function (Builder $query): void {
+            $query->whereDoesntHave('messages')
+                ->orWhereHas('latestMessage', fn (Builder $query) => $query->where('sender_type', '!=', User::class));
+        });
+
+        $activeVisitorsQuery = $presenceQuery();
+        $this->applyConversationPresenceFilter($activeVisitorsQuery, 'active');
+
+        $recentVisitorsQuery = $presenceQuery();
+        $this->applyConversationPresenceFilter($recentVisitorsQuery, 'recent');
+
+        return [
+            $this->conversationQueueSummaryChip(
+                'new_activity',
+                'Needs attention',
+                $laneQuery()->withNewActivityFor($agent)->count(),
+                ['conversation_filter' => 'new_activity'],
+                $conversationQuery,
+                $conversationFilter === 'new_activity',
+            ),
+            $this->conversationQueueSummaryChip(
+                'needs_reply',
+                'Needs reply',
+                $needsReplyQuery->count(),
+                ['conversation_filter' => 'needs_reply'],
+                $conversationQuery,
+                $conversationFilter === 'needs_reply',
+            ),
+            $this->conversationQueueSummaryChip(
+                'assigned_to_me',
+                'Assigned to me',
+                $laneQuery()->where('assigned_agent_id', $agent->id)->count(),
+                ['conversation_filter' => 'assigned_to_me'],
+                $conversationQuery,
+                $conversationFilter === 'assigned_to_me',
+            ),
+            $this->conversationQueueSummaryChip(
+                'unassigned',
+                'Unassigned',
+                $laneQuery()->whereNull('assigned_agent_id')->count(),
+                ['conversation_filter' => 'unassigned'],
+                $conversationQuery,
+                $conversationFilter === 'unassigned',
+            ),
+            $this->conversationQueueSummaryChip(
+                'active',
+                'Active visitors',
+                $activeVisitorsQuery->count(),
+                ['conversation_filter' => null, 'conversation_presence' => 'active'],
+                $conversationQuery,
+                $conversationPresence === 'active',
+            ),
+            $this->conversationQueueSummaryChip(
+                'recent',
+                'Recently active',
+                $recentVisitorsQuery->count(),
+                ['conversation_filter' => null, 'conversation_presence' => 'recent'],
+                $conversationQuery,
+                $conversationPresence === 'recent',
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<string, string|int|null>  $overrides
+     * @param  array<string, string|int>  $conversationQuery
+     * @return array{state: string, label: string, count: int, href: string, active: bool}
+     */
+    private function conversationQueueSummaryChip(string $state, string $label, int $count, array $overrides, array $conversationQuery, bool $active): array
+    {
+        foreach ($overrides as $key => $value) {
+            if ($value === null) {
+                unset($conversationQuery[$key]);
+
+                continue;
+            }
+
+            $conversationQuery[$key] = $value;
+        }
+
+        return [
+            'active' => $active,
+            'count' => $count,
+            'href' => route('dashboard.conversations.index', $conversationQuery),
+            'label' => $label,
+            'state' => $state,
+        ];
+    }
+
+    /**
+     * @return Builder<Conversation>
+     */
+    private function visibleOpenConversationQuery(User $agent, ?int $conversationSite, string $conversationSearch): Builder
+    {
+        return Conversation::query()
+            ->where('status', 'open')
+            ->whereHas('site', fn (Builder $query) => $query->visibleToAgent($agent))
+            ->when($conversationSite, fn (Builder $query) => $query->where('site_id', $conversationSite))
+            ->when($conversationSearch !== '', function (Builder $query) use ($conversationSearch): void {
+                $searchPattern = $this->conversationSearchPattern($conversationSearch);
+
+                $query->where(function (Builder $query) use ($searchPattern): void {
+                    $this->whereLiteralLike($query, 'subject', $searchPattern);
+                    $this->whereLiteralLike($query, 'support_code', $searchPattern, 'or');
+                    $query->orWhereHas('visitor', function (Builder $query) use ($searchPattern): void {
+                        $this->whereLiteralLike($query, 'anonymous_id', $searchPattern);
+                        $this->whereLiteralLike($query, 'external_id', $searchPattern, 'or');
+                        $this->whereLiteralLike($query, 'name', $searchPattern, 'or');
+                        $this->whereLiteralLike($query, 'email', $searchPattern, 'or');
+                    });
+                });
+            });
     }
 
     private function conversationSearchPattern(string $conversationSearch): string
