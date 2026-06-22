@@ -4,8 +4,11 @@ use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\AuditEvent;
 use App\Models\Conversation;
+use App\Models\ExternalIssueProviderConnection;
 use App\Models\Site;
+use App\Models\SiteExternalIssueProject;
 use App\Models\Ticket;
+use App\Models\TicketExternalLink;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -322,6 +325,318 @@ test('account overview shows agent alert digest delivery status without raw prov
         ->assertDontSee('SMTP provider secret stack trace should not render')
         ->assertDontSee('Outside Digest')
         ->assertDontSee('Outside failure should not render.');
+});
+
+test('account admins can inspect external issue readiness without raw provider details', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $secondSite = Site::factory()->for($account)->create(['name' => 'Status Portal']);
+    $otherAccount = Account::factory()->create(['name' => 'Other Support']);
+    $otherSite = Site::factory()->for($otherAccount)->create(['name' => 'Other Docs']);
+
+    $githubConnection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'provider' => 'github',
+            'name' => 'Engineering GitHub',
+            'credentials' => ['token' => 'ghp_account_secret'],
+        ]);
+    $disabledConnection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'is_enabled' => false,
+            'name' => 'Dormant GitLab',
+            'provider' => 'gitlab',
+        ]);
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($site)
+        ->for($githubConnection, 'providerConnection')
+        ->create([
+            'project_key' => 'adamgreenwell/wayfindr',
+            'project_name' => 'Wayfindr',
+        ]);
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($secondSite)
+        ->for($disabledConnection, 'providerConnection')
+        ->create([
+            'project_key' => 'acme/status',
+            'project_name' => 'Status Portal',
+        ]);
+
+    TicketExternalLink::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'sync_status' => 'linked',
+        ]);
+    TicketExternalLink::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'sync_status' => 'sync_pending',
+        ]);
+    TicketExternalLink::factory()
+        ->for($account)
+        ->for($secondSite)
+        ->create([
+            'provider' => 'gitlab',
+            'project_key' => 'acme/status',
+            'sync_status' => 'sync_failed',
+        ]);
+    TicketExternalLink::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'provider' => 'github',
+            'project_key' => 'other/private',
+            'sync_status' => 'sync_failed',
+        ]);
+
+    AuditEvent::factory()
+        ->for($account)
+        ->for($secondSite)
+        ->create([
+            'action' => 'ticket.external_sync_failed',
+            'metadata' => [
+                'provider' => 'gitlab',
+                'project_key' => 'acme/status',
+                'status' => 503,
+                'message' => 'Authorization: Bearer ghp_account_secret raw provider body should stay private',
+            ],
+            'occurred_at' => now()->subMinutes(6),
+        ]);
+    AuditEvent::factory()
+        ->for($otherAccount)
+        ->for($otherSite)
+        ->create([
+            'action' => 'ticket.external_sync_failed',
+            'metadata' => [
+                'provider' => 'github',
+                'project_key' => 'other/private',
+                'status' => 401,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('External issue readiness')
+        ->assertSee('Needs attention')
+        ->assertSee('2 provider connections')
+        ->assertSee('2 mapped projects')
+        ->assertSee('1 disabled')
+        ->assertSee('1 sync failed')
+        ->assertSee('1 sync pending')
+        ->assertSee('Engineering GitHub')
+        ->assertSee('GitHub')
+        ->assertSee('Acme Docs')
+        ->assertSee('adamgreenwell/wayfindr')
+        ->assertSee('Dormant GitLab')
+        ->assertSee('Status Portal')
+        ->assertSee('acme/status')
+        ->assertSee('Last external sync failure')
+        ->assertSee('Status 503')
+        ->assertSee(route('dashboard.sites.show', $site), false)
+        ->assertSee(route('dashboard.sites.show', $secondSite), false)
+        ->assertDontSee('ghp_account_secret')
+        ->assertDontSee('Authorization: Bearer')
+        ->assertDontSee('raw provider body should stay private')
+        ->assertDontSee('Other Support')
+        ->assertDontSee('other/private')
+        ->assertDontSee('Status 401');
+});
+
+test('regular agents do not see account wide external issue readiness', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $site->supportAgents()->attach($agent);
+    $connection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'name' => 'Engineering GitHub',
+            'provider' => 'github',
+        ]);
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($site)
+        ->for($connection, 'providerConnection')
+        ->create(['project_key' => 'adamgreenwell/wayfindr']);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertDontSee('External issue readiness')
+        ->assertDontSee('Engineering GitHub')
+        ->assertDontSee('adamgreenwell/wayfindr');
+});
+
+test('account external issue readiness follows visible site scope', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $restrictedAdmin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Rory Restricted',
+    ]);
+    $visibleSite = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $restrictedSite = Site::factory()->for($account)->create(['name' => 'Restricted Store']);
+    $restrictedSite->supportAgents()->attach($restrictedAdmin);
+
+    $visibleConnection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'provider' => 'github',
+            'name' => 'Visible GitHub',
+        ]);
+    $restrictedConnection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'is_enabled' => false,
+            'name' => 'Restricted GitLab',
+            'provider' => 'gitlab',
+        ]);
+
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($visibleSite)
+        ->for($visibleConnection, 'providerConnection')
+        ->create(['project_key' => 'adamgreenwell/wayfindr']);
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($restrictedSite)
+        ->for($restrictedConnection, 'providerConnection')
+        ->create(['project_key' => 'private/restricted']);
+
+    TicketExternalLink::factory()
+        ->for($account)
+        ->for($visibleSite)
+        ->create([
+            'provider' => 'github',
+            'project_key' => 'adamgreenwell/wayfindr',
+            'sync_status' => 'sync_pending',
+        ]);
+    TicketExternalLink::factory()
+        ->for($account)
+        ->for($restrictedSite)
+        ->create([
+            'provider' => 'gitlab',
+            'project_key' => 'private/restricted',
+            'sync_status' => 'sync_failed',
+        ]);
+    AuditEvent::factory()
+        ->for($account)
+        ->for($restrictedSite)
+        ->create([
+            'action' => 'ticket.external_sync_failed',
+            'metadata' => [
+                'provider' => 'gitlab',
+                'project_key' => 'private/restricted',
+                'status' => 503,
+                'message' => 'restricted provider body',
+            ],
+        ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('External issue readiness')
+        ->assertSee('Sync pending')
+        ->assertSee('1 provider connection')
+        ->assertSee('1 mapped project')
+        ->assertSee('0 disabled')
+        ->assertSee('0 sync failed')
+        ->assertSee('1 sync pending')
+        ->assertSee('Visible GitHub')
+        ->assertSee('Acme Docs')
+        ->assertSee('adamgreenwell/wayfindr')
+        ->assertSee(route('dashboard.sites.show', $visibleSite), false)
+        ->assertDontSee('Restricted Store')
+        ->assertDontSee('Restricted GitLab')
+        ->assertDontSee('private/restricted')
+        ->assertDontSee('Status 503')
+        ->assertDontSee('restricted provider body')
+        ->assertDontSee(route('dashboard.sites.show', $restrictedSite), false);
+});
+
+test('account external issue readiness counts audit only sync failures', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    $site = Site::factory()->for($account)->create(['name' => 'Acme Docs']);
+    $connection = ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'provider' => 'github',
+            'name' => 'Engineering GitHub',
+        ]);
+    SiteExternalIssueProject::factory()
+        ->for($account)
+        ->for($site)
+        ->for($connection, 'providerConnection')
+        ->create(['project_key' => 'adamgreenwell/wayfindr']);
+    AuditEvent::factory()
+        ->for($account)
+        ->for($site)
+        ->create([
+            'action' => 'ticket.external_sync_failed',
+            'metadata' => [
+                'provider' => 'github',
+                'project_key' => 'adamgreenwell/wayfindr',
+                'status' => 502,
+                'message' => 'raw provider exception should stay hidden',
+            ],
+        ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Needs attention')
+        ->assertSee('1 sync failed')
+        ->assertSee('Last external sync failure')
+        ->assertSee('Status 502')
+        ->assertDontSee('raw provider exception should stay hidden');
+});
+
+test('account external issue readiness treats provider only setup as unmapped', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+    ]);
+    ExternalIssueProviderConnection::factory()
+        ->for($account)
+        ->create([
+            'provider' => 'github',
+            'name' => 'Engineering GitHub',
+        ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('External issue readiness')
+        ->assertSee('Not configured')
+        ->assertSee('Map at least one site project before tickets can leave Wayfindr.')
+        ->assertSee('1 provider connection')
+        ->assertSee('0 mapped projects');
 });
 
 test('account admins can inspect team alert readiness without leaking provider details', function (): void {
