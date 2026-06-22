@@ -107,6 +107,11 @@ class ConversationMessageController extends Controller
                     'status' => $conversation->status,
                 ],
                 'message' => [
+                    'id' => $message->id,
+                    'sender' => [
+                        'kind' => 'visitor',
+                        'name' => 'Visitor',
+                    ],
                     'type' => $message->type,
                     'body' => $message->body,
                     'created_at' => $message->created_at?->toJSON(),
