@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\AuditEvent;
 use App\Models\Site;
 use App\Models\User;
+use App\Support\AccountAlertReadiness;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -76,6 +77,9 @@ class AgentAccountController extends Controller
             'account' => $account,
             'accountActivity' => $this->accountActivityItems($account, $visibleSiteIds),
             'agent' => $agent,
+            'agentAlertReadinessSummary' => $agent->isAdmin()
+                ? app(AccountAlertReadiness::class)->summarize($agents)
+                : null,
             'agentAlertDeliverySummaries' => $agents->mapWithKeys(fn (User $accountAgent): array => [
                 $accountAgent->id => $this->agentAlertDeliverySummary($accountAgent),
             ]),

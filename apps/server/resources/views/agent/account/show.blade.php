@@ -199,6 +199,36 @@
                 </section>
             @endif
 
+            @if ($canViewAlertDelivery && $agentAlertReadinessSummary)
+                <section class="section" aria-labelledby="team-alert-readiness-heading">
+                    <div class="section-header">
+                        <div>
+                            <h2 id="team-alert-readiness-heading">Team alert readiness</h2>
+                            <p class="lede">{{ $agentAlertReadinessSummary['detail'] }}</p>
+                        </div>
+                        <div class="section-actions">
+                            <span class="readiness-status" data-status="{{ $agentAlertReadinessSummary['status'] }}">
+                                {{ $agentAlertReadinessSummary['label'] }}
+                            </span>
+                            <a class="button secondary" href="{{ route('dashboard.readiness.show') }}">Readiness</a>
+                        </div>
+                    </div>
+                    <div class="meta-grid readiness-summary-grid">
+                        @foreach ($agentAlertReadinessSummary['metrics'] as $metric)
+                            <div class="meta-item">
+                                <span class="meta-label">{{ $metric['label'] }}</span>
+                                <span class="meta-value">{{ $metric['value'] }}</span>
+                                <span class="lede">
+                                    <span class="readiness-status" data-status="{{ $metric['tone'] }}">
+                                        {{ ucfirst($metric['tone']) }}
+                                    </span>
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
             <section id="agents" class="section" aria-labelledby="agents-heading">
                 <div class="section-header">
                     <h2 id="agents-heading">Agents</h2>

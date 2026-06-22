@@ -324,6 +324,160 @@ test('account overview shows agent alert digest delivery status without raw prov
         ->assertDontSee('Outside failure should not render.');
 });
 
+test('account admins can inspect team alert readiness without leaking provider details', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $admin = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Admin,
+        'name' => 'Ada Admin',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_IMMEDIATE,
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Ivy Immediate',
+        'email' => 'immediate@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_IMMEDIATE,
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Quinn Digest',
+        'email' => 'digest@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_DIGEST,
+            'digest_delivery' => [
+                'status' => User::ALERT_DIGEST_DELIVERY_QUEUED,
+                'candidate_count' => 3,
+                'message' => User::digestQueuedMessage(3),
+            ],
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Nora New Digest',
+        'email' => 'not-run@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_DIGEST,
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Faye Failed',
+        'email' => 'failed@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_DIGEST,
+            'digest_delivery' => [
+                'status' => User::ALERT_DIGEST_DELIVERY_FAILED,
+                'message' => 'Digest email could not be queued.',
+                'error' => 'SMTP provider secret stack trace should not render',
+            ],
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Quinn Quiet',
+        'email' => 'quiet@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_QUIET,
+            'email' => false,
+            'cadence' => User::ALERT_CADENCE_IMMEDIATE,
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Ash Dashboard',
+        'email' => 'dashboard@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ASSIGNED,
+            'email' => false,
+            'cadence' => User::ALERT_CADENCE_IMMEDIATE,
+        ],
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Doug Dormant',
+        'email' => 'dormant@example.test',
+        'deactivated_at' => now(),
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_IMMEDIATE,
+        ],
+    ]);
+
+    User::factory()->for(Account::factory())->create([
+        'name' => 'Outside Failed',
+        'email' => 'outside@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_DIGEST,
+            'digest_delivery' => [
+                'status' => User::ALERT_DIGEST_DELIVERY_FAILED,
+                'message' => 'Outside failure should not render.',
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertSee('Team alert readiness')
+        ->assertSee('7 active')
+        ->assertSee('2 immediate email')
+        ->assertSee('1 digest ready')
+        ->assertSee('1 digest needs baseline')
+        ->assertSee('1 needs attention')
+        ->assertSee('2 dashboard only or quiet')
+        ->assertSee('1 deactivated')
+        ->assertSee('Faye Failed')
+        ->assertDontSee('SMTP provider secret stack trace should not render')
+        ->assertDontSee('Outside Failed')
+        ->assertDontSee('Outside failure should not render.');
+});
+
+test('regular agents do not see team alert readiness rollups', function (): void {
+    $account = Account::factory()->create(['name' => 'Acme Support']);
+    $agent = User::factory()->for($account)->create([
+        'account_role' => AccountRole::Agent,
+        'name' => 'Bea Builder',
+    ]);
+
+    User::factory()->for($account)->create([
+        'name' => 'Faye Failed',
+        'email' => 'failed@example.test',
+        'alert_preferences' => [
+            'mode' => User::ALERT_MODE_ALL,
+            'email' => true,
+            'cadence' => User::ALERT_CADENCE_DIGEST,
+            'digest_delivery' => [
+                'status' => User::ALERT_DIGEST_DELIVERY_FAILED,
+                'message' => 'Digest email could not be queued.',
+                'error' => 'SMTP provider secret stack trace should not render',
+            ],
+        ],
+    ]);
+
+    $this->actingAs($agent)
+        ->get('/dashboard/account')
+        ->assertOk()
+        ->assertDontSee('Team alert readiness')
+        ->assertDontSee('needs attention')
+        ->assertDontSee('SMTP provider secret stack trace should not render');
+});
+
 test('account overview clarifies agent alert scope and quiet delivery state', function (): void {
     $account = Account::factory()->create(['name' => 'Acme Support']);
     $admin = User::factory()->for($account)->create([
