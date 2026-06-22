@@ -148,6 +148,84 @@ test('GitLab issue creation supports self-managed host base URLs', function (): 
     ]);
 });
 
+test('ticket detail previews the conservative GitLab issue export payload', function (): void {
+    $fixture = gitlabOutboundIssueFixture();
+    $ticket = $fixture['ticket'];
+    $agent = $fixture['agent'];
+
+    $response = $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk();
+
+    $response
+        ->assertSeeInOrder([
+            'External issue export preview',
+            'Issue title',
+            'Checkout export keeps failing',
+            'Summary sent to external trackers',
+            "Wayfindr ticket #{$ticket->id}",
+            'Support code: WF-GL01',
+            'Site: Acme Docs',
+            'Priority: High',
+            'Category: Bug',
+            'Status: Open',
+            'Description',
+            'The visitor cannot export orders after checkout.',
+            'Raw visitor transcripts, cobrowse snapshots, and internal notes were not exported by default.',
+        ]);
+
+    preg_match('/<div class="external-issue-export-preview" data-external-issue-export-preview>.*?<\/pre>\s*<\/div>/s', $response->getContent(), $matches);
+
+    expect($matches[0] ?? '')
+        ->not->toBe('')
+        ->not->toContain('my card number is 4242 4242 4242 4242')
+        ->not->toContain('Do not send this internal note')
+        ->not->toContain('super-secret-cobrowse-token')
+        ->not->toContain('glpat_test_secret');
+});
+
+test('GitLab issue exports omit conversation generated ticket descriptions', function (): void {
+    $fixture = gitlabOutboundIssueFixture();
+    $ticket = $fixture['ticket'];
+    $project = $fixture['project'];
+    $agent = $fixture['agent'];
+
+    $ticket->forceFill([
+        'description' => 'Visitor: my card number is 4242 4242 4242 4242'.PHP_EOL.PHP_EOL.'Ada Agent: Do not export this transcript.',
+        'metadata' => array_replace($ticket->metadata ?? [], [
+            'description_source' => 'conversation_transcript',
+        ]),
+    ])->save();
+
+    Http::fake([
+        'https://gitlab.com/api/v4/projects/adamgreenwell%2Fwayfindr/issues' => Http::response([
+            'id' => 456789,
+            'iid' => 42,
+            'web_url' => 'https://gitlab.com/adamgreenwell/wayfindr/-/issues/42',
+            'title' => 'Checkout export keeps failing',
+        ], 201),
+    ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/external-issues/gitlab", [
+            'site_external_issue_project_id' => $project->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'GitLab issue created.');
+
+    Http::assertSent(function (HttpClientRequest $request): bool {
+        $description = (string) data_get($request->data(), 'description');
+
+        expect($description)
+            ->toContain('Conversation transcript omitted.')
+            ->not->toContain('my card number is 4242 4242 4242 4242')
+            ->not->toContain('Do not export this transcript');
+
+        return true;
+    });
+});
+
 test('GitLab issue creation failure is audited without storing credentials or leaking response details', function (): void {
     $fixture = gitlabOutboundIssueFixture(projectOverrides: [
         'project_key' => 'secret-group/private-project',

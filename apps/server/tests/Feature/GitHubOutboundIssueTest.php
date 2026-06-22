@@ -100,6 +100,84 @@ test('agent can create a conservative GitHub issue from a mapped ticket', functi
         ->assertSee('https://github.com/adamgreenwell/wayfindr/issues/123');
 });
 
+test('ticket detail previews the conservative GitHub issue export payload', function (): void {
+    $fixture = githubOutboundIssueFixture();
+    $ticket = $fixture['ticket'];
+    $agent = $fixture['agent'];
+
+    $response = $this->actingAs($agent)
+        ->get("/dashboard/tickets/{$ticket->id}")
+        ->assertOk();
+
+    $response
+        ->assertSeeInOrder([
+            'External issue export preview',
+            'Issue title',
+            'Checkout export keeps failing',
+            'Summary sent to external trackers',
+            "Wayfindr ticket #{$ticket->id}",
+            'Support code: WF-GH01',
+            'Site: Acme Docs',
+            'Priority: High',
+            'Category: Bug',
+            'Status: Open',
+            'Description',
+            'The visitor cannot export orders after checkout.',
+            'Raw visitor transcripts, cobrowse snapshots, and internal notes were not exported by default.',
+        ]);
+
+    preg_match('/<div class="external-issue-export-preview" data-external-issue-export-preview>.*?<\/pre>\s*<\/div>/s', $response->getContent(), $matches);
+
+    expect($matches[0] ?? '')
+        ->not->toBe('')
+        ->not->toContain('my card number is 4242 4242 4242 4242')
+        ->not->toContain('Do not send this internal note')
+        ->not->toContain('super-secret-cobrowse-token')
+        ->not->toContain('ghp_test_secret');
+});
+
+test('GitHub issue exports omit conversation generated ticket descriptions', function (): void {
+    $fixture = githubOutboundIssueFixture();
+    $ticket = $fixture['ticket'];
+    $project = $fixture['project'];
+    $agent = $fixture['agent'];
+
+    $ticket->forceFill([
+        'description' => 'Visitor: my card number is 4242 4242 4242 4242'.PHP_EOL.PHP_EOL.'Ada Agent: Do not export this transcript.',
+        'metadata' => array_replace($ticket->metadata ?? [], [
+            'description_source' => 'conversation_transcript',
+        ]),
+    ])->save();
+
+    Http::fake([
+        'https://api.github.com/repos/adamgreenwell/wayfindr/issues' => Http::response([
+            'id' => 987,
+            'number' => 123,
+            'html_url' => 'https://github.com/adamgreenwell/wayfindr/issues/123',
+            'title' => 'Checkout export keeps failing',
+        ], 201),
+    ]);
+
+    $this->actingAs($agent)
+        ->from("/dashboard/tickets/{$ticket->id}")
+        ->post("/dashboard/tickets/{$ticket->id}/external-issues/github", [
+            'site_external_issue_project_id' => $project->id,
+        ])
+        ->assertRedirect("/dashboard/tickets/{$ticket->id}")
+        ->assertSessionHas('status', 'GitHub issue created.');
+
+    Http::assertSent(function (HttpClientRequest $request): bool {
+        $body = (string) data_get($request->data(), 'body');
+
+        expect($body)
+            ->toContain('Conversation transcript omitted.')
+            ->not->toContain('my card number is 4242 4242 4242 4242')
+            ->not->toContain('Do not export this transcript');
+
+        return true;
+    });
+});
+
 test('GitHub issue creation failure is audited without storing credentials', function (): void {
     $fixture = githubOutboundIssueFixture();
     $ticket = $fixture['ticket'];
