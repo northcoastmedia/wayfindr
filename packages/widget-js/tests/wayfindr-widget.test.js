@@ -1405,6 +1405,123 @@ test('renders the embedded conversation timeline and refreshes replies', async (
   );
 });
 
+test('renders accepted visitor messages before the next refresh completes', async () => {
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+    url: 'https://docs.example.test/install',
+  });
+  const calls = [];
+  const timelineRefresh = deferred();
+
+  const widget = Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    storage: memoryStorage(),
+    cobrowseStatusPollMs: 0,
+    messagePollMs: 0,
+    fetch: async (url, options) => {
+      const path = new URL(url).pathname;
+      calls.push({ url, options });
+
+      if (path === '/api/widget/bootstrap') {
+        return jsonResponse(201, {
+          data: {
+            site: { public_key: 'site_public_docs', settings: {} },
+            visitor: { anonymous_id: 'anon-browser-123', token: 'visitor-token-123' },
+          },
+        });
+      }
+
+      if (path === '/api/conversations') {
+        return jsonResponse(201, {
+          data: {
+            support_code: 'WF-TEST123',
+            status: 'open',
+          },
+        });
+      }
+
+      if (path === '/api/conversations/WF-TEST123/messages' && options.method === 'POST') {
+        return jsonResponse(201, {
+          data: {
+            conversation: { support_code: 'WF-TEST123', status: 'open' },
+            message: {
+              id: 7,
+              sender: { kind: 'visitor', name: 'Visitor' },
+              type: 'text',
+              body: 'Can you help me?',
+              created_at: '2026-05-23T14:00:00.000000Z',
+            },
+          },
+        });
+      }
+
+      if (path === '/api/conversations/WF-TEST123/messages') {
+        return timelineRefresh.promise;
+      }
+
+      if (path === '/api/conversations/WF-TEST123/cobrowse') {
+        return jsonResponse(200, {
+          data: {
+            conversation: { support_code: 'WF-TEST123' },
+            cobrowse: {
+              status: 'unavailable',
+              consent: 'unavailable',
+              requested_by: null,
+            },
+          },
+        });
+      }
+
+      throw new Error('Unexpected request ' + url);
+    },
+  });
+
+  widget.open();
+
+  widget.root.querySelector('.wayfindr-widget__textarea').value = 'Can you help me?';
+  widget.root.querySelector('.wayfindr-widget__form').dispatchEvent(
+    new dom.window.Event('submit', { bubbles: true, cancelable: true }),
+  );
+
+  await settle();
+
+  assert.deepEqual(
+    messageSummaries(widget),
+    ['VisitorCan you help me?'],
+  );
+  assert.equal(
+    calls.filter((call) => new URL(call.url).pathname === '/api/conversations/WF-TEST123/messages' && call.options.method === 'GET').length,
+    1,
+  );
+
+  timelineRefresh.resolve(jsonResponse(200, {
+    data: {
+      conversation: {
+        support_code: 'WF-TEST123',
+        status: 'open',
+      },
+      messages: [{
+        id: 7,
+        sender: { kind: 'visitor', name: 'Visitor' },
+        type: 'text',
+        body: 'Can you help me?',
+        created_at: '2026-05-23T14:00:00.000000Z',
+      }],
+    },
+  }));
+
+  await settle();
+
+  assert.deepEqual(
+    messageSummaries(widget),
+    ['VisitorCan you help me?'],
+  );
+});
+
 test('marks consecutive widget messages from the same sender as a visual group', async () => {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
     url: 'https://docs.example.test/install',
@@ -3688,7 +3805,7 @@ test('keeps live connection copy when redundant fallback message polling fails',
 
   assert.deepEqual(
     messageSummaries(widget),
-    ['Ada AgentLive hello.'],
+    ['VisitorCan you help me?', 'Ada AgentLive hello.'],
   );
   assert.match(
     widget.root.querySelector('.wayfindr-widget__connection').textContent,

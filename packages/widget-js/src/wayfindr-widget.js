@@ -1488,6 +1488,7 @@
         if (supportCode) {
           var sentMessage = await client.sendMessage(supportCode, body);
           applyConversationStatus(sentMessage.conversation);
+          appendMessage(sentMessage.message);
           renderConversationNotice();
           activateConversation();
         } else {
@@ -1500,6 +1501,7 @@
           supportCode = conversation.support_code;
           var firstMessage = await client.sendMessage(supportCode, body);
           applyConversationStatus(firstMessage.conversation);
+          appendMessage(firstMessage.message);
           renderConversationNotice();
           activateConversation();
         }
