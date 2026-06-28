@@ -55,7 +55,7 @@ class CobrowseReplayPreview
 
     /**
      * @param  array<string, mixed>  $metadata
-     * @return array{srcdoc: string, applied_mutations: string, skipped_mutations: string}|null
+     * @return array{srcdoc: string, applied_mutations: string, skipped_mutations: string, drift: array<string, mixed>}|null
      */
     public function fromMetadata(array $metadata): ?array
     {
@@ -70,7 +70,9 @@ class CobrowseReplayPreview
 
         $counts = [
             'applied' => 0,
-            'skipped' => 0,
+            'unresolved' => 0,
+            'unsupported' => 0,
+            'invalid' => 0,
         ];
 
         $this->applyRecentMutations(
@@ -81,10 +83,13 @@ class CobrowseReplayPreview
         );
         $this->sanitizeDocument($document);
 
+        $skipped = $counts['unresolved'] + $counts['unsupported'] + $counts['invalid'];
+
         return [
             'srcdoc' => $this->wrapPreviewHtml($this->bodyHtml($document)),
             'applied_mutations' => number_format($counts['applied']).' applied',
-            'skipped_mutations' => number_format($counts['skipped']).' skipped',
+            'skipped_mutations' => number_format($skipped).' skipped',
+            'drift' => (new CobrowseReplayDrift)->evaluate($counts),
         ];
     }
 
@@ -163,7 +168,7 @@ class CobrowseReplayPreview
     }
 
     /**
-     * @param  array{applied: int, skipped: int}  $counts
+     * @param  array{applied: int, unresolved: int, unsupported: int, invalid: int}  $counts
      */
     private function applyRecentMutations(DOMDocument $document, mixed $batches, array &$counts, ?int $snapshotMutationSequence): void
     {
@@ -182,12 +187,12 @@ class CobrowseReplayPreview
 
             foreach ($batch['mutations'] as $mutation) {
                 if (! is_array($mutation)) {
-                    $counts['skipped']++;
+                    $counts['invalid']++;
 
                     continue;
                 }
 
-                $this->applyMutation($document, $mutation) ? $counts['applied']++ : $counts['skipped']++;
+                $counts[$this->applyMutation($document, $mutation)]++;
             }
         }
     }
@@ -218,8 +223,9 @@ class CobrowseReplayPreview
 
     /**
      * @param  array<string, mixed>  $mutation
+     * @return 'applied'|'unresolved'|'unsupported'|'invalid'
      */
-    private function applyMutation(DOMDocument $document, array $mutation): bool
+    private function applyMutation(DOMDocument $document, array $mutation): string
     {
         $type = (string) ($mutation['type'] ?? '');
         $path = (string) ($mutation['path'] ?? '');
@@ -233,48 +239,69 @@ class CobrowseReplayPreview
                 $mutation['attribute_value'] ?? null,
             ),
             'added' => $this->applyAddedMutation($document, $path, $mutation['html'] ?? null),
-            default => false,
+            default => 'unsupported',
         };
     }
 
-    private function applyTextMutation(DOMDocument $document, string $path, mixed $text): bool
+    /**
+     * @return 'applied'|'unresolved'|'invalid'
+     */
+    private function applyTextMutation(DOMDocument $document, string $path, mixed $text): string
     {
-        $element = $this->elementForPath($document, $path);
+        [$status, $element] = $this->resolvePath($document, $path);
 
-        if (! $element || ! is_string($text)) {
-            return false;
+        if ($status !== 'ok') {
+            return $status;
+        }
+
+        if (! is_string($text)) {
+            return 'invalid';
         }
 
         $element->textContent = $text;
 
-        return true;
+        return 'applied';
     }
 
-    private function applyAttributeMutation(DOMDocument $document, string $path, mixed $name, mixed $value): bool
+    /**
+     * @return 'applied'|'unresolved'|'unsupported'|'invalid'
+     */
+    private function applyAttributeMutation(DOMDocument $document, string $path, mixed $name, mixed $value): string
     {
-        $element = $this->elementForPath($document, $path);
+        [$status, $element] = $this->resolvePath($document, $path);
 
-        if (! $element || ! is_string($name) || ! is_scalar($value)) {
-            return false;
+        if ($status !== 'ok') {
+            return $status;
+        }
+
+        if (! is_string($name) || ! is_scalar($value)) {
+            return 'invalid';
         }
 
         $attributeName = strtolower($name);
 
         if (! $this->isSafeMutationAttribute($attributeName)) {
-            return false;
+            return 'unsupported';
         }
 
         $element->setAttribute($attributeName, (string) $value);
 
-        return true;
+        return 'applied';
     }
 
-    private function applyAddedMutation(DOMDocument $document, string $path, mixed $html): bool
+    /**
+     * @return 'applied'|'unresolved'|'invalid'
+     */
+    private function applyAddedMutation(DOMDocument $document, string $path, mixed $html): string
     {
-        $parent = $this->elementForPath($document, $path);
+        [$status, $parent] = $this->resolvePath($document, $path);
 
-        if (! $parent || ! is_string($html) || $html === '') {
-            return false;
+        if ($status !== 'ok') {
+            return $status;
+        }
+
+        if (! is_string($html) || $html === '') {
+            return 'invalid';
         }
 
         $fragmentDocument = $this->loadDocument($html);
@@ -283,7 +310,7 @@ class CobrowseReplayPreview
         $body = $fragmentDocument->getElementsByTagName('body')->item(0);
 
         if (! $body) {
-            return false;
+            return 'invalid';
         }
 
         $appended = false;
@@ -293,7 +320,7 @@ class CobrowseReplayPreview
             $appended = true;
         }
 
-        return $appended;
+        return $appended ? 'applied' : 'invalid';
     }
 
     private function isSafeMutationAttribute(string $attributeName): bool
@@ -306,17 +333,28 @@ class CobrowseReplayPreview
             || str_starts_with($attributeName, 'aria-');
     }
 
-    private function elementForPath(DOMDocument $document, string $path): ?DOMElement
+    /**
+     * Resolve a mutation path, distinguishing an unsupported path syntax from a
+     * supported path that no longer matches a node. Only the latter is drift;
+     * malformed or legacy paths are invalid and must not feed the drift ratio.
+     *
+     * @return array{0: 'ok'|'invalid'|'unresolved', 1: ?DOMElement}
+     */
+    private function resolvePath(DOMDocument $document, string $path): array
     {
         $xpath = $this->pathToXPath($path);
 
         if ($xpath === null) {
-            return null;
+            return ['invalid', null];
         }
 
         $node = (new DOMXPath($document))->query($xpath)?->item(0);
 
-        return $node instanceof DOMElement ? $node : null;
+        if (! $node instanceof DOMElement) {
+            return ['unresolved', null];
+        }
+
+        return ['ok', $node];
     }
 
     private function pathToXPath(string $path): ?string
