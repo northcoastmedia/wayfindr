@@ -1822,11 +1822,71 @@
     return normalized;
   }
 
+  function forEachChildNode(node, callback) {
+    Array.prototype.slice.call((node && node.childNodes) || []).forEach(callback);
+  }
+
+  // Deep-clone a node for capture, inlining open shadow roots so web-component
+  // content is visible (and maskable) in the snapshot. Closed shadow roots are
+  // inaccessible by design and are simply absent. Falls back to a plain deep
+  // clone for nodes without shadow content, so behavior is unchanged for pages
+  // that do not use shadow DOM.
+  function cloneForCapture(node) {
+    if (!node) {
+      return null;
+    }
+
+    if (node.nodeType !== 1) {
+      return node.cloneNode(true);
+    }
+
+    var tagName = String(node.tagName || '').toLowerCase();
+
+    // <template> content is an inert fragment that the preview never renders and
+    // that the querySelectorAll-based masking helpers cannot reach, so copying
+    // it would serialize unmasked markup. Capture the empty shell only.
+    if (tagName === 'template') {
+      return node.cloneNode(false);
+    }
+
+    var clone = node.cloneNode(false);
+    var ownerDocument = node.ownerDocument;
+
+    forEachChildNode(node, function (child) {
+      var clonedChild = cloneForCapture(child);
+
+      if (clonedChild) {
+        clone.appendChild(clonedChild);
+      }
+    });
+
+    // Inline open shadow content after the light children, inside a uniquely
+    // tagged wrapper. Mutation paths are computed from the real (light) DOM with
+    // nth-of-type, so the wrapper must not share a tag with any real element or
+    // it would shift those indices and make replayed paths resolve to the wrong
+    // node. A custom <wayfindr-shadow-content> tag never appears in a real path.
+    if (node.shadowRoot && ownerDocument) {
+      var shadowContainer = ownerDocument.createElement('wayfindr-shadow-content');
+
+      forEachChildNode(node.shadowRoot, function (child) {
+        var clonedChild = cloneForCapture(child);
+
+        if (clonedChild) {
+          shadowContainer.appendChild(clonedChild);
+        }
+      });
+
+      clone.appendChild(shadowContainer);
+    }
+
+    return clone;
+  }
+
   function createCobrowseSnapshot(doc, options) {
     options = options || {};
 
     var location = options.location || (doc && doc.location) || null;
-    var source = doc && doc.body ? doc.body.cloneNode(true) : null;
+    var source = doc && doc.body ? cloneForCapture(doc.body) : null;
 
     if (!source) {
       return {
@@ -2007,7 +2067,7 @@
   }
 
   function addedMutation(record, element, options) {
-    var clone = element.cloneNode(true);
+    var clone = cloneForCapture(element);
     var maskedCount;
 
     removeMatching(clone, DEFAULT_REMOVE_SELECTORS);
