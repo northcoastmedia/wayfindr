@@ -163,6 +163,59 @@ class CobrowseReplayPreview
             $this->sanitizeAttributes($element);
             $this->sanitizeFormControl($element);
         }
+
+        $this->maskSensitiveElements($document);
+    }
+
+    /**
+     * Mask the text content of elements the widget marks sensitive
+     * (data-secret / data-wayfindr-mask / data-wayfindr-private). The stock
+     * widget masks these before sending, but the server is the source of truth:
+     * an older or hostile widget could send them unmasked, and they must never
+     * reach the agent replay preview in the clear.
+     */
+    private function maskSensitiveElements(DOMDocument $document): void
+    {
+        $matches = (new DOMXPath($document))->query('//*[@data-secret or @data-wayfindr-mask or @data-wayfindr-private]');
+
+        if (! $matches) {
+            return;
+        }
+
+        $nodes = [];
+
+        foreach ($matches as $node) {
+            $nodes[] = $node;
+        }
+
+        foreach ($nodes as $node) {
+            if (! $node instanceof DOMElement) {
+                continue;
+            }
+
+            $tagName = strtolower($node->tagName);
+
+            if (in_array($tagName, ['input', 'textarea', 'select'], true)) {
+                // For a sensitive form control, masking textContent is not enough
+                // (an input serializes its value/placeholder attributes). Mirror
+                // the widget and mask both so nothing reaches the agent in clear.
+                if ($node->hasAttribute('value')) {
+                    $node->setAttribute('value', '[masked]');
+                }
+
+                if ($node->hasAttribute('placeholder')) {
+                    $node->setAttribute('placeholder', '[masked]');
+                }
+
+                if ($tagName !== 'input') {
+                    $node->textContent = '[masked]';
+                }
+
+                continue;
+            }
+
+            $node->textContent = '[masked]';
+        }
     }
 
     private function sanitizeAttributes(DOMElement $element): void
