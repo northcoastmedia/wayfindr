@@ -12,6 +12,7 @@ use App\Models\Visitor;
 use App\Support\OperatorReadiness;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
@@ -911,6 +912,59 @@ test('readiness security posture stays ready when debug is on outside production
     expect($security['status'])->toBe('ready')
         ->and($security['summary'])->toBe('Debug mode is on in the testing environment.')
         ->and(collect($readiness['checks'])->where('status', 'attention')->pluck('key'))->not->toContain('security_posture');
+});
+
+test('readiness cache store check round-trips a working store', function (): void {
+    config(['cache.default' => 'file']);
+
+    $readiness = app(OperatorReadiness::class)->summary();
+    $cache = collect($readiness['checks'])->firstWhere('key', 'cache_store');
+
+    expect($cache)->toMatchArray([
+        'label' => 'Cache store',
+        'status' => 'ready',
+    ])->and($cache['summary'])->toContain('responded');
+});
+
+test('readiness flags a non-persistent cache store in production', function (): void {
+    $this->app->detectEnvironment(fn (): string => 'production');
+    config(['cache.default' => 'array']);
+
+    $readiness = app(OperatorReadiness::class)->summary();
+    $cache = collect($readiness['checks'])->firstWhere('key', 'cache_store');
+
+    expect($cache)->toMatchArray([
+        'label' => 'Cache store',
+        'status' => 'attention',
+        'summary' => 'CACHE_STORE is array in production.',
+    ])
+        ->and(collect($readiness['checks'])->where('status', 'attention')->pluck('key'))->toContain('cache_store');
+});
+
+test('readiness flags a cache store that cannot be reached', function (): void {
+    config(['cache.default' => 'redis']);
+    Cache::shouldReceive('store')->with('redis')->andThrow(new RuntimeException('Connection refused'));
+
+    $readiness = app(OperatorReadiness::class)->summary();
+    $cache = collect($readiness['checks'])->firstWhere('key', 'cache_store');
+
+    expect($cache['status'])->toBe('attention')
+        ->and($cache['summary'])->toContain('redis cache store could not be verified');
+});
+
+test('readiness flags a failed persistent store inside a cache failover chain', function (): void {
+    // The repo's failover store chains [database, array]. A round-trip would
+    // otherwise pass through the array fallback and hide a broken primary, so the
+    // persistent member (database) must be probed directly.
+    config(['cache.default' => 'failover']);
+    Cache::shouldReceive('store')->with('database')->andThrow(new RuntimeException('no such table: cache'));
+
+    $readiness = app(OperatorReadiness::class)->summary();
+    $cache = collect($readiness['checks'])->firstWhere('key', 'cache_store');
+
+    expect($cache['status'])->toBe('attention')
+        ->and($cache['summary'])->toContain('database')
+        ->and($cache['summary'])->toContain('failover');
 });
 
 test('readiness diagnostics flag smtp mail that still points at local defaults', function (): void {
