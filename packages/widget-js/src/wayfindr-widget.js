@@ -190,13 +190,14 @@
           page_url: details.pageUrl || null,
         }, details.context, externalId));
       },
-      sendMessage: function (supportCode, body) {
-        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages', {
+      sendMessage: function (supportCode, body, clientMessageId) {
+        return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/messages', withoutNullValues({
           site_public_key: sitePublicKey,
           anonymous_id: anonymousId,
           visitor_token: requireVisitorToken(visitorToken),
           body: body,
-        });
+          client_message_id: clientMessageId || null,
+        }));
       },
       reportTyping: function (supportCode, isTyping) {
         return postJson(fetcher, apiBaseUrl + '/api/conversations/' + encodeURIComponent(supportCode) + '/typing', {
@@ -344,7 +345,7 @@
         }
 
         var conversation = await this.startConversation(body, details);
-        var message = await this.sendMessage(conversation.support_code, body);
+        var message = await this.sendMessage(conversation.support_code, body, details.clientMessageId || generateClientMessageId());
 
         return {
           conversation: conversation,
@@ -489,6 +490,8 @@
     var visitorContext = options.visitorContext || null;
     var composerBusy = false;
     var refreshBusy = false;
+    var pendingClientMessageId = null;
+    var pendingClientMessageBody = null;
     var noticeRetryAction = null;
     var sendLabel = send.textContent;
     var refreshLabel = refresh.textContent;
@@ -1559,6 +1562,14 @@
       setComposerBusy(true);
       status.textContent = 'Sending...';
 
+      // Reuse the same idempotency key while retrying the same draft, so a lost
+      // response on the first attempt does not create a duplicate message when
+      // the visitor retries. A new draft gets a fresh key.
+      if (pendingClientMessageId === null || pendingClientMessageBody !== body) {
+        pendingClientMessageId = generateClientMessageId();
+        pendingClientMessageBody = body;
+      }
+
       try {
         if (!bootstrapped) {
           await client.bootstrap(location ? location.href : null, visitorContext);
@@ -1566,7 +1577,7 @@
         }
 
         if (supportCode) {
-          var sentMessage = await client.sendMessage(supportCode, body);
+          var sentMessage = await client.sendMessage(supportCode, body, pendingClientMessageId);
           applyConversationStatus(sentMessage.conversation);
           appendMessage(sentMessage.message);
           renderConversationNotice();
@@ -1579,7 +1590,7 @@
 
           applyConversationStatus(conversation);
           supportCode = conversation.support_code;
-          var firstMessage = await client.sendMessage(supportCode, body);
+          var firstMessage = await client.sendMessage(supportCode, body, pendingClientMessageId);
           applyConversationStatus(firstMessage.conversation);
           appendMessage(firstMessage.message);
           renderConversationNotice();
@@ -1587,6 +1598,8 @@
         }
 
         textarea.value = '';
+        pendingClientMessageId = null;
+        pendingClientMessageBody = null;
         await refreshMessages({ silent: true });
         await refreshCobrowseStatus({ silent: true });
         status.textContent = 'Message sent. Support code ' + supportCode + '.';
@@ -2547,6 +2560,18 @@
     });
 
     return result;
+  }
+
+  function generateClientMessageId() {
+    try {
+      if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+        return 'wf-' + crypto.randomUUID();
+      }
+    } catch (error) {
+      // Fall through to the timestamp/random fallback below.
+    }
+
+    return 'wf-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
   }
 
   function visitorTokenStorageKey(sitePublicKey) {

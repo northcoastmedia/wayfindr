@@ -7,12 +7,14 @@ use App\Events\ConversationPresenceUpdated;
 use App\Events\ConversationReadReceiptUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
+use App\Models\ConversationMessage;
 use App\Models\Site;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Support\VisitorSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ConversationMessageController extends Controller
 {
@@ -73,6 +75,7 @@ class ConversationMessageController extends Controller
             'anonymous_id' => ['required', 'string', 'max:255'],
             'visitor_token' => ['nullable', 'string', 'max:4096'],
             'body' => ['required', 'string', 'max:4000'],
+            'client_message_id' => ['nullable', 'string', 'max:128'],
         ]);
 
         $conversation = $this->conversationForVisitor(
@@ -84,22 +87,54 @@ class ConversationMessageController extends Controller
         );
         $this->recordVisitorPresence($conversation);
 
-        $message = $conversation->messages()->create([
-            'sender_type' => Visitor::class,
-            'sender_id' => $conversation->visitor_id,
-            'type' => 'text',
-            'body' => $validated['body'],
-            'metadata' => [],
-        ]);
+        $clientMessageId = $this->normalizeClientMessageId($validated['client_message_id'] ?? null);
 
-        $conversation->forceFill([
-            'status' => 'open',
-            'closed_at' => null,
-            'last_message_at' => $message->created_at,
-        ])->save();
+        [$message, $created] = DB::transaction(function () use ($conversation, $validated, $clientMessageId) {
+            // Lock the conversation row so the idempotency check and the insert
+            // are atomic. Without this, two concurrent sends sharing a
+            // client_message_id could both pass the lookup before either row is
+            // visible and both create a message.
+            Conversation::query()->whereKey($conversation->getKey())->lockForUpdate()->first();
 
-        event(new ConversationMessageCreated($message));
+            if ($clientMessageId !== null) {
+                $existing = $conversation->messages()
+                    ->where('sender_type', Visitor::class)
+                    ->where('metadata->client_message_id', $clientMessageId)
+                    ->first();
 
+                if ($existing) {
+                    // Idempotent retry: the message was already accepted, so
+                    // return it without creating a second row or re-broadcasting.
+                    return [$existing, false];
+                }
+            }
+
+            $message = $conversation->messages()->create([
+                'sender_type' => Visitor::class,
+                'sender_id' => $conversation->visitor_id,
+                'type' => 'text',
+                'body' => $validated['body'],
+                'metadata' => $clientMessageId !== null ? ['client_message_id' => $clientMessageId] : [],
+            ]);
+
+            $conversation->forceFill([
+                'status' => 'open',
+                'closed_at' => null,
+                'last_message_at' => $message->created_at,
+            ])->save();
+
+            return [$message, true];
+        });
+
+        if ($created) {
+            event(new ConversationMessageCreated($message));
+        }
+
+        return $this->storedMessageResponse($conversation, $message);
+    }
+
+    private function storedMessageResponse(Conversation $conversation, ConversationMessage $message): JsonResponse
+    {
         return response()->json([
             'data' => [
                 'conversation' => [
@@ -119,6 +154,17 @@ class ConversationMessageController extends Controller
                 'visitor_presence' => $conversation->visitorPresencePayload(),
             ],
         ], 201);
+    }
+
+    private function normalizeClientMessageId(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     private function conversationForVisitor(
