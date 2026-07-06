@@ -2027,6 +2027,16 @@
 
   var CAPTURED_OWN_STYLE_PROPERTIES = ['background-color', 'border-radius', 'text-decoration-line'];
 
+  // Layout is only captured on flex/grid containers. Containers are a small
+  // minority of nodes, so this restores multi-column structure (heroes, navs,
+  // button rows) without serializing box metrics for every element on the page.
+  var CAPTURED_CONTAINER_DISPLAY_VALUES = ['flex', 'inline-flex', 'grid', 'inline-grid'];
+
+  var CAPTURED_LAYOUT_STYLE_PROPERTIES = [
+    'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'gap',
+    'grid-template-columns', 'padding', 'margin', 'max-width',
+  ];
+
   function isCapturableStyleValue(value) {
     if (!value || value.length > 200) {
       return false;
@@ -2053,6 +2063,50 @@
     }
 
     if (property === 'text-decoration-line') {
+      return value === 'none';
+    }
+
+    return false;
+  }
+
+  // Browsers include named grid lines ("[content-start] 480px [content-end]")
+  // in the computed grid-template-columns value. The server's value grammar
+  // rejects brackets, which would silently drop the whole declaration and
+  // collapse the grid; the track sizes alone replay fine, so strip the names.
+  function normalizeLayoutStyleValue(property, value) {
+    if (property === 'grid-template-columns') {
+      return value.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    return value;
+  }
+
+  function isDefaultLayoutStyleValue(property, value) {
+    if (property === 'flex-direction') {
+      return value === 'row';
+    }
+
+    if (property === 'flex-wrap') {
+      return value === 'nowrap';
+    }
+
+    if (property === 'justify-content' || property === 'align-items') {
+      return value === 'normal';
+    }
+
+    if (property === 'gap') {
+      return value === 'normal' || value === 'normal normal' || value === '0px' || value === '0px 0px';
+    }
+
+    if (property === 'grid-template-columns') {
+      return value === 'none';
+    }
+
+    if (property === 'padding' || property === 'margin') {
+      return value === '0px' || value === '0px 0px 0px 0px';
+    }
+
+    if (property === 'max-width') {
       return value === 'none';
     }
 
@@ -2088,6 +2142,22 @@
 
       declarations.push(property + ':' + value);
     });
+
+    var display = readValue('display');
+
+    if (CAPTURED_CONTAINER_DISPLAY_VALUES.indexOf(display) !== -1) {
+      declarations.push('display:' + display);
+
+      CAPTURED_LAYOUT_STYLE_PROPERTIES.forEach(function (property) {
+        var value = normalizeLayoutStyleValue(property, readValue(property));
+
+        if (! isCapturableStyleValue(value) || isDefaultLayoutStyleValue(property, value)) {
+          return;
+        }
+
+        declarations.push(property + ':' + value);
+      });
+    }
 
     return declarations.join(';');
   }
