@@ -2129,6 +2129,37 @@
     'grid-template-columns', 'padding', 'margin', 'max-width',
   ];
 
+  // Composition built on positioning instead of flex/grid (floating cards,
+  // overlays, badges) collapses into normal flow without these. relative and
+  // absolute replay faithfully now that the preview renders at the visitor's
+  // viewport width; fixed and sticky are intentionally left uncaptured — page
+  // chrome (banners, navbars) stays in flow rather than pinning over the
+  // preview.
+  var CAPTURED_POSITION_VALUES = ['relative', 'absolute'];
+
+  var CAPTURED_POSITION_OFFSET_PROPERTIES = ['top', 'right', 'bottom', 'left'];
+
+  var POSITION_OFFSET_MAX_PX = 10000;
+
+  function capturablePositionOffset(value) {
+    var parsed = /^(-?\d+(?:\.\d+)?)px$/.exec(value || '');
+
+    return parsed && Math.abs(parseFloat(parsed[1])) <= POSITION_OFFSET_MAX_PX;
+  }
+
+  // Once inside fixed/sticky page chrome (intentionally left in flow),
+  // absolute descendants must not be captured either: their containing block
+  // is the dropped ancestor, so their offsets would re-anchor to the wrong
+  // element in the replay. A relative element re-establishes a faithful
+  // containing block below the chrome, lifting the suppression.
+  function nextPositionSuppressed(position, suppressed) {
+    if (position === 'fixed' || position === 'sticky') {
+      return true;
+    }
+
+    return position === 'relative' ? false : suppressed;
+  }
+
   function isCapturableStyleValue(value, maxLength) {
     if (!value || value.length > (maxLength || 200)) {
       return false;
@@ -2251,7 +2282,7 @@
 
   // readValue / readParentValue: (property) => string. readParentValue is null
   // for a style root (so it establishes the base for inherited properties).
-  function buildCapturedStyle(readValue, readParentValue) {
+  function buildCapturedStyle(readValue, readParentValue, suppressAbsolute) {
     var declarations = [];
 
     CAPTURED_INHERITED_STYLE_PROPERTIES.forEach(function (property) {
@@ -2293,6 +2324,31 @@
 
         declarations.push(property + ':' + value);
       });
+    }
+
+    var position = readValue('position');
+
+    if (
+      CAPTURED_POSITION_VALUES.indexOf(position) !== -1
+      && ! (position === 'absolute' && suppressAbsolute)
+    ) {
+      // position:relative is captured even with no offsets: it establishes
+      // the containing block that absolute descendants anchor to.
+      declarations.push('position:' + position);
+
+      CAPTURED_POSITION_OFFSET_PROPERTIES.forEach(function (property) {
+        var value = readValue(property);
+
+        if (capturablePositionOffset(value)) {
+          declarations.push(property + ':' + value);
+        }
+      });
+
+      var zIndex = readValue('z-index');
+
+      if (/^-?\d{1,4}$/.test(zIndex || '')) {
+        declarations.push('z-index:' + zIndex);
+      }
     }
 
     return declarations.join(';');
@@ -2543,7 +2599,7 @@
           styleContext.budget.captured += 1;
 
           if (! shouldSkipStyleCapture(node, styleContext.maskSelectors, styleContext.sensitiveTerms)) {
-            var captured = buildCapturedStyle(readValue, styleContext.readParentValue);
+            var captured = buildCapturedStyle(readValue, styleContext.readParentValue, styleContext.positionSuppressed);
             var emptySize = buildEmptyElementSizeStyle(node, readValue);
 
             if (emptySize) {
@@ -2564,6 +2620,7 @@
           maskSelectors: styleContext.maskSelectors,
           sensitiveTerms: styleContext.sensitiveTerms,
           readParentValue: styleContext.isRoot ? null : readValue,
+          positionSuppressed: nextPositionSuppressed(readValue('position'), styleContext.positionSuppressed),
         };
       } catch (error) {
         // Style capture is best-effort; fall back to structural cloning.
@@ -2683,6 +2740,7 @@
         view: view,
         readParentValue: null,
         isRoot: true,
+        positionSuppressed: false,
         maskSelectors: DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []),
         sensitiveTerms: options.sensitiveTerms || [],
         budget: {
