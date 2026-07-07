@@ -78,6 +78,13 @@ No image URL reaches the agent, who must never fetch visitor resources, and no
 pixel data ever leaves the visitor page. Rendering real imagery would require a
 future explicit, site-configured opt-in; it is not part of the default posture.
 
+Content-empty decorative elements (skeleton blocks, panels, dots, spacers)
+additionally carry their rendered pixel box (width and height) so they keep
+their footprint in the replay instead of collapsing. Masked elements and form
+controls are excluded from this, as from all style capture: an element's box
+can encode value-derived signals (`ch`-unit widths, validity styling), and no
+styling of masked content is ever serialized.
+
 The **page-level background** is captured as a style summary, not a resource:
 the widget reads the body's (or the root element's) background color,
 gradient-only background image, and tile size under the same rules as element
