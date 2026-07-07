@@ -73,6 +73,98 @@ class CobrowseAuditTrail
     }
 
     /**
+     * Record a snapshot keyframe's provenance: when it was captured, how much
+     * was masked, and — crucially — which masking ruleset was actually in
+     * force at capture time, so masking is provable later even after the
+     * site's rules change. Metadata is provenance only, never snapshot content.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @param  array{selectors: array<int, string>, terms: array<int, string>}|null  $reportedRuleset
+     * @param  array{selectors: array<int, string>, terms: array<int, string>}  $siteRuleset
+     */
+    public function snapshotReceived(CobrowseSession $session, Visitor $actor, array $snapshot, ?array $reportedRuleset, array $siteRuleset): void
+    {
+        $this->record($session, $actor, 'cobrowse.snapshot_received', [
+            'support_code' => $this->supportCode($session),
+            'reported_at' => $this->stringOrNull($snapshot['reported_at'] ?? null),
+            'page_url' => $this->stringOrNull($snapshot['page_url'] ?? null),
+            'node_count' => $this->intOrNull($snapshot['node_count'] ?? null),
+            'masked_count' => $this->intOrNull($snapshot['masked_count'] ?? null),
+            'html_length' => $this->intOrNull($snapshot['html_length'] ?? null),
+            'mutation_sequence' => $this->intOrNull($snapshot['mutation_sequence'] ?? null),
+            'resync_request_id' => $this->stringOrNull($snapshot['resync_request_id'] ?? null),
+            'masking_ruleset' => $this->maskingRulesetProvenance($reportedRuleset, $siteRuleset),
+        ]);
+    }
+
+    /**
+     * The widget masks with the ruleset it cached at bootstrap, which can
+     * differ from the site's current settings if an admin edits them
+     * mid-session — so provenance records what the widget reports it applied
+     * (source: widget_reported), falling back to the receipt-time site
+     * settings only for widgets that predate ruleset reporting. The hash pins
+     * the full untruncated ruleset; matches_site_settings makes a mid-session
+     * rules change visible in the trail. Rulesets are public widget
+     * configuration (never secrets); the stock widget's built-in defaults are
+     * code-versioned, proxied here by the release version.
+     *
+     * @param  array{selectors: array<int, string>, terms: array<int, string>}|null  $reportedRuleset
+     * @param  array{selectors: array<int, string>, terms: array<int, string>}  $siteRuleset
+     * @return array<string, mixed>
+     */
+    private function maskingRulesetProvenance(?array $reportedRuleset, array $siteRuleset): array
+    {
+        $applied = $reportedRuleset ?? $siteRuleset;
+        $appliedHash = $this->rulesetHash($applied);
+        $selectors = $this->boundedRulesetList($applied['selectors']);
+        $terms = $this->boundedRulesetList($applied['terms']);
+
+        return [
+            'source' => $reportedRuleset !== null ? 'widget_reported' : 'site_settings_at_receipt',
+            'hash' => $appliedHash,
+            'mask_selectors' => $selectors['items'],
+            'mask_selector_count' => count($applied['selectors']),
+            'sensitive_terms' => $terms['items'],
+            'sensitive_term_count' => count($applied['terms']),
+            'truncated' => $selectors['truncated'] || $terms['truncated'],
+            'matches_site_settings' => $appliedHash === $this->rulesetHash($siteRuleset),
+            'release' => $this->stringOrNull(config('wayfindr.release.version')),
+        ];
+    }
+
+    /**
+     * @param  array{selectors: array<int, string>, terms: array<int, string>}  $ruleset
+     */
+    private function rulesetHash(array $ruleset): string
+    {
+        return hash('sha256', (string) json_encode([$ruleset['selectors'], $ruleset['terms']]));
+    }
+
+    /**
+     * @param  array<int, string>  $items
+     * @return array{items: array<int, string>, truncated: bool}
+     */
+    private function boundedRulesetList(array $items): array
+    {
+        $clean = array_values(array_filter($items, 'is_string'));
+        $kept = array_slice($clean, 0, 50);
+        $truncated = count($clean) > 50;
+
+        foreach ($kept as $item) {
+            if (mb_strlen($item) > 120) {
+                $truncated = true;
+
+                break;
+            }
+        }
+
+        return [
+            'items' => array_map(static fn (string $item): string => mb_substr($item, 0, 120), $kept),
+            'truncated' => $truncated,
+        ];
+    }
+
+    /**
      * Record that an agent actually viewed a rendered replay preview, so "who
      * watched the visitor's screen, and when" is auditable. Throttled per
      * agent + session so the live auto-refresh loop cannot flood the audit log;
