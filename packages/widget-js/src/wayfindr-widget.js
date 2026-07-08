@@ -500,6 +500,7 @@
     var cobrowseVisitorNotice = null;
     var pendingCobrowseConsentFocus = false;
     var mutationObserver = null;
+    var cobrowseResumeInFlight = false;
     var pendingMutationRecords = [];
     var skippedMutationRecords = 0;
     var mutationFlushTimer = null;
@@ -1349,6 +1350,14 @@
 
       var startedAt = Date.now();
 
+      // Claim the kickoff for the whole consent update: the server commits
+      // the grant as soon as the POST lands, so a status poll racing this
+      // request could otherwise see "granted" and run the resume path (#544)
+      // before this sequence reports — double-sending page state and
+      // snapshot. Claiming up front also keeps a mid-revoke poll from
+      // resuming reporting off stale granted status.
+      cobrowseResumeInFlight = true;
+
       cobrowseAllow.disabled = true;
       cobrowseDecline.disabled = true;
       status.textContent = nextGranted ? 'Granting cobrowse consent...' : 'Revoking cobrowse consent...';
@@ -1399,6 +1408,7 @@
       } catch (error) {
         status.textContent = error.message || 'Wayfindr could not update cobrowse consent.';
       } finally {
+        cobrowseResumeInFlight = false;
         cobrowseAllow.disabled = false;
         cobrowseDecline.disabled = false;
       }
@@ -1415,6 +1425,7 @@
         var result = await client.fetchCobrowseStatus(supportCode);
 
         applyCobrowseStatus(result && result.cobrowse ? result.cobrowse : null);
+        await resumeCobrowseReporting();
 
         return result;
       } catch (error) {
@@ -1424,6 +1435,44 @@
 
         return null;
       }
+    }
+
+    // A reloaded page that resumes a conversation (#528) discovers an
+    // already-granted cobrowse session through the status poll instead of a
+    // consent click, so nothing restarted reporting: the widget showed
+    // "Cobrowse is active" while the agent preview stayed frozen (#544).
+    // Discovering granted-but-not-reporting re-runs the same sequence the
+    // consent click runs — fresh page state, fresh snapshot, mutation stream.
+    // Consent stays untouched: the session was granted and never ended, the
+    // visitor sees the active state with a Stop control, and revoking still
+    // stops everything through the same status handling.
+    async function resumeCobrowseReporting() {
+      if (!cobrowseGranted || mutationObserver || cobrowseResumeInFlight || !supportCode) {
+        return;
+      }
+
+      cobrowseResumeInFlight = true;
+
+      try {
+        await client.reportCobrowsePageState(supportCode, collectPageState());
+      } catch (error) {
+        // Best-effort: the next poll retries the resume.
+      }
+
+      try {
+        await client.reportCobrowseSnapshot(supportCode, createCobrowseSnapshot(doc, {
+          location: location,
+          maskSelectors: client.getMaskSelectors(),
+          sensitiveTerms: client.getSensitiveTerms(),
+        }));
+      } catch (error) {
+        // Best-effort: the agent can still pull a resync explicitly.
+      }
+
+      // Only consider the resume settled once the stream is observing;
+      // startMutationStream is a no-op without a body or observer support.
+      startMutationStream();
+      cobrowseResumeInFlight = false;
     }
 
     async function refreshMessages(options) {
