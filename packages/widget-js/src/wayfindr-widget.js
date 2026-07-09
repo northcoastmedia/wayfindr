@@ -1284,6 +1284,7 @@
       var batch = createCobrowseMutationBatch(records, {
         document: doc,
         location: location,
+        view: doc.defaultView || root,
         maskSelectors: client.getMaskSelectors(),
         sensitiveTerms: client.getSensitiveTerms(),
         sequence: mutationSequence + 1,
@@ -2258,6 +2259,75 @@
     return position === 'relative' ? false : suppressed;
   }
 
+  // A live-inserted subtree (SPA content) is captured with a style context
+  // rooted at the added element, reading its real parent for the inherited
+  // baseline so only differences are emitted — the same rule the snapshot
+  // uses as it descends. Position suppression is seeded by replaying the
+  // ancestor chain top-down, so an added absolute element inside fixed/sticky
+  // page chrome is suppressed exactly as it would be in a full snapshot.
+  function styleContextForAddedElement(element, parent, view, maskSelectors, sensitiveTerms, maxStyledElements) {
+    if (!view || typeof view.getComputedStyle !== 'function' || !element || element.nodeType !== 1) {
+      return null;
+    }
+
+    parent = (parent && parent.nodeType === 1 ? parent : element.parentElement) || null;
+    var readParentValue = null;
+
+    // The preview shell's <body> only receives background declarations
+    // (CobrowseReplayPreview only replays those onto it), so a snapshot roots
+    // at the body and lets its direct children emit their full inherited
+    // styles rather than comparing against the body. A top-level addition
+    // must match: with the body/html as the parent there is no inherited
+    // baseline, so page typography and color ride along on the added element
+    // instead of being suppressed as "same as body."
+    var parentTag = parent ? String(parent.tagName || '').toLowerCase() : '';
+    var parentEstablishesBaseline = parent && parentTag !== 'body' && parentTag !== 'html';
+
+    if (parentEstablishesBaseline) {
+      try {
+        var parentComputed = view.getComputedStyle(parent);
+
+        readParentValue = function (property) {
+          return parentComputed.getPropertyValue(property);
+        };
+      } catch (error) {
+        readParentValue = null;
+      }
+    }
+
+    var ancestors = [];
+
+    for (var ancestor = parent; ancestor && ancestor.nodeType === 1; ancestor = ancestor.parentElement) {
+      ancestors.unshift(ancestor);
+    }
+
+    var positionSuppressed = false;
+
+    ancestors.forEach(function (node) {
+      try {
+        positionSuppressed = nextPositionSuppressed(
+          view.getComputedStyle(node).getPropertyValue('position'),
+          positionSuppressed
+        );
+      } catch (error) {
+        // Leave suppression unchanged if an ancestor's style is unreadable.
+      }
+    });
+
+    return {
+      view: view,
+      readParentValue: readParentValue,
+      isRoot: false,
+      positionSuppressed: positionSuppressed,
+      maskSelectors: maskSelectors,
+      sensitiveTerms: sensitiveTerms,
+      budget: {
+        captured: 0,
+        max: typeof maxStyledElements === 'number' ? maxStyledElements : 200,
+      },
+    };
+  }
+
   function isCapturableStyleValue(value, maxLength) {
     if (!value || value.length > (maxLength || 200)) {
       return false;
@@ -2901,6 +2971,8 @@
 
     var doc = options.document || null;
     var location = options.location || (doc && doc.location) || null;
+    var view = options.view || (doc && doc.defaultView) || null;
+    var captureStyles = options.captureStyles !== false && view && typeof view.getComputedStyle === 'function';
     var maskSelectors = DEFAULT_MASK_SELECTORS.concat(options.maskSelectors || []);
     var sensitiveTerms = options.sensitiveTerms || [];
     var maxMutations = options.maxMutations || 50;
@@ -2917,6 +2989,8 @@
       var mutation = mutationFromRecord(record, {
         maskSelectors: maskSelectors,
         sensitiveTerms: sensitiveTerms,
+        view: captureStyles ? view : null,
+        maxStyledElements: options.maxStyledElementsPerMutation,
       });
 
       if (!mutation) {
@@ -3048,7 +3122,10 @@
   }
 
   function addedMutation(record, element, options) {
-    var clone = cloneForCapture(element);
+    var styleContext = options.view
+      ? styleContextForAddedElement(element, record.target, options.view, options.maskSelectors, options.sensitiveTerms, options.maxStyledElements)
+      : null;
+    var clone = cloneForCapture(element, styleContext);
     var maskedCount;
 
     removeMatching(clone, DEFAULT_REMOVE_SELECTORS);
