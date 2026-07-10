@@ -1012,6 +1012,7 @@
                 var csrf = document.querySelector('meta[name="csrf-token"]');
                 var transcript = document.querySelector('[data-transcript]');
                 var transcriptCount = document.querySelector('[data-transcript-count]');
+                var visitorTyping = document.querySelector('[data-visitor-typing]');
                 var hasTranscriptTarget = Boolean(transcript);
                 var hasCobrowseTargets = Boolean(panel && status);
                 var hasPresenceTargets = Boolean(visitorPresenceLabel && visitorPresenceDetail);
@@ -1609,6 +1610,7 @@
 
                     transcriptRefreshInFlight = true;
                     var stickToBottom = agentNearBottom();
+                    var previousCount = transcript.querySelectorAll('[data-message-id]').length;
 
                     fetch(config.messagesUrl, {
                         credentials: 'same-origin',
@@ -1627,13 +1629,21 @@
                         .then(function (html) {
                             transcript.innerHTML = html;
 
+                            var items = transcript.querySelectorAll('[data-message-id]');
+                            var total = items.length;
+
                             if (transcriptCount) {
-                                var total = transcript.querySelectorAll('[data-message-id]').length;
                                 transcriptCount.textContent = total + ' total';
                             }
 
+                            // Only a genuinely new message means the visitor stopped
+                            // typing. A plain catch-up refresh (e.g. on first subscribe)
+                            // must not clear the seeded/live typing indicator.
+                            if (visitorTyping && total > previousCount) {
+                                visitorTyping.hidden = true;
+                            }
+
                             if (stickToBottom) {
-                                var items = transcript.querySelectorAll('[data-message-id]');
                                 var last = items[items.length - 1];
 
                                 if (last && typeof last.scrollIntoView === 'function') {
@@ -1652,6 +1662,34 @@
                                 refreshTranscript();
                             }
                         });
+                }
+
+                var visitorTypingTimer = null;
+
+                function updateVisitorTyping(typing) {
+                    if (!visitorTyping || !typing) {
+                        return;
+                    }
+
+                    if (visitorTypingTimer) {
+                        window.clearTimeout(visitorTypingTimer);
+                        visitorTypingTimer = null;
+                    }
+
+                    if (typing.state === 'typing') {
+                        visitorTyping.hidden = false;
+
+                        // Auto-clear if a stop-typing signal never arrives.
+                        var freshMs = typeof config.visitorTypingFreshMs === 'number' && config.visitorTypingFreshMs > 0
+                            ? config.visitorTypingFreshMs
+                            : 6000;
+
+                        visitorTypingTimer = window.setTimeout(function () {
+                            visitorTyping.hidden = true;
+                        }, freshMs);
+                    } else {
+                        visitorTyping.hidden = true;
+                    }
                 }
 
                 function subscribe(socket, auth) {
@@ -1821,6 +1859,10 @@
 
                     if (event.event === config.messageEventName) {
                         refreshTranscript();
+                    }
+
+                    if (event.event === config.typingEventName) {
+                        updateVisitorTyping(parsePayload(event.data).visitor_typing);
                     }
                 }
 
