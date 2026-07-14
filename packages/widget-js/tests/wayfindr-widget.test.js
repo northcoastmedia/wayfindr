@@ -83,6 +83,31 @@ test('injects responsive panel styles so the composer stays reachable on short s
   assert.ok(css.includes('max-height:calc(100dvh - 24px)'), 'mobile panel is viewport-height bounded');
 });
 
+test('uses a mobile-safe composer font size that does not trigger focus zoom', () => {
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
+    url: 'https://docs.example.test/install',
+  });
+
+  Wayfindr.init({
+    document: dom.window.document,
+    location: dom.window.location,
+    mount: '#support',
+    apiBaseUrl: 'http://127.0.0.1:8000/',
+    sitePublicKey: 'site_public_docs',
+    anonymousId: 'anon-browser-123',
+    storage: memoryStorage(),
+    fetch: async () => jsonResponse(404, { message: 'Not used' }),
+  });
+
+  const css = dom.window.document.querySelector('#wayfindr-widget-styles').textContent;
+
+  assert.match(
+    css,
+    /\.wayfindr-widget__textarea\{[^}]*font:16px\/1\.4/,
+    'composer text should stay at or above the iOS focus-zoom threshold',
+  );
+});
+
 test('shows calm empty-state copy before a widget conversation starts', () => {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="support"></div></body></html>', {
     url: 'https://docs.example.test/install',

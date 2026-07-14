@@ -3727,7 +3727,7 @@
       '.wayfindr-widget__message-delivery{justify-self:end;color:#7d8a85;font-size:11px;line-height:1.2}',
       '.wayfindr-widget__form{display:grid;gap:10px;padding:16px}',
       '.wayfindr-widget__label{font-size:13px;font-weight:700}',
-      '.wayfindr-widget__textarea{width:100%;resize:vertical;border:1px solid #d8dfdc;border-radius:6px;padding:10px;color:#1d2523;font:14px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
+      '.wayfindr-widget__textarea{width:100%;resize:vertical;border:1px solid #d8dfdc;border-radius:6px;padding:10px;color:#1d2523;font:16px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
       '.wayfindr-widget__textarea:focus{outline:3px solid rgba(13,111,104,.2);border-color:#0d6f68}',
       '.wayfindr-widget__textarea:disabled{background:#f7f7f3;color:#62706b;cursor:wait}',
       '.wayfindr-widget__actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
