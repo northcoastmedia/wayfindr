@@ -9,6 +9,8 @@ use App\Support\Attachments\AttachmentUploadService;
 use App\Support\VisitorConversationResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -85,5 +87,56 @@ class ConversationAttachmentController extends Controller
         abort_unless($record && $record->isDownloadableBy($conversation->visitor), 404);
 
         return $responder->stream($record);
+    }
+
+    /**
+     * Delete a not-yet-sent upload, e.g. when the visitor removes its chip
+     * before sending. Only an unbound attachment this visitor uploaded can be
+     * deleted; a bound attachment is part of the transcript. Freeing it here
+     * reclaims the per-conversation quota immediately rather than waiting for
+     * the retention sweep.
+     */
+    public function destroy(
+        Request $request,
+        string $supportCode,
+        int $attachment,
+        VisitorConversationResolver $conversations,
+    ): Response {
+        $validated = $request->validate([
+            'site_public_key' => ['required', 'string', 'max:255'],
+            'anonymous_id' => ['required', 'string', 'max:255'],
+            'visitor_token' => ['nullable', 'string', 'max:4096'],
+        ]);
+
+        $conversation = $conversations->resolve(
+            $request,
+            $supportCode,
+            $validated['site_public_key'],
+            $validated['anonymous_id'],
+        );
+
+        $visitor = $conversation->visitor;
+
+        // Lock the row and re-assert unbound under the lock so a concurrent send
+        // that binds this attachment cannot race the delete — the binder locks
+        // the same row, so the delete either wins (still unbound) or 404s (a send
+        // bound it first) rather than deleting a just-sent attachment.
+        DB::transaction(function () use ($conversation, $attachment, $visitor): void {
+            $record = ConversationMessageAttachment::query()
+                ->forConversation($conversation)
+                ->whereKey($attachment)
+                ->whereNull('conversation_message_id')
+                ->where('uploaded_by_type', $visitor->getMorphClass())
+                ->where('uploaded_by_id', $visitor->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($record, 404);
+
+            // The deleting hook removes the binary with the row.
+            $record->delete();
+        });
+
+        return response()->noContent();
     }
 }
