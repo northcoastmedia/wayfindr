@@ -156,6 +156,84 @@ test('readiness flags an unknown driver as attention', function (): void {
         ->and($check['summary'])->toContain('Unknown malware scanner driver');
 });
 
+test('a silent clamd (accepts but never answers) times out to unavailable instead of hanging', function (): void {
+    // Reproduces the socket-activation failure mode: systemd accepts the
+    // connection while the daemon behind it is dead, so nothing ever answers.
+    // The scan must fail closed within its timeout, not hang the upload request.
+    $socketPath = sys_get_temp_dir().'/wf-silent-clamd-'.uniqid().'.sock';
+    $server = stream_socket_server('unix://'.$socketPath, $errno, $errstr);
+    expect($server)->not->toBeFalse();
+
+    $file = tempnam(sys_get_temp_dir(), 'wf-scan');
+    file_put_contents($file, 'clean bytes');
+
+    try {
+        $scanner = new ClamAvScanner('unix://'.$socketPath, scanTimeoutSeconds: 2);
+
+        $startedAt = microtime(true);
+        $result = $scanner->scan($file);
+        $elapsed = microtime(true) - $startedAt;
+
+        expect($result->isUnavailable())->toBeTrue()
+            ->and($result->error)->toContain('Timed out')
+            ->and($elapsed)->toBeLessThan(6.0);
+    } finally {
+        fclose($server);
+        @unlink($socketPath);
+        @unlink($file);
+    }
+});
+
+test('an early clamd verdict that closes the connection mid-stream is honored, not reported unavailable', function (): void {
+    // clamd writes its verdict early and closes when it can already decide
+    // (early detection or a size-limit error). The client's still-streaming
+    // writes then fail — but the verdict is sitting in the receive buffer and
+    // must be drained and honored. Reported by review: without this, a
+    // fail-open install could accept a file clamd had flagged.
+    $socketPath = sys_get_temp_dir().'/wf-early-clamd-'.uniqid().'.sock';
+    $serverScript = tempnam(sys_get_temp_dir(), 'wf-clamd-srv');
+    file_put_contents($serverScript, <<<PHP
+    <?php
+    \$server = stream_socket_server('unix://{$socketPath}');
+    \$client = stream_socket_accept(\$server, 10);
+    // Answer immediately with an infected verdict and close, without ever
+    // reading the stream — the classic early-verdict shape.
+    fwrite(\$client, "stream: Win.Test.EICAR_HDB-1 FOUND\\0");
+    fclose(\$client);
+    usleep(200000);
+    PHP);
+
+    $process = proc_open([PHP_BINARY, $serverScript], [], $pipes);
+    expect($process)->not->toBeFalse();
+
+    // Wait for the fake daemon's socket to exist.
+    $waited = 0;
+    while (! file_exists($socketPath) && $waited < 3000) {
+        usleep(50_000);
+        $waited += 50;
+    }
+    expect(file_exists($socketPath))->toBeTrue();
+
+    // A payload comfortably larger than the socket buffer, so the client's
+    // writes fail once the server has answered and closed.
+    $file = tempnam(sys_get_temp_dir(), 'wf-scan');
+    file_put_contents($file, str_repeat('A', 4 * 1024 * 1024));
+
+    try {
+        $scanner = new ClamAvScanner('unix://'.$socketPath, scanTimeoutSeconds: 5);
+        $result = $scanner->scan($file);
+
+        expect($result->isInfected())->toBeTrue()
+            ->and($result->threat)->toBe('Win.Test.EICAR_HDB-1');
+    } finally {
+        proc_terminate($process);
+        proc_close($process);
+        @unlink($socketPath);
+        @unlink($serverScript);
+        @unlink($file);
+    }
+});
+
 test('clamav interprets clamd verdicts', function (): void {
     $scanner = new ClamAvScanner('tcp://127.0.0.1:3310');
 

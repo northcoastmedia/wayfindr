@@ -38,8 +38,16 @@ class ClamAvScanner implements AttachmentScanner
             return ScanResult::unavailable(sprintf('Could not connect to clamd at %s.', $this->socket));
         }
 
+        // A hard wall-clock deadline for the whole scan. Socket-activated clamd
+        // can accept a connection while the daemon behind it is dead (systemd
+        // accepts, the service never answers); without a deadline the request
+        // would hang instead of failing closed.
+        $deadline = microtime(true) + max(1, $this->scanTimeoutSeconds);
+
         try {
-            fwrite($stream, "zINSTREAM\0");
+            if (! $this->writeAll($stream, "zINSTREAM\0", $deadline)) {
+                return $this->verdictAfterSendFailure($stream, $deadline);
+            }
 
             while (! feof($handle)) {
                 $chunk = fread($handle, $this->chunkSize);
@@ -48,25 +56,21 @@ class ClamAvScanner implements AttachmentScanner
                     break;
                 }
 
-                fwrite($stream, pack('N', strlen($chunk)).$chunk);
+                if (! $this->writeAll($stream, pack('N', strlen($chunk)).$chunk, $deadline)) {
+                    return $this->verdictAfterSendFailure($stream, $deadline);
+                }
             }
 
             // Zero-length chunk signals end of stream.
-            fwrite($stream, pack('N', 0));
-
-            $response = '';
-
-            while (! feof($stream)) {
-                $buffer = fread($stream, 4096);
-
-                if ($buffer === false) {
-                    break;
-                }
-
-                $response .= $buffer;
+            if (! $this->writeAll($stream, pack('N', 0), $deadline)) {
+                return $this->verdictAfterSendFailure($stream, $deadline);
             }
 
-            return $this->interpret($response);
+            $response = $this->readResponse($stream, $deadline);
+
+            return $response === ''
+                ? ScanResult::unavailable('Timed out waiting for a clamd verdict.')
+                : $this->interpret($response);
         } catch (Throwable $exception) {
             return ScanResult::unavailable($exception->getMessage());
         } finally {
@@ -129,6 +133,121 @@ class ClamAvScanner implements AttachmentScanner
         }
 
         return ScanResult::unavailable('clamd error: '.$response);
+    }
+
+    /**
+     * A send failure does not always mean clamd is gone: it writes its verdict
+     * EARLY and closes the connection when it can already decide (an infected
+     * stream, or a size-limit error) — which surfaces on our side as a failed
+     * write. Drain whatever verdict is already in the receive buffer and honor
+     * it; only report unavailable when there is genuinely no answer. Without
+     * this, a fail-open install could accept a file clamd had already flagged.
+     *
+     * @param  resource  $stream
+     */
+    private function verdictAfterSendFailure($stream, float $deadline): ScanResult
+    {
+        $response = $this->readResponse($stream, $deadline);
+
+        return $response === ''
+            ? ScanResult::unavailable('Timed out sending the file to clamd.')
+            : $this->interpret($response);
+    }
+
+    /**
+     * Read clamd's response until EOF, a timeout, or the deadline — returning
+     * whatever arrived ('' if nothing). fread returns '' (not false) on a
+     * socket timeout with feof still false, so both are treated as "clamd is
+     * not answering" rather than spinning forever.
+     *
+     * @param  resource  $stream
+     */
+    private function readResponse($stream, float $deadline): string
+    {
+        $response = '';
+
+        while (! feof($stream)) {
+            // Check the budget BEFORE blocking, and cap each read by what
+            // remains — otherwise a scan whose writes consumed the budget would
+            // still block a full socket timeout here, overshooting the deadline
+            // to ~2x the configured limit.
+            if (! $this->applyRemainingTimeout($stream, $deadline)) {
+                return $response;
+            }
+
+            $buffer = fread($stream, 4096);
+
+            if ($buffer === false || $buffer === '') {
+                if ($buffer === false || stream_get_meta_data($stream)['timed_out']) {
+                    return $response;
+                }
+
+                continue;
+            }
+
+            $response .= $buffer;
+        }
+
+        return $response;
+    }
+
+    /**
+     * Bound the next blocking socket operation by the time left before the
+     * deadline. Returns false when the budget is already spent.
+     *
+     * @param  resource  $stream
+     */
+    private function applyRemainingTimeout($stream, float $deadline): bool
+    {
+        $remaining = $deadline - microtime(true);
+
+        if ($remaining <= 0) {
+            return false;
+        }
+
+        stream_set_timeout($stream, (int) $remaining, (int) (fmod($remaining, 1.0) * 1_000_000));
+
+        return true;
+    }
+
+    /**
+     * Write the full payload, honoring socket timeouts and the wall-clock
+     * deadline. fwrite can time out (false), stall (0 bytes), or write
+     * partially; anything that stops making progress before the deadline is a
+     * failure, never a hang.
+     *
+     * @param  resource  $stream
+     */
+    private function writeAll($stream, string $bytes, float $deadline): bool
+    {
+        $offset = 0;
+        $length = strlen($bytes);
+
+        while ($offset < $length) {
+            // Cap each blocking write by the remaining budget, mirroring the
+            // read side, so no single fwrite can overshoot the deadline.
+            if (! $this->applyRemainingTimeout($stream, $deadline)) {
+                return false;
+            }
+
+            $written = @fwrite($stream, substr($bytes, $offset));
+
+            if ($written === false || stream_get_meta_data($stream)['timed_out']) {
+                return false;
+            }
+
+            if ($written === 0) {
+                // No progress this pass; back off briefly instead of hot-spinning
+                // until the deadline decides.
+                usleep(50_000);
+
+                continue;
+            }
+
+            $offset += $written;
+        }
+
+        return true;
     }
 
     /**
