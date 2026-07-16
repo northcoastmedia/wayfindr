@@ -164,9 +164,12 @@ class BreakGlassGrant extends Model
 
         return match ($this->scope_type) {
             // A conversation-scoped grant covers the tickets that belong to
-            // that conversation — they are its support artifacts.
+            // that conversation — they are its support artifacts. The ticket
+            // must sit on the conversation's own site too: a row from another
+            // site claiming the covered conversation is not covered.
             self::SCOPE_CONVERSATION => $ticket->conversation_id !== null
-                && (int) $ticket->conversation_id === (int) $this->conversation_id,
+                && (int) $ticket->conversation_id === (int) $this->conversation_id
+                && (int) $ticket->site_id === (int) $this->site_id,
             self::SCOPE_SITE => (int) $ticket->site_id === (int) $this->site_id,
             self::SCOPE_ACCOUNT => true,
             default => false,
@@ -208,14 +211,45 @@ class BreakGlassGrant extends Model
 
     /**
      * A short human label for audit trails and the account-visible record.
+     * The referenced resource is only NAMED when it actually belongs to the
+     * grant's account — a mismatched row must not leak another account's
+     * support code or site name into pages or audit metadata.
      */
     public function scopeLabel(): string
     {
         return match ($this->scope_type) {
-            self::SCOPE_CONVERSATION => 'Conversation '.($this->conversation?->support_code ?? ($this->conversation_id ? '#'.$this->conversation_id : '(deleted)')),
-            self::SCOPE_SITE => 'Site '.($this->site?->name ?? ($this->site_id ? '#'.$this->site_id : '(deleted)')),
+            self::SCOPE_CONVERSATION => 'Conversation '.$this->conversationReference(),
+            self::SCOPE_SITE => 'Site '.$this->siteReference(),
             self::SCOPE_ACCOUNT => 'Entire account',
             default => $this->scope_type,
         };
+    }
+
+    private function conversationReference(): string
+    {
+        if ($this->conversation_id === null) {
+            return '(deleted)';
+        }
+
+        $conversation = $this->conversation?->loadMissing('site');
+
+        if (! $conversation || (int) $conversation->site?->account_id !== (int) $this->account_id) {
+            return '(out of scope)';
+        }
+
+        return (string) $conversation->support_code;
+    }
+
+    private function siteReference(): string
+    {
+        if ($this->site_id === null) {
+            return '(deleted)';
+        }
+
+        if (! $this->site || (int) $this->site->account_id !== (int) $this->account_id) {
+            return '(out of scope)';
+        }
+
+        return (string) $this->site->name;
     }
 }

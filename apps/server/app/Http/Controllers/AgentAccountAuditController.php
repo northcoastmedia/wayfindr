@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\AuditEvent;
+use App\Models\BreakGlassGrant;
 use App\Models\CobrowseSession;
 use App\Models\Site;
 use App\Models\User;
@@ -241,7 +242,13 @@ class AgentAccountAuditController extends Controller
                             ->whereLike('name', $searchPattern)
                             ->orWhereLike('domain', $searchPattern))
                         ->orWhereHasMorph('subject', [CobrowseSession::class], fn (Builder $query) => $query
-                            ->whereHas('conversation', fn (Builder $query) => $query->whereLike('support_code', $searchPattern)));
+                            ->whereHas('conversation', fn (Builder $query) => $query->whereLike('support_code', $searchPattern)))
+                        // Break-glass subjects surface their reference-safe
+                        // labels (support code, site name, "Ticket #n") from
+                        // event metadata — the search must reach what the
+                        // subject column shows.
+                        ->orWhereLike('metadata->resource_label', $searchPattern)
+                        ->orWhereLike('metadata->scope_label', $searchPattern);
                 });
             });
     }
@@ -286,6 +293,18 @@ class AgentAccountAuditController extends Controller
 
     private function auditSubject(AuditEvent $event): string
     {
+        if ($event->subject instanceof BreakGlassGrant) {
+            // The break-glass label fields are references by construction
+            // (support code, site name, "Ticket #n" — never customer
+            // content), so surfacing them here keeps the export boundary
+            // while telling the account exactly what an operator reached.
+            $label = data_get($event->metadata, 'resource_label')
+                ?? data_get($event->metadata, 'scope_label')
+                ?? $event->subject->scopeLabel();
+
+            return 'Break-glass: '.$label;
+        }
+
         if ($event->subject instanceof User) {
             return $event->subject->name;
         }
