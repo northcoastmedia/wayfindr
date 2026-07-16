@@ -4,11 +4,13 @@ namespace App\Support;
 
 use App\Models\OperatorReadinessConfirmation;
 use App\Models\User;
+use App\Support\Attachments\AttachmentStorage;
 use App\Support\Attachments\Scanning\AttachmentScanner;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -65,6 +67,7 @@ class OperatorReadiness
             $this->realtimeBroadcasting(),
             $this->cobrowseTransportReadiness->check(),
             $this->storagePaths(),
+            $this->attachmentStorage(),
             $this->attachmentScanning(),
             $this->scheduler(),
             $this->alertDigestDelivery(),
@@ -519,6 +522,103 @@ class OperatorReadiness
             summary: 'Laravel storage paths are writable.',
             detail: 'Cache, compiled views, sessions, and logs can be written by the application.',
             action: 'Keep storage shared between zero-downtime releases.'
+        );
+    }
+
+    /**
+     * @return array{action: string, detail: string, key: string, label: string, status: string, status_label: string, summary: string}
+     */
+    private function attachmentStorage(): array
+    {
+        try {
+            $diskName = AttachmentStorage::diskName();
+        } catch (Throwable $exception) {
+            return $this->check(
+                key: 'attachment_storage',
+                label: 'Attachment storage',
+                status: 'attention',
+                summary: 'Attachment storage is misconfigured.',
+                detail: $exception->getMessage().' New uploads are being rejected until this is corrected.',
+                action: 'Set WAYFINDR_ATTACHMENT_STORAGE_DISK to attachments (local) or attachments-s3, then run php artisan config:cache.',
+                commands: ['php artisan config:cache'],
+            );
+        }
+
+        $driver = (string) config("filesystems.disks.{$diskName}.driver", 'local');
+
+        // Probe what Wayfindr can honestly verify: the active disk accepts a
+        // write, reads it back, and deletes it. Durability and backups stay
+        // operator-owned, per the documented posture. The probe key is a
+        // dotfile so the orphan sweep never races it.
+        try {
+            // The probe lives under its own dotfile prefix: listing that prefix
+            // is a one-object ListObjects call (never a full-bucket list), and
+            // the dotfile names keep the orphan sweep from ever racing it.
+            $probeDir = '.wayfindr-readiness-probe-'.Str::random(12);
+            $probeKey = $probeDir.'/.probe';
+            $disk = Storage::disk($diskName);
+            $wrote = $disk->put($probeKey, 'ok') !== false;
+            $read = $wrote && $disk->get($probeKey) === 'ok';
+            $listed = $read && in_array($probeKey, $disk->files($probeDir), true);
+            $deleted = $disk->delete($probeKey);
+
+            if (! $read) {
+                throw new \RuntimeException('The disk accepted a connection but a write/read round-trip failed.');
+            }
+
+            // The retention sweep reconciles by LISTING the disk; credentials
+            // that can write/read but not list would let it silently do nothing.
+            if (! $listed) {
+                return $this->check(
+                    key: 'attachment_storage',
+                    label: 'Attachment storage',
+                    status: 'attention',
+                    summary: sprintf('The %s disk cannot list objects.', $diskName),
+                    detail: 'Writes and reads work, but a listing probe did not return the probe object — the retention sweep cannot reconcile orphaned storage without listing.',
+                    action: $driver === 's3'
+                        ? 'Grant the credentials ListBucket permission on the bucket.'
+                        : 'Make the attachments storage directory readable and listable by the PHP user.',
+                );
+            }
+
+            // The disks run with throw => false, so a delete refused by the
+            // credentials returns false silently. The retention sweep and
+            // chip-removal cleanup depend on delete working — surface it
+            // rather than reporting ready.
+            if ($deleted === false || $disk->exists($probeKey)) {
+                return $this->check(
+                    key: 'attachment_storage',
+                    label: 'Attachment storage',
+                    status: 'attention',
+                    summary: sprintf('The %s disk cannot delete objects.', $diskName),
+                    detail: 'Writes and reads work, but the delete probe failed — the retention sweep and upload cleanup cannot reclaim storage, so it will grow unbounded.',
+                    action: $driver === 's3'
+                        ? 'Grant the credentials DeleteObject permission on the bucket.'
+                        : 'Make the attachments storage directory writable and deletable by the PHP user.',
+                );
+            }
+        } catch (Throwable $exception) {
+            return $this->check(
+                key: 'attachment_storage',
+                label: 'Attachment storage',
+                status: 'attention',
+                summary: sprintf('The %s disk failed its write/read probe.', $diskName),
+                detail: $exception->getMessage(),
+                action: $driver === 's3'
+                    ? 'Check WAYFINDR_ATTACHMENT_S3_KEY/SECRET/REGION/BUCKET (and ENDPOINT + USE_PATH_STYLE for non-AWS stores), then reload.'
+                    : 'Make the attachments storage directory writable by the PHP user.',
+            );
+        }
+
+        return $this->check(
+            key: 'attachment_storage',
+            label: 'Attachment storage',
+            status: 'ready',
+            summary: sprintf('New uploads are stored on the %s disk (%s).', $diskName, $driver === 's3' ? 'S3-compatible' : 'local'),
+            detail: 'The active disk passed a write/read/delete probe. Existing attachments keep serving from the disk recorded on each row, so switching surfaces never breaks old files. Durability and backups remain operator-owned.',
+            action: $driver === 's3'
+                ? 'Keep the bucket private (block public access) — downloads always stream through Wayfindr, never from a bucket URL.'
+                : 'Keep storage shared between zero-downtime releases, or set WAYFINDR_ATTACHMENT_STORAGE_DISK=attachments-s3 to store new uploads in an S3-compatible bucket.',
         );
     }
 
