@@ -196,6 +196,36 @@ if [ "$reverb_status" = "502" ] || [ "$reverb_status" = "404" ]; then
     exit 1
 fi
 
+echo "Taking a real backup (pg_dump must exist in the image)."
+compose_exec() {
+    docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_BUILD_FILE" exec -T web "$@"
+}
+compose_exec php artisan wayfindr:backup --path=/tmp/wayfindr-smoke-backup
+backup_archive="$(compose_exec sh -c 'ls /tmp/wayfindr-smoke-backup/wayfindr-backup-*.tar.gz 2>/dev/null | head -n1')"
+if [ -z "$backup_archive" ]; then
+    echo "Backup produced no archive." >&2
+    exit 1
+fi
+# The archive must contain a real Postgres dump (proves pg_dump ran, not a fake).
+if ! compose_exec sh -c "tar -xzOf '$backup_archive' ./database.sql | grep -q 'PostgreSQL database dump'"; then
+    echo "Backup archive has no PostgreSQL dump." >&2
+    exit 1
+fi
+
+# Ephemeral table DATA is excluded but the SCHEMA is kept: the sessions table
+# is created (CREATE TABLE) but never populated (no COPY public.sessions).
+compose_exec php artisan tinker --execute="Illuminate\Support\Facades\DB::table('sessions')->insert(['id'=>'smoke-session','payload'=>'x','last_activity'=>time()]);" >/dev/null 2>&1 || true
+compose_exec php artisan wayfindr:backup --path=/tmp/wayfindr-smoke-backup2 >/dev/null
+backup2="$(compose_exec sh -c 'ls /tmp/wayfindr-smoke-backup2/wayfindr-backup-*.tar.gz 2>/dev/null | head -n1')"
+if ! compose_exec sh -c "tar -xzOf '$backup2' ./database.sql | grep -q 'CREATE TABLE public.sessions'"; then
+    echo "Dump is missing the sessions schema." >&2
+    exit 1
+fi
+if compose_exec sh -c "tar -xzOf '$backup2' ./database.sql | grep -q 'COPY public.sessions'"; then
+    echo "Dump wrongly included ephemeral sessions data." >&2
+    exit 1
+fi
+
 assert_services_running queue scheduler reverb
 
 echo "Self-host Compose smoke passed for $PROJECT_NAME."
