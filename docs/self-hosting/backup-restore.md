@@ -63,33 +63,69 @@ backup command prints those disks; heed them.
 
 By default the archive is written to `storage/app/backups` inside the
 `wayfindr-storage` volume (override with `WAYFINDR_BACKUP_PATH` or the `--path`
-flag). That is durable across container restarts, **but it is not offsite** — a
-backup that never leaves the machine shares the failure mode of no backup at
-all. Until Wayfindr grows a remote-push option (see [Deferred](#deferred)),
-copying archives offsite is your job. Two common patterns:
+flag). That is durable across container restarts, **but it is not offsite** on
+its own — a backup that never leaves the machine shares the failure mode of no
+backup at all.
 
-**Write to a host directory.** Map a host path into the `web` service and point
-the command at it, so archives land straight on the host where your existing
-offsite tooling (rsync, restic, a provider snapshot) can reach them:
+### Offsite mirror to a bucket
 
-```yaml
-# docker-compose override for the web service
-services:
-  web:
-    volumes:
-      - /srv/wayfindr-backups:/backups
-    environment:
-      WAYFINDR_BACKUP_PATH: /backups
+Set `WAYFINDR_BACKUP_DISK` to a configured filesystem disk and `wayfindr:backup`
+uploads the finished archive to it after the local write. The local copy is
+always kept; the bucket is a mirror. The stack ships a ready `backups` disk for
+any S3-compatible store (AWS S3, Cloudflare R2, MinIO, B2, Spaces) with its own
+credentials — just fill these in:
+
+```dotenv
+WAYFINDR_BACKUP_DISK=backups
+WAYFINDR_BACKUP_S3_BUCKET=my-wayfindr-backups
+WAYFINDR_BACKUP_S3_KEY=...
+WAYFINDR_BACKUP_S3_SECRET=...
+WAYFINDR_BACKUP_S3_REGION=auto            # R2/MinIO: as required by your store
+WAYFINDR_BACKUP_S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+WAYFINDR_BACKUP_S3_USE_PATH_STYLE=true    # most non-AWS stores need this
+WAYFINDR_BACKUP_S3_ACL=private            # R2 requires this; the default suits AWS
 ```
 
-**Or copy each archive out** after taking it:
+The disk defaults its object ACL to `bucket-owner-full-control`, which AWS
+buckets accept. Cloudflare R2 rejects any ACL but `private`, so set
+`WAYFINDR_BACKUP_S3_ACL=private` for R2 (as above) — otherwise every upload
+fails. MinIO and other S3-compatibles vary; `private` is the safe fallback.
 
-```bash
-docker compose ... cp web:/app/apps/server/storage/app/backups/. ./wayfindr-backups/
-```
+(Or point `WAYFINDR_BACKUP_DISK` at any other disk you define — anything except
+an `attachments*` disk.)
 
-Cadence and retention are yours to own — the command never deletes an archive
-it did not just write. A simple nightly cron on the host:
+The upload is verified (the object exists and its size matches the local
+archive). If a disk is configured but the upload fails, **the command fails**
+(non-zero exit) and says so — you are never told "backup complete" when the
+offsite copy did not land — while leaving the local archive intact so you can
+retry.
+
+> The backup disk **must not be an attachment disk** (a disk named
+> `attachments*`). The orphaned-attachment sweep reconciles those disks and
+> would delete your backups as stray files; `wayfindr:backup` refuses such a
+> disk.
+
+**Sharing one destination across installs is safe.** Each install stores its
+archives under a per-install prefix — both in the bucket and on the local path
+(`{backup path}/{prefix}/`) — derived from `APP_KEY`, or set a readable one with
+`WAYFINDR_BACKUP_PREFIX`. Retention only ever prunes within that install's own
+prefix, so one install's short retention window never erases another's archives,
+whether they share a bucket or a host backup directory.
+
+Prefer to keep the archive on the host instead of (or as well as) a bucket? Map
+a host path into the `web` service and point `WAYFINDR_BACKUP_PATH` at it, or
+`docker compose ... cp web:/app/apps/server/storage/app/backups/. ./local/`.
+
+### Retention
+
+Set `WAYFINDR_BACKUP_RETENTION_DAYS=N` and, after each successful backup,
+archives older than N days are pruned on **both** the local path and the remote
+disk. It only ever removes files matching the exact
+`wayfindr-backup-…​.tar.gz` name (dated by the timestamp in the name), never the
+archive just written, and only after a fully successful run — a failed backup
+never prunes history. Unset/`0` keeps everything (you prune).
+
+Cadence is yours — schedule `wayfindr:backup` from the host:
 
 ```cron
 15 3 * * *  cd /opt/wayfindr && docker compose --env-file wayfindr/.env -f wayfindr/compose.yml exec -T web php artisan wayfindr:backup >> /var/log/wayfindr-backup.log 2>&1
@@ -161,12 +197,14 @@ failure rolls back and leaves the database untouched rather than half-restored.
 
 ## Deferred
 
-These are named, valuable, and out of the v1 scope:
+These are named, valuable, and still out of scope:
 
-- **Remote backup destinations** — pushing the archive to S3/R2 with a
-  retention policy. Until this lands, offsite copying is your responsibility.
 - **Archive encryption at rest** — encrypt archives with your own tooling (age,
   gpg) today.
+- **Split retention** (different windows for local vs remote) and **count-based
+  retention** (keep the newest N).
 - **Scheduled backups out of the box** and **point-in-time / WAL recovery.**
 
-See ADR [0009](../decisions/0009-backup-and-restore.md) for the full rationale.
+See ADR [0009](../decisions/0009-backup-and-restore.md) (backup and restore) and
+ADR [0010](../decisions/0010-remote-backup-destinations.md) (offsite mirror and
+retention) for the full rationale.

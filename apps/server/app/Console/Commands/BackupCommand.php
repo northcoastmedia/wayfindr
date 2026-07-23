@@ -32,7 +32,10 @@ class BackupCommand extends Command
         $disk = $manifest['attachment_storage_disk'];
         $newUploadsAreLocal = config("filesystems.disks.{$disk}.driver") === 'local';
 
-        $this->line('Backup complete: '.$result['path']);
+        // Neutral phrasing until the offsite mirror (if any) is confirmed — the
+        // "Backup complete" success marker prints only on full success below, so
+        // log-based alerting never sees success on a failed offsite upload.
+        $this->line('Backup archive written: '.$result['path']);
         $this->line('  Size: '.$this->humanBytes($result['size']));
         $this->line('  Wayfindr version: '.$manifest['wayfindr_version']);
         $this->line('  New uploads → '.$disk.($newUploadsAreLocal ? ' (local)' : ' (remote object store)'));
@@ -68,6 +71,24 @@ class BackupCommand extends Command
         if (is_array($remote) && isset($remote['key'])) {
             $this->line('  Offsite copy uploaded to ['.$remote['disk'].']: '.$remote['key']);
         }
+
+        // Retention runs only after a fully successful backup (reached only past
+        // the offsite-failure return above), so a bad run can never prune the
+        // last good history (ADR 0010).
+        // Pass the just-written archive so retention can never delete it, even
+        // if a slow backup ran past a small window (ADR 0010).
+        $pruned = $backups->pruneExpired($destination, basename($result['path']));
+
+        if ($pruned['days'] > 0 && ($pruned['local'] + $pruned['remote']) > 0) {
+            $this->line(sprintf(
+                '  Retention: pruned %d local and %d offsite archive(s) older than %d day(s).',
+                $pruned['local'],
+                $pruned['remote'],
+                $pruned['days'],
+            ));
+        }
+
+        $this->info('Backup complete.');
 
         return self::SUCCESS;
     }

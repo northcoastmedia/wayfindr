@@ -49,6 +49,10 @@ class BackupService
             throw new RuntimeException("Backup destination is not writable: {$destinationDir}");
         }
 
+        // Validate the backup prefix up front so a misconfigured one fails
+        // before the (potentially long) dump, not after.
+        $this->backupPrefix();
+
         $timestamp = Carbon::now();
         // Assemble on the DESTINATION volume, not /tmp: a large dump plus
         // attachment copies could overflow the container's small /tmp while the
@@ -73,10 +77,20 @@ class BackupService
                 json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL,
             );
 
+            // Archives land under a per-install prefix on the local path too —
+            // not just the remote disk — so two installs that share one host
+            // backup directory keep separate namespaces and retention in one
+            // never prunes the other's archives (ADR 0010).
+            $archiveDir = rtrim($destinationDir, '/').'/'.$this->backupPrefix();
+
+            if (! is_dir($archiveDir) && ! mkdir($archiveDir, 0700, true) && ! is_dir($archiveDir)) {
+                throw new RuntimeException("Could not create backup archive directory: {$archiveDir}");
+            }
+
             // A random suffix keeps two runs in the same second (retries,
             // overlapping schedules) from choosing the same name and silently
             // overwriting each other.
-            $archive = rtrim($destinationDir, '/')
+            $archive = $archiveDir
                 .'/wayfindr-backup-'.$timestamp->format('Ymd-His').'-'.bin2hex(random_bytes(3)).'.tar.gz';
 
             // Build under a .partial name and rename only on success: a tar
@@ -110,6 +124,173 @@ class BackupService
     }
 
     /**
+     * Age-based retention (ADR 0010): after a successful backup, prune archives
+     * older than WAYFINDR_BACKUP_RETENTION_DAYS on both the local path and the
+     * remote disk. Best-effort — a prune failure never fails the backup that
+     * already succeeded. Only ever removes files that match the exact archive
+     * naming, dated by the timestamp IN THE NAME (not mtime, which an upload or
+     * copy resets), and only when the age is confidently known.
+     *
+     * @param  string|null  $keep  basename of the just-written archive, never pruned
+     * @return array{days: int, local: int, remote: int}
+     */
+    public function pruneExpired(string $localDir, ?string $keep = null): array
+    {
+        $days = (int) config('wayfindr.backup.retention_days', 0);
+
+        if ($days <= 0) {
+            return ['days' => 0, 'local' => 0, 'remote' => 0];
+        }
+
+        $cutoff = Carbon::now()->subDays($days);
+
+        return [
+            'days' => $days,
+            'local' => $this->pruneLocalArchives($localDir, $cutoff, $keep),
+            'remote' => $this->pruneRemoteArchives($cutoff, $keep),
+        ];
+    }
+
+    private function pruneLocalArchives(string $dir, Carbon $cutoff, ?string $keep): int
+    {
+        $removed = 0;
+
+        try {
+            // Only this install's prefix subdirectory — never the shared parent
+            // — so a shorter window here cannot delete another install's
+            // archives.
+            $scoped = rtrim($dir, '/').'/'.$this->backupPrefix();
+
+            if (! is_dir($scoped)) {
+                return 0;
+            }
+
+            // Scan the directory literally (not via glob): a backup PATH or
+            // PREFIX containing glob metacharacters ([ ] ? *) would make glob
+            // treat the real directory as a pattern and scan the wrong place,
+            // silently skipping retention. The filename is matched by
+            // archiveTimestamp's strict regex instead.
+            foreach (scandir($scoped) ?: [] as $name) {
+                if ($name === $keep) {
+                    continue;
+                }
+
+                $when = $this->archiveTimestamp($name);
+                $path = $scoped.'/'.$name;
+
+                if ($when !== null && $when->lt($cutoff) && is_file($path) && @unlink($path)) {
+                    $removed++;
+                }
+            }
+        } catch (Throwable) {
+            // Best-effort, like the remote prune: a list/delete failure (e.g. an
+            // unreadable mounted directory) must not fail a backup whose archive
+            // and offsite upload already succeeded.
+        }
+
+        return $removed;
+    }
+
+    private function pruneRemoteArchives(Carbon $cutoff, ?string $keep): int
+    {
+        $diskName = trim((string) config('wayfindr.backup.disk'));
+
+        // No remote, an unknown disk, or an attachment disk (never a backup
+        // target): nothing to prune. Attachment disks are guarded so retention
+        // can never reach into attachment storage.
+        if ($diskName === ''
+            || config("filesystems.disks.{$diskName}") === null
+            || str_starts_with($diskName, 'attachments')) {
+            return 0;
+        }
+
+        try {
+            $disk = Storage::disk($diskName);
+            $removed = 0;
+
+            // List ONLY this install's prefix — never the whole bucket — so a
+            // shorter window here cannot erase another install's archives that
+            // happen to share the disk.
+            foreach ($disk->files($this->backupPrefix()) as $path) {
+                if ($keep !== null && basename($path) === $keep) {
+                    continue;
+                }
+
+                $when = $this->archiveTimestamp(basename($path));
+
+                if ($when !== null && $when->lt($cutoff) && $disk->delete($path)) {
+                    $removed++;
+                }
+            }
+
+            return $removed;
+        } catch (Throwable) {
+            // A list/delete error on the remote must not fail a backup that
+            // already succeeded; the next run reconciles.
+            return 0;
+        }
+    }
+
+    /**
+     * The per-install key prefix offsite archives are stored under and the ONLY
+     * prefix retention prunes within. Explicit WAYFINDR_BACKUP_PREFIX wins;
+     * otherwise a stable prefix derived from APP_KEY (unique per install,
+     * hashed so nothing secret leaks into the path) keeps two installs that
+     * share a backup disk from pruning each other's archives (ADR 0010).
+     */
+    private function backupPrefix(): string
+    {
+        $prefix = trim((string) config('wayfindr.backup.prefix'), '/');
+
+        if ($prefix === '') {
+            return 'wayfindr-backups/'.substr(hash('sha256', (string) config('app.key')), 0, 16);
+        }
+
+        // A prefix is a relative namespace UNDER the backup path/bucket, never
+        // an escape from it. Reject traversal so a stray `..` cannot write
+        // archives outside the destination or point retention at a sibling
+        // install's directory (which would break the isolation guarantee).
+        if (preg_match('#(^|/)\.\.(/|$)#', $prefix) === 1) {
+            throw new RuntimeException("WAYFINDR_BACKUP_PREFIX must not contain '..' path segments; got [{$prefix}].");
+        }
+
+        return $prefix;
+    }
+
+    /**
+     * The instant an archive was taken, parsed from its filename — the only
+     * files retention will ever act on. Returns null for anything that is not
+     * an exact wayfindr-backup-YYYYMMDD-HHMMSS-xxxxxx.tar.gz, so a foreign file
+     * on a shared destination is never dated and never pruned.
+     */
+    private function archiveTimestamp(string $filename): ?Carbon
+    {
+        if (! preg_match('/^wayfindr-backup-(\d{8})-(\d{6})-[0-9a-f]{6}\.tar\.gz$/', $filename, $matches)) {
+            return null;
+        }
+
+        $stamp = $matches[1].' '.$matches[2];
+
+        try {
+            // Matches the format the archive is written with (Carbon::now() in
+            // the app timezone), so ages compare correctly.
+            $when = Carbon::createFromFormat('Ymd His', $stamp, config('app.timezone') ?: 'UTC');
+        } catch (Throwable) {
+            return null;
+        }
+
+        // createFromFormat NORMALIZES an impossible date (e.g. 20250231 -> early
+        // March) instead of failing, so a foreign file whose name only looks
+        // like a timestamp could be assigned an old date and pruned. Require an
+        // exact round-trip: only a genuine timestamp is ever dated.
+        if (! $when instanceof Carbon || $when->format('Ymd His') !== $stamp) {
+            return null;
+        }
+
+        return $when;
+    }
+
+    /**
      * Upload the finished archive to the configured backup disk, verifying the
      * object exists and its size matches. Returns null when no disk is
      * configured, {disk, key} on success, or {disk, error} on failure — a
@@ -140,7 +321,9 @@ class BackupService
             }
 
             $disk = Storage::disk($diskName);
-            $key = basename($archivePath);
+            // Namespace the object per-install so a shared bucket is safe: the
+            // retention prune only ever reaches within this same prefix.
+            $key = $this->backupPrefix().'/'.basename($archivePath);
 
             $stream = fopen($archivePath, 'rb');
 
